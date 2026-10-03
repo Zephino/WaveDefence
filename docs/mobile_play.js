@@ -1,8 +1,9 @@
-/* Mobile/web helpers: CSS landscape fill, button-triggered fullscreen, Quit cleanup. */
+/* Mobile/web helpers: CSS landscape fill, fullscreen button (menu + floating), Quit cleanup. */
 (function () {
 	var mode = ""; // "" | "portrait-css" | "landscape-fill"
 	var enterInFlight = false;
 	var released = false;
+	var fsBtn = null;
 
 	function isPortrait() {
 		try {
@@ -83,6 +84,46 @@
 		return Promise.resolve(false);
 	}
 
+	function ensureFsButton() {
+		if (fsBtn) return fsBtn;
+		fsBtn = document.createElement("button");
+		fsBtn.type = "button";
+		fsBtn.id = "wd-fs-btn";
+		fsBtn.textContent = "Fullscreen";
+		fsBtn.style.cssText = [
+			"position:fixed",
+			"top:10px",
+			"right:10px",
+			"z-index:2147483645",
+			"display:none",
+			"padding:10px 14px",
+			"border:0",
+			"border-radius:8px",
+			"background:#d4a017",
+			"color:#141414",
+			"font:600 15px/1.1 system-ui,sans-serif",
+			"box-shadow:0 2px 10px rgba(0,0,0,0.45)",
+			"touch-action:manipulation",
+		].join(";");
+		fsBtn.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			enterFullscreen();
+		});
+		document.body.appendChild(fsBtn);
+		return fsBtn;
+	}
+
+	/** Show floating Fullscreen when the browser dropped out of FS (sleep, swipe, etc.). */
+	function refreshFsButton() {
+		if (released) {
+			if (fsBtn) fsBtn.style.display = "none";
+			return;
+		}
+		var btn = ensureFsButton();
+		btn.style.display = isFullscreen() ? "none" : "block";
+	}
+
 	/** Quit: undo fullscreen / CSS and try to leave the page. */
 	function exitPlayMode() {
 		released = true;
@@ -90,6 +131,7 @@
 		unlockOrientation();
 		clearCanvasCss(canvasEl());
 		mode = "";
+		refreshFsButton();
 
 		return exitFullscreen().then(function () {
 			try {
@@ -174,24 +216,36 @@
 		return tryOne(0);
 	}
 
-	/** Called from the in-game Fullscreen button. */
+	/** Menu Fullscreen button + floating restore button. */
 	function enterFullscreen() {
 		if (released || enterInFlight) return Promise.resolve(false);
 		enterInFlight = true;
+		mode = "";
 		applyCssLandscape();
 		return requestFullscreen()
 			.then(function () {
 				return lockLandscape();
 			})
 			.then(function () {
+				mode = "";
 				applyCssLandscape();
 				enterInFlight = false;
+				refreshFsButton();
 				return isFullscreen();
 			})
 			.catch(function () {
 				enterInFlight = false;
+				refreshFsButton();
 				return false;
 			});
+	}
+
+	function onResume() {
+		if (released) return;
+		// Screen timeout / app switch drops fullscreen; restore layout + show FS control.
+		mode = "";
+		applyCssLandscape();
+		refreshFsButton();
 	}
 
 	window.WaveDefenceMobile = {
@@ -199,10 +253,13 @@
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,
+		refreshFsButton: refreshFsButton,
 	};
 
 	function boot() {
 		applyCssLandscape();
+		refreshFsButton();
+
 		window.addEventListener("resize", function () {
 			if (!released) applyCssLandscape();
 		});
@@ -210,18 +267,28 @@
 			if (released) return;
 			mode = "";
 			setTimeout(applyCssLandscape, 80);
-			setTimeout(applyCssLandscape, 300);
+			setTimeout(function () {
+				applyCssLandscape();
+				refreshFsButton();
+			}, 300);
 		});
 		document.addEventListener("fullscreenchange", function () {
 			if (released) return;
 			mode = "";
 			applyCssLandscape();
+			refreshFsButton();
 		});
 		document.addEventListener("webkitfullscreenchange", function () {
 			if (released) return;
 			mode = "";
 			applyCssLandscape();
+			refreshFsButton();
 		});
+		document.addEventListener("visibilitychange", function () {
+			if (document.visibilityState === "visible") onResume();
+		});
+		window.addEventListener("pageshow", onResume);
+		window.addEventListener("focus", onResume);
 	}
 
 	if (document.readyState === "loading") {

@@ -1,3 +1,14 @@
+## Version 00.01.65
+Date: 10/03/2026
+Time: 1:48 PM
+
+### Changes
+- After screen timeout / app switch, show a floating **Fullscreen** button on any screen (not only the main menu)
+- Re-apply landscape CSS when the page becomes visible again
+
+### Reason
+Waking the phone dropped browser fullscreen with no way back mid-run.
+
 ## Version 00.01.64
 Date: 10/03/2026
 Time: 11:53 AM

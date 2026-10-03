@@ -116,6 +116,28 @@ body {
 		return XO.apply(this, arguments);
 	};
 })();
+</script><script>
+(function () {
+	var VER = "00.01.65";
+	function withVer(url) {
+		if (!url || typeof url !== "string") return url;
+		if (!/\.(pck|wasm|js)(\?|$)/i.test(url)) return url;
+		return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(VER);
+	}
+	var _fetch = window.fetch;
+	window.fetch = function (input, init) {
+		if (typeof input === "string") input = withVer(input);
+		else if (input && typeof Request !== "undefined" && input instanceof Request) {
+			input = new Request(withVer(input.url), input);
+		}
+		return _fetch.call(this, input, init);
+	};
+	var XO = XMLHttpRequest.prototype.open;
+	XMLHttpRequest.prototype.open = function (method, url) {
+		arguments[1] = withVer(url);
+		return XO.apply(this, arguments);
+	};
+})();
 </script></head>
 	<body>
 		<canvas id="canvas">
