@@ -52,7 +52,16 @@ static func is_mobile_device() -> bool:
 	if OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile"):
 		return true
 	if OS.has_feature("web"):
-		return _is_web_mobile()
+		if _is_web_mobile():
+			return true
+		# Fallbacks when the JS probe fails or returns an unexpected value.
+		if DisplayServer.is_touchscreen_available():
+			var size := DisplayServer.screen_get_size()
+			if mini(size.x, size.y) > 0 and mini(size.x, size.y) <= 1100:
+				return true
+		var win := DisplayServer.window_get_size()
+		if DisplayServer.is_touchscreen_available() and mini(win.x, win.y) <= 900:
+			return true
 	return false
 
 
@@ -65,21 +74,24 @@ static func _is_web_mobile() -> bool:
 			"""
 			(function () {
 				try {
-					var ua = navigator.userAgent || '';
-					var uaMobile = /Android|iPhone|iPad|iPod|Mobile|Tablet|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-					var touch = (navigator.maxTouchPoints || 0) > 0;
-					var small = Math.min(screen.width || 0, screen.height || 0) > 0
-						&& Math.min(screen.width || 0, screen.height || 0) <= 920;
+					var ua = navigator.userAgent || navigator.vendor || '';
+					var uaMobile = /Android|iPhone|iPad|iPod|Mobile|Tablet|webOS|BlackBerry|IEMobile|Opera Mini|CriOS|FxiOS/i.test(ua);
+					var touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+					var w = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+					var s = Math.min(screen.width || 0, screen.height || 0);
+					var small = (w > 0 && w <= 1100) || (s > 0 && s <= 1100);
 					var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-					return (uaMobile || (touch && small) || (coarse && small)) ? '1' : '0';
+					var hoverNone = window.matchMedia && window.matchMedia('(hover: none)').matches;
+					return (uaMobile || (touch && small) || (coarse && small) || (hoverNone && touch && small)) ? 1 : 0;
 				} catch (e) {
-					return '0';
+					return 0;
 				}
 			})()
 			""",
 			true
 		)
-		detected = str(result).strip_edges() == "1"
+		var text := str(result).strip_edges().to_lower()
+		detected = text == "1" or text == "true" or text == "1.0" or int(result) == 1
 	_web_mobile_cache = 1 if detected else 0
 	return detected
 

@@ -1,3 +1,15 @@
+## Version 00.01.58
+Date: 10/03/2026
+Time: 11:24 AM
+
+### Changes
+- Show the mobile-web fullscreen hint near the **top** of the main menu (was clipped off-screen under tall buttons)
+- Stronger mobile-browser detection + touch/size fallbacks
+- Scrollable main menu on phones so controls stay reachable
+
+### Reason
+Phone players could not see the “tap for fullscreen” message.
+
 ## Version 00.01.57
 Date: 10/03/2026
 Time: 11:19 AM

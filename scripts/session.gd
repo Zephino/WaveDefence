@@ -32,7 +32,10 @@ var _web_fullscreen_done: bool = false
 func _ready() -> void:
 	_apply_mobile_presentation()
 	# Mobile web: wait for first tap/click to enter fullscreen (browser requirement).
-	_web_fullscreen_armed = GameLayout.is_mobile_device() and OS.has_feature("web")
+	_web_fullscreen_armed = (
+		OS.has_feature("web")
+		and (GameLayout.is_mobile_device() or GameLayout.use_touch_ui())
+	)
 	set_process_input(_web_fullscreen_armed)
 
 

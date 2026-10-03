@@ -18,15 +18,37 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	var center_host := CenterContainer.new()
-	center_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center_host)
+	var mobile_web := OS.has_feature("web") and (
+		GameLayout.is_mobile_device() or GameLayout.use_touch_ui()
+	)
+
+	# Scroll on phones so the fullscreen hint / buttons are never clipped.
+	var host: Control
+	if mobile_web or GameLayout.use_touch_ui():
+		var scroll := ScrollContainer.new()
+		scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		add_child(scroll)
+		var pad := MarginContainer.new()
+		pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pad.add_theme_constant_override("margin_left", 16)
+		pad.add_theme_constant_override("margin_right", 16)
+		pad.add_theme_constant_override("margin_top", 16)
+		pad.add_theme_constant_override("margin_bottom", 24)
+		scroll.add_child(pad)
+		host = pad
+	else:
+		var center_host := CenterContainer.new()
+		center_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		center_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(center_host)
+		host = center_host
 
 	var center := VBoxContainer.new()
 	center.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_theme_constant_override("separation", 12)
-	center_host.add_child(center)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.add_theme_constant_override("separation", 10 if mobile_web else 12)
+	host.add_child(center)
 
 	var title := Label.new()
 	title.text = "WAVE DEFENCE"
@@ -39,6 +61,18 @@ func _build_ui() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(0.7, 0.75, 0.8)
 	center.add_child(subtitle)
+
+	# Keep this near the top — bottom-of-menu hints were clipped on phones.
+	if mobile_web:
+		center.add_child(_spacer(6))
+		var fs_hint := Label.new()
+		fs_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fs_hint.modulate = Color(1.0, 0.85, 0.35)
+		fs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		fs_hint.custom_minimum_size = Vector2(420, 0)
+		fs_hint.add_theme_font_size_override("font_size", 18)
+		fs_hint.text = "Tap anywhere for fullscreen · use landscape"
+		center.add_child(fs_hint)
 
 	center.add_child(_spacer(8))
 
@@ -97,15 +131,6 @@ func _build_ui() -> void:
 		func(ok: bool) -> void:
 			boards_label.text = "Leaderboards: Global" if ok else "Leaderboards: Local (offline)"
 	)
-
-	if GameLayout.is_mobile_device() and OS.has_feature("web"):
-		var fs_hint := Label.new()
-		fs_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		fs_hint.modulate = Color(0.75, 0.7, 0.45)
-		fs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		fs_hint.custom_minimum_size = Vector2(420, 0)
-		fs_hint.text = "Tap anywhere for fullscreen · rotate to landscape"
-		center.add_child(fs_hint)
 
 
 func _boards_status_text() -> String:
