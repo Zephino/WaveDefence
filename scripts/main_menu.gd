@@ -18,13 +18,12 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	var mobile_web := OS.has_feature("web") and (
-		GameLayout.is_mobile_device() or GameLayout.use_touch_ui()
+	var touch_layout := GameLayout.use_touch_ui() or (
+		OS.has_feature("web") and GameLayout.is_mobile_device()
 	)
 
-	# Scroll on phones so the fullscreen hint / buttons are never clipped.
 	var host: Control
-	if mobile_web or GameLayout.use_touch_ui():
+	if touch_layout:
 		var scroll := ScrollContainer.new()
 		scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -47,7 +46,7 @@ func _build_ui() -> void:
 	var center := VBoxContainer.new()
 	center.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_theme_constant_override("separation", 10 if mobile_web else 12)
+	center.add_theme_constant_override("separation", 10 if touch_layout else 12)
 	host.add_child(center)
 
 	var title := Label.new()
@@ -61,18 +60,6 @@ func _build_ui() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(0.7, 0.75, 0.8)
 	center.add_child(subtitle)
-
-	# Keep this near the top — bottom-of-menu hints were clipped on phones.
-	if mobile_web:
-		center.add_child(_spacer(6))
-		var fs_hint := Label.new()
-		fs_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		fs_hint.modulate = Color(1.0, 0.85, 0.35)
-		fs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		fs_hint.custom_minimum_size = Vector2(420, 0)
-		fs_hint.add_theme_font_size_override("font_size", 17)
-		fs_hint.text = "Tap for fullscreen · phone can stay upright (auto-rotates view)\nFor app-like view: open in Chrome, or Add to Home Screen"
-		center.add_child(fs_hint)
 
 	center.add_child(_spacer(8))
 
@@ -113,6 +100,8 @@ func _build_ui() -> void:
 		func() -> void: _start_difficulty(WaveScaler.Difficulty.HARD)
 	))
 	center.add_child(_menu_button("Leaderboard", _on_leaderboard))
+	if OS.has_feature("web"):
+		center.add_child(_menu_button("Fullscreen", _on_fullscreen))
 	center.add_child(_menu_button("Quit", _on_quit))
 
 	version_label = Label.new()
@@ -185,6 +174,10 @@ func _start_difficulty(difficulty: int) -> void:
 
 func _on_leaderboard() -> void:
 	Session.go_leaderboard(-1)
+
+
+func _on_fullscreen() -> void:
+	Session.request_web_fullscreen()
 
 
 func _on_quit() -> void:

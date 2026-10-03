@@ -24,7 +24,7 @@ var global_push_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var global_push_needed: bool = false
 var global_push_done: bool = false
 
-## Mobile web presentation (JS helper handles the first user gesture for fullscreen).
+## True on mobile web (CSS landscape helper applies).
 var _web_mobile_play: bool = false
 
 
@@ -34,7 +34,6 @@ func _ready() -> void:
 		and (GameLayout.is_mobile_device() or GameLayout.use_touch_ui())
 	)
 	_apply_mobile_presentation()
-	# Do not re-enter play mode on every tap — that black-flashed the WebGL canvas.
 
 
 func _notification(what: int) -> void:
@@ -86,16 +85,32 @@ func quit_game() -> void:
 	get_tree().quit()
 
 
-## Landscape + fullscreen on phones (native + mobile browsers). Desktop unchanged.
+## Landscape on phones. Web fullscreen is only via the Fullscreen menu button.
 func _apply_mobile_presentation() -> void:
 	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 	if OS.has_feature("web"):
-		# Layout only here. Fullscreen is requested once from JS on the first real gesture.
 		_js_apply_css_landscape()
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
+func request_web_fullscreen() -> void:
+	if not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval(
+		"""
+		(function () {
+			try {
+				if (window.WaveDefenceMobile && WaveDefenceMobile.enterFullscreen) {
+					WaveDefenceMobile.enterFullscreen();
+				}
+			} catch (e) {}
+		})()
+		""",
+		true
+	)
 
 
 func _release_mobile_presentation() -> void:

@@ -14,7 +14,7 @@ After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from 
 
 Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
 
-On **phones**, the web build can **CSS-rotate** the game 90° when the phone is upright so it plays in a landscape layout. A tap also requests browser fullscreen (hides the URL bar when the browser allows it). **Discord/in-app browsers** usually block that — use **⋮ → Open in Chrome**, or **Add to Home Screen**, for an app-like view. Desktop browsers stay windowed.
+On **phones**, the web build can **CSS-rotate** the game 90° when upright. Use the menu **Fullscreen** button to hide the browser bar when the browser allows it.
 
 Rebuild the site files:
 
@@ -70,7 +70,8 @@ On launch you get:
   - **Random** — randomized spawn/exit and rock tiles; every **25** waves the board rebuilds, towers clear, lives reset, and gold is based on kills on that map (`max(starting gold, kills × 3)`)
 - **Easy / Medium / Hard** — begin a run (starting gold **350 / 200 / 100**)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Web, PC, Android, and iOS **pull the same worldwide boards** when online (cached locally). Runs that opened/used the debug menu cannot be submitted.
-- **Quit** — close the game (desktop/Android). On the **web** build, also exits fullscreen / CSS rotate and tries to go back to the previous page (e.g. Discord).
+- **Fullscreen** (web) — request browser fullscreen
+- **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 

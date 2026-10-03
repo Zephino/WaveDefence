@@ -1,3 +1,14 @@
+## Version 00.01.64
+Date: 10/03/2026
+Time: 11:53 AM
+
+### Changes
+- Web menu **Fullscreen** button (no more tap-anywhere fullscreen)
+- Removed unused mobile tip banner / auto-gesture fullscreen helpers
+
+### Reason
+Fullscreen should be an explicit control; extra unused mobile UI was getting in the way.
+
 ## Version 00.01.63
 Date: 10/03/2026
 Time: 11:43 AM
