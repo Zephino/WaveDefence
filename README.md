@@ -14,7 +14,7 @@ After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from 
 
 Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
 
-On **phones**, the game detects a mobile browser, prefers **landscape**, and enters **fullscreen** after the first tap (browsers block auto-fullscreen). Desktop browsers are left windowed.
+On **phones**, the game detects a mobile browser and asks for **landscape + fullscreen** after a tap. If you stay in portrait, a **rotate** overlay appears. **iPhone Safari** often blocks true fullscreen/orientation lock — use **Share → Add to Home Screen**, then open that icon for the best view. Desktop browsers stay windowed.
 
 Rebuild the site files:
 

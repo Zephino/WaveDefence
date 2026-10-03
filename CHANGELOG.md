@@ -1,3 +1,15 @@
+## Version 00.01.60
+Date: 10/03/2026
+Time: 11:31 AM
+
+### Changes
+- Mobile web: fullscreen then landscape lock (Android-friendly order), retry on taps
+- Full-screen **Rotate your phone** overlay when the browser is in portrait
+- Enable web PWA landscape/fullscreen manifest; clearer iPhone Add-to-Home-Screen hint
+
+### Reason
+Phones detected mobile mode but browsers (especially iPhone Safari) block forced fullscreen/rotation.
+
 ## Version 00.01.59
 Date: 10/03/2026
 Time: 11:26 AM

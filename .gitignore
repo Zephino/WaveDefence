@@ -18,6 +18,10 @@ phone_export_log.txt
 !docs/
 !docs/**
 
+# Source helpers copied into docs/ on web export
+!web/
+!web/**
+
 # Keep release folder helper files; binaries already ignored above
 !pc/README.txt
 !phone/README.txt

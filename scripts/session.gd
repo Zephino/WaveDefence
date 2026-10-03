@@ -24,35 +24,31 @@ var global_push_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var global_push_needed: bool = false
 var global_push_done: bool = false
 
-## Web browsers block fullscreen until a tap; track that we already asked.
-var _web_fullscreen_armed: bool = false
-var _web_fullscreen_done: bool = false
+## Mobile web: keep asking on taps until presentation sticks (browsers are picky).
+var _web_mobile_play: bool = false
 
 
 func _ready() -> void:
 	_apply_mobile_presentation()
-	# Mobile web: wait for first tap/click to enter fullscreen (browser requirement).
-	_web_fullscreen_armed = (
+	_web_mobile_play = (
 		OS.has_feature("web")
 		and (GameLayout.is_mobile_device() or GameLayout.use_touch_ui())
 	)
-	set_process_input(_web_fullscreen_armed)
+	set_process_input(_web_mobile_play)
+	if _web_mobile_play:
+		_js_enter_play_mode()
 
 
 func _input(event: InputEvent) -> void:
-	if not _web_fullscreen_armed or _web_fullscreen_done:
+	if not _web_mobile_play:
 		return
 	var pressed := false
 	if event is InputEventScreenTouch:
 		pressed = event.pressed
 	elif event is InputEventMouseButton:
 		pressed = event.pressed
-	if not pressed:
-		return
-	_web_fullscreen_done = true
-	_request_mobile_fullscreen()
-	_js_lock_landscape()
-	set_process_input(false)
+	if pressed:
+		_js_enter_play_mode()
 
 
 func _notification(what: int) -> void:
@@ -78,6 +74,8 @@ func go_game(selected_difficulty: int = -1, selected_mode: int = -1) -> void:
 		game_mode = selected_mode
 	pending_wave_score = -1
 	pending_debug_used = false
+	if _web_mobile_play:
+		_js_enter_play_mode()
 	get_tree().change_scene_to_file(GAME_SCENE)
 
 
@@ -100,17 +98,19 @@ func quit_game() -> void:
 
 ## Landscape + fullscreen on phones (native + mobile browsers). Desktop unchanged.
 func _apply_mobile_presentation() -> void:
-	if not GameLayout.is_mobile_device():
+	if not GameLayout.is_mobile_device() and not (
+		OS.has_feature("web") and GameLayout.use_touch_ui()
+	):
 		return
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
-	_js_lock_landscape()
-	# Native apps can go fullscreen immediately; web needs a user gesture (see _input).
-	if not OS.has_feature("web"):
+	if OS.has_feature("web"):
+		_js_enter_play_mode()
+	else:
 		_request_mobile_fullscreen()
 
 
 func _release_mobile_presentation() -> void:
-	if not GameLayout.is_mobile_device():
+	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR)
 	_js_unlock_orientation()
@@ -119,33 +119,19 @@ func _release_mobile_presentation() -> void:
 
 
 func _request_mobile_fullscreen() -> void:
-	if not GameLayout.is_mobile_device():
-		return
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval(
-			"""
-			(function () {
-				try {
-					var el = document.documentElement;
-					var req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-					if (req) { req.call(el); }
-				} catch (e) {}
-			})()
-			""",
-			true
-		)
 
 
-func _js_lock_landscape() -> void:
+func _js_enter_play_mode() -> void:
 	if not OS.has_feature("web"):
 		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	JavaScriptBridge.eval(
 		"""
 		(function () {
 			try {
-				if (screen.orientation && screen.orientation.lock) {
-					screen.orientation.lock('landscape').catch(function () {});
+				if (window.WaveDefenceMobile && WaveDefenceMobile.enterPlayMode) {
+					WaveDefenceMobile.enterPlayMode();
 				}
 			} catch (e) {}
 		})()

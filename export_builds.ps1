@@ -120,10 +120,20 @@ if ($doWeb) {
     }
     # GitHub Pages: skip Jekyll so wasm/pck paths work.
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline
-    # Bust phone/browser caches so VERSION updates show without a manual hard refresh.
     $ver = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
     $htmlPath = Join-Path $ProjectRoot "docs\index.html"
     $html = Get-Content $htmlPath -Raw
+
+    # Mobile rotate/fullscreen helper (browsers cannot fully force this without help).
+    $mobileJsSrc = Join-Path $ProjectRoot "web\mobile_play.js"
+    $mobileJsDst = Join-Path $ProjectRoot "docs\mobile_play.js"
+    Copy-Item -Force $mobileJsSrc $mobileJsDst
+    $mobileTag = "<script src=`"mobile_play.js?v=$ver`"></script>"
+    if ($html -notmatch "mobile_play\.js") {
+        $html = $html -replace "</head>", ($mobileTag + "</head>")
+    }
+
+    # Bust phone/browser caches so VERSION updates show without a manual hard refresh.
     $bust = @"
 <script>
 (function () {
@@ -151,9 +161,9 @@ if ($doWeb) {
 "@
     if ($html -notmatch [regex]::Escape("var VER = `"$ver`"")) {
         $html = $html -replace "</head>", ($bust + "</head>")
-        Set-Content -Path $htmlPath -Value $html -NoNewline
     }
-    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver)" -ForegroundColor Green
+    Set-Content -Path $htmlPath -Value $html -NoNewline
+    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper)" -ForegroundColor Green
 }
 
 Write-Host ""
