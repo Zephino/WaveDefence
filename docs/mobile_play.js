@@ -4,6 +4,7 @@
 	var mode = ""; // "" | "portrait-css" | "landscape-fill"
 	var fullscreenAttempted = false;
 	var enterInFlight = false;
+	var released = false;
 
 	function isPortrait() {
 		try {
@@ -66,8 +67,65 @@
 		}, 120);
 	}
 
+	function exitFullscreen() {
+		var exit =
+			document.exitFullscreen ||
+			document.webkitExitFullscreen ||
+			document.webkitCancelFullScreen ||
+			document.msExitFullscreen;
+		if (!exit || !isFullscreen()) return Promise.resolve(true);
+		try {
+			var out = exit.call(document);
+			if (out && typeof out.then === "function") {
+				return out.then(function () { return true; }).catch(function () { return true; });
+			}
+		} catch (e) {}
+		return Promise.resolve(true);
+	}
+
+	function unlockOrientation() {
+		try {
+			if (screen.orientation && screen.orientation.unlock) {
+				screen.orientation.unlock();
+			}
+		} catch (e) {}
+	}
+
+	/** Undo fullscreen / CSS rotate so the user can leave the page normally (Quit). */
+	function exitPlayMode() {
+		released = true;
+		enterInFlight = false;
+		if (banner) banner.style.display = "none";
+		unlockOrientation();
+		var c = canvasEl();
+		clearCanvasCss(c);
+		mode = "";
+
+		return exitFullscreen().then(function () {
+			// Prefer going back (Discord / in-app browser / previous tab history).
+			try {
+				if (window.history && window.history.length > 1) {
+					window.history.back();
+					return true;
+				}
+			} catch (e) {}
+			try {
+				window.close();
+			} catch (e) {}
+			// Fallback: replace the game with a simple leave screen.
+			try {
+				document.body.innerHTML =
+					'<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+					'background:#101418;color:#e8eef2;font:18px/1.4 system-ui,sans-serif;text-align:center;padding:24px;">' +
+					"<div><b>Wave Defence closed</b><br><br>You can close this tab or go back.</div></div>";
+			} catch (e) {}
+			return true;
+		});
+	}
+
 	/** Apply CSS only when orientation mode actually changes. */
 	function applyCssLandscape() {
+		if (released) return;
 		var c = canvasEl();
 		if (!c) return;
 
@@ -196,6 +254,7 @@
 	 * @param {boolean} [opts.forceFullscreen] — request FS even if we already tried
 	 */
 	function enterPlayMode(opts) {
+		if (released) return Promise.resolve(false);
 		opts = opts || {};
 		applyCssLandscape();
 
@@ -224,6 +283,7 @@
 
 	window.WaveDefenceMobile = {
 		enterPlayMode: enterPlayMode,
+		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isPortrait: isPortrait,
 		refreshRotatePrompt: applyCssLandscape,
@@ -234,24 +294,28 @@
 		if (isInAppBrowser()) showFsTip();
 
 		window.addEventListener("resize", function () {
-			applyCssLandscape();
+			if (!released) applyCssLandscape();
 		});
 		window.addEventListener("orientationchange", function () {
+			if (released) return;
 			mode = ""; // force recompute after rotate
 			setTimeout(applyCssLandscape, 80);
 			setTimeout(applyCssLandscape, 300);
 		});
 		document.addEventListener("fullscreenchange", function () {
+			if (released) return;
 			mode = "";
 			applyCssLandscape();
 		});
 		document.addEventListener("webkitfullscreenchange", function () {
+			if (released) return;
 			mode = "";
 			applyCssLandscape();
 		});
 
 		// One gesture only for fullscreen — repeating it on every button tap caused black flashes.
 		function onFirstGesture() {
+			if (released) return;
 			enterPlayMode({ forceFullscreen: true });
 			document.removeEventListener("pointerdown", onFirstGesture, true);
 			document.removeEventListener("touchstart", onFirstGesture, true);

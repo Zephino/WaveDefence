@@ -1,3 +1,13 @@
+## Version 00.01.63
+Date: 10/03/2026
+Time: 11:43 AM
+
+### Changes
+- Web **Quit** exits fullscreen, clears CSS landscape rotate, unlocks orientation, and tries `history.back()` so users return to Discord/prior page
+
+### Reason
+Quit on the GitHub web build should undo mobile presentation and let people get back to what they were doing.
+
 ## Version 00.01.62
 Date: 10/03/2026
 Time: 11:41 AM

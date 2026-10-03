@@ -70,7 +70,7 @@ On launch you get:
   - **Random** — randomized spawn/exit and rock tiles; every **25** waves the board rebuilds, towers clear, lives reset, and gold is based on kills on that map (`max(starting gold, kills × 3)`)
 - **Easy / Medium / Hard** — begin a run (starting gold **350 / 200 / 100**)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Web, PC, Android, and iOS **pull the same worldwide boards** when online (cached locally). Runs that opened/used the debug menu cannot be submitted.
-- **Quit** — close the game (desktop and Android)
+- **Quit** — close the game (desktop/Android). On the **web** build, also exits fullscreen / CSS rotate and tries to go back to the previous page (e.g. Discord).
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 

@@ -77,6 +77,12 @@ func go_leaderboard(wave_score: int = -1, debug_used: bool = false, run_difficul
 
 func quit_game() -> void:
 	_release_mobile_presentation()
+	if OS.has_feature("web"):
+		# Exit fullscreen / CSS rotate and try to leave the page (history.back).
+		_js_exit_play_mode()
+		# Stop the engine after handing control back to the browser.
+		get_tree().quit()
+		return
 	get_tree().quit()
 
 
@@ -96,9 +102,9 @@ func _release_mobile_presentation() -> void:
 	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR)
-	_js_unlock_orientation()
-	if not OS.has_feature("web"):
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	if OS.has_feature("web"):
+		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 
 
 func _js_apply_css_landscape() -> void:
@@ -118,15 +124,15 @@ func _js_apply_css_landscape() -> void:
 	)
 
 
-func _js_unlock_orientation() -> void:
+func _js_exit_play_mode() -> void:
 	if not OS.has_feature("web"):
 		return
 	JavaScriptBridge.eval(
 		"""
 		(function () {
 			try {
-				if (screen.orientation && screen.orientation.unlock) {
-					screen.orientation.unlock();
+				if (window.WaveDefenceMobile && WaveDefenceMobile.exitPlayMode) {
+					WaveDefenceMobile.exitPlayMode();
 				}
 			} catch (e) {}
 		})()
