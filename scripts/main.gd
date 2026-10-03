@@ -1,0 +1,575 @@
+extends Node2D
+
+var game_state: GameState
+var grid: GameGrid
+var pathfinder: Pathfinder
+var build_system: BuildSystem
+var wave_manager: WaveManager
+var hud: UIHud
+var debug_panel: DebugPanel
+
+var enemies: Node2D
+var projectiles: Node2D
+var map_offset: Vector2 = GameLayout.board_origin()
+
+## Hold left mouse / finger to paint-place towers/walls across cells.
+var _paint_holding: bool = false
+var _paint_enabled: bool = false
+var _last_paint_cell: Vector2i = Vector2i(-999, -999)
+## Touch / mouse long-press on a tower toggles multi-select.
+var _awaiting_tower_tap: bool = false
+var _long_press_triggered: bool = false
+var _press_start_pos: Vector2 = Vector2.ZERO
+var _press_hold_time: float = 0.0
+const LONG_PRESS_SEC := 0.45
+const TAP_MOVE_PX := 18.0
+var _touch_ui: bool = false
+var _multi_select_mode: bool = false
+
+
+func _ready() -> void:
+	_touch_ui = GameLayout.use_touch_ui()
+	_setup_world()
+	_setup_systems()
+	_setup_ui()
+	build_system.refresh_after_reset()
+
+
+func _setup_world() -> void:
+	var bg := ColorRect.new()
+	bg.color = Color(0.08, 0.1, 0.13)
+	bg.size = Vector2(1280, 720)
+	bg.z_index = -10
+	# Must ignore mouse or this fullscreen Control eats all map clicks.
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+
+	grid = GameGrid.new()
+	grid.name = "GameGrid"
+	grid.position = map_offset
+	add_child(grid)
+	_apply_run_map(false)
+
+	enemies = Node2D.new()
+	enemies.name = "Enemies"
+	enemies.position = map_offset
+	add_child(enemies)
+
+	projectiles = Node2D.new()
+	projectiles.name = "Projectiles"
+	projectiles.position = map_offset
+	add_child(projectiles)
+
+
+func _setup_systems() -> void:
+	game_state = GameState.new()
+	game_state.name = "GameState"
+	game_state.difficulty = Session.difficulty
+	game_state.game_mode = Session.game_mode
+	add_child(game_state)
+
+	pathfinder = Pathfinder.new(grid)
+
+	build_system = BuildSystem.new()
+	build_system.name = "BuildSystem"
+	add_child(build_system)
+	build_system.setup(grid, pathfinder, game_state, enemies, projectiles)
+
+	wave_manager = WaveManager.new()
+	wave_manager.name = "WaveManager"
+	add_child(wave_manager)
+	wave_manager.setup(grid, pathfinder, game_state, enemies)
+	wave_manager.wave_started.connect(_on_wave_started)
+	wave_manager.wave_cleared.connect(_on_wave_cleared)
+	wave_manager.map_rotate_requested.connect(_on_map_rotate_requested)
+
+	grid.tower_removed.connect(func(_c: Vector2i) -> void: wave_manager.repath_living_enemies())
+	grid.tower_placed.connect(func(_c: Vector2i, _t: Node) -> void: wave_manager.repath_living_enemies())
+
+
+func _setup_ui() -> void:
+	hud = UIHud.new()
+	add_child(hud)
+	hud.setup(game_state, VersionInfo.current())
+	hud.skip_timer_pressed.connect(_on_skip_timer)
+	hud.sell_pressed.connect(_on_sell_selected)
+	hud.deselect_pressed.connect(_on_deselect)
+	hud.upgrade_pressed.connect(_on_upgrade_selected)
+	hud.final_element_pressed.connect(_on_final_element_selected)
+	hud.tower_type_selected.connect(_on_tower_type_selected)
+	hud.multi_select_changed.connect(func(on: bool) -> void:
+		_multi_select_mode = on
+		hud.set_status("Multi-select %s." % ("ON — tap towers to add/remove" if on else "OFF"))
+	)
+	build_system.selected_towers_changed.connect(hud.update_sell_button)
+	build_system.selection_upgrade_changed.connect(hud.update_upgrade_buttons)
+	hud.end_run_confirmed.connect(_on_end_run_confirmed)
+	game_state.game_over.connect(_on_game_over_to_leaderboard)
+	wave_manager.timer_updated.connect(hud.update_timer)
+	wave_manager.enemies_remaining_changed.connect(hud.update_enemies_remaining)
+	wave_manager.skip_unlock_changed.connect(func(_u: bool) -> void: hud.set_skip_hint_ready())
+
+	debug_panel = DebugPanel.new()
+	add_child(debug_panel)
+	debug_panel.debug_opened.connect(_mark_debug_used)
+	debug_panel.add_gold_requested.connect(_debug_add_gold)
+	debug_panel.add_lives_requested.connect(_debug_add_lives)
+	debug_panel.set_wave_requested.connect(_debug_set_wave)
+	debug_panel.send_wave_requested.connect(_debug_force_next_wave)
+	debug_panel.clear_enemies_requested.connect(_debug_clear_enemies)
+	debug_panel.god_mode_toggled.connect(_debug_god_mode)
+	debug_panel.restart_requested.connect(restart_run)
+
+	wave_manager.begin_run()
+	hud.refresh_run_labels()
+	if WaveScaler.is_random_mode(game_state.game_mode):
+		hud.set_status("Random map %d — build a path, then Start Round." % game_state.map_sector)
+	elif _touch_ui:
+		hud.set_status("Touch: drag to place, long-press tower to multi-select, then Start Round.")
+	else:
+		hud.set_status("Build your maze, then press Start Round.")
+	hud.update_timer(0.0, true, "prep")
+
+
+func _process(delta: float) -> void:
+	if game_state.is_game_over:
+		_paint_holding = false
+		_paint_enabled = false
+		_awaiting_tower_tap = false
+		hud.hide_board_tower_tooltip()
+		return
+	hud.tick_tooltips()
+	var mouse := get_global_mouse_position()
+	var local_map := mouse - map_offset
+
+	if _awaiting_tower_tap and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_press_hold_time += delta
+		if mouse.distance_to(_press_start_pos) > TAP_MOVE_PX:
+			_awaiting_tower_tap = false
+		elif _press_hold_time >= LONG_PRESS_SEC:
+			_long_press_triggered = true
+			_awaiting_tower_tap = false
+			build_system.try_place_at(local_map, true)
+			hud.set_status("Multi-select: %d tower(s). Long-press or Multi: On." % build_system.selection_count())
+			var tower := grid.get_tower_at(grid.world_to_cell(local_map))
+			if tower:
+				hud.show_touch_tower_info(tower as Tower)
+
+	# Desktop hover tooltips; on touch, info is tap/long-press driven.
+	if not _touch_ui:
+		var hovered_tower := build_system.update_hover(local_map)
+		if hovered_tower != null and _is_on_board(local_map) and not _paint_holding and not _awaiting_tower_tap:
+			hud.show_board_tower_tooltip_for(hovered_tower, mouse)
+		elif not hud.is_tooltip_pinned():
+			hud.hide_board_tower_tooltip()
+	else:
+		build_system.update_hover(local_map)
+
+	if _paint_holding and _paint_enabled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		if not _is_additive_select():
+			_paint_place_at(local_map, false)
+
+
+func _is_additive_select() -> bool:
+	return (
+		_multi_select_mode
+		or Input.is_key_pressed(KEY_CTRL)
+		or Input.is_key_pressed(KEY_SHIFT)
+	)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		_handle_key(event as InputEventKey)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		_handle_mouse(event as InputEventMouseButton)
+	elif event is InputEventScreenTouch:
+		# Prefer mouse emulation path; still mark touch UI if a screen appears mid-session.
+		_touch_ui = true
+
+
+func _handle_key(event: InputEventKey) -> void:
+	match event.keycode:
+		KEY_F1, KEY_QUOTELEFT:
+			debug_panel.toggle()
+		KEY_G:
+			_debug_add_gold(1000)
+		KEY_L:
+			_debug_add_lives(5)
+		KEY_N:
+			_debug_force_next_wave()
+		KEY_K:
+			_debug_clear_enemies()
+		KEY_U:
+			_on_upgrade_selected()
+		KEY_ESCAPE:
+			_on_deselect()
+		KEY_R:
+			restart_run()
+
+
+func _handle_mouse(event: InputEventMouseButton) -> void:
+	if game_state.is_game_over:
+		return
+
+	if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		var local_map := get_global_mouse_position() - map_offset
+		if _is_on_board(local_map) or build_system.selection_count() > 0:
+			_on_deselect()
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.button_index != MOUSE_BUTTON_LEFT:
+		return
+
+	if not event.pressed:
+		_finish_pointer_press()
+		return
+
+	var local_map := get_global_mouse_position() - map_offset
+	if not _is_on_board(local_map):
+		# Tap outside the board clears selection on touch devices.
+		if _touch_ui and build_system.selection_count() > 0:
+			_on_deselect()
+			get_viewport().set_input_as_handled()
+		return
+	get_viewport().set_input_as_handled()
+
+	var additive := event.ctrl_pressed or event.shift_pressed or _multi_select_mode
+	_paint_holding = true
+	_last_paint_cell = Vector2i(-999, -999)
+	_press_start_pos = get_global_mouse_position()
+	_press_hold_time = 0.0
+	_long_press_triggered = false
+
+	var cell := grid.world_to_cell(local_map)
+	var existing = grid.get_tower_at(cell)
+
+	# Tower press: wait for short-tap vs long-press (multi-select).
+	if existing != null and not (TowerData.is_wall(existing.tower_id) and not TowerData.is_wall(build_system.selected_tower_id) and build_system.can_place_at(cell)):
+		if additive:
+			_paint_enabled = false
+			_awaiting_tower_tap = false
+			build_system.try_place_at(local_map, true)
+			hud.set_status("Selection: %d tower(s)." % build_system.selection_count())
+			hud.show_touch_tower_info(existing as Tower)
+			return
+		_awaiting_tower_tap = true
+		_paint_enabled = false
+		return
+
+	_awaiting_tower_tap = false
+
+	# Ctrl/Shift / Multi mode on empty = no paint.
+	if additive:
+		_paint_enabled = false
+		return
+
+	var placed := _paint_place_at(local_map, true)
+	_paint_enabled = placed
+	if not placed:
+		var count := build_system.selection_count()
+		if count > 0 and existing == null:
+			# Empty failed cell while something is selected → deselect (touch-friendly).
+			_on_deselect()
+		elif not game_state.can_afford(int(TowerData.get_def(build_system.selected_tower_id)["cost"])):
+			hud.set_status("Not enough gold.")
+		elif pathfinder.would_block_path(cell):
+			hud.set_status("Can't place there — would block the path.")
+		else:
+			hud.set_status("Can't place there.")
+
+
+func _finish_pointer_press() -> void:
+	var local_map := get_global_mouse_position() - map_offset
+	if _awaiting_tower_tap and not _long_press_triggered and _is_on_board(local_map):
+		build_system.try_place_at(local_map, false)
+		var cell := grid.world_to_cell(local_map)
+		var tower = grid.get_tower_at(cell)
+		var count := build_system.selection_count()
+		if tower:
+			hud.set_status("Selected %d. Long-press or Multi: On to multi-select." % maxi(count, 1))
+			hud.show_touch_tower_info(tower as Tower)
+	_awaiting_tower_tap = false
+	_long_press_triggered = false
+	_paint_holding = false
+	_paint_enabled = false
+	_last_paint_cell = Vector2i(-999, -999)
+	_press_hold_time = 0.0
+
+
+func _is_on_board(local_map: Vector2) -> bool:
+	if local_map.x < 0.0 or local_map.y < 0.0:
+		return false
+	var size := grid.map_pixel_size()
+	return local_map.x <= size.x and local_map.y <= size.y
+
+
+func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:
+	if not _is_on_board(local_map):
+		return false
+	var cell := grid.world_to_cell(local_map)
+	if cell == _last_paint_cell:
+		return false
+	var had_wall := false
+	var existing = grid.get_tower_at(cell)
+	if existing and TowerData.is_wall(existing.tower_id):
+		had_wall = true
+	if not build_system.can_place_at(cell):
+		# Mark empty invalid cells so we don't spam attempts while held.
+		if existing == null:
+			_last_paint_cell = cell
+		return false
+	if build_system.try_place_at(local_map, false):
+		_last_paint_cell = cell
+		if show_status:
+			if had_wall and not TowerData.is_wall(build_system.selected_tower_id):
+				hud.set_status("Tower built over wall. Hold-drag to continue.")
+			else:
+				hud.set_status("Hold and drag to place more.")
+		return true
+	return false
+
+
+func _on_tower_type_selected(tower_id: String) -> void:
+	build_system.select_tower_type(tower_id)
+	var def := TowerData.get_def(tower_id)
+	var name := str(def.get("display_name", tower_id))
+	hud.set_status("Placing %s. Sell a tower before building over it." % name)
+
+
+func _on_sell_selected() -> void:
+	var count := build_system.selection_count()
+	var refund := build_system.selection_sell_total()
+	if build_system.sell_selected():
+		hud.set_status("Sold %d tower(s) for %d gold." % [count, refund])
+	else:
+		hud.set_status("Nothing selected to sell.")
+
+
+func _on_deselect() -> void:
+	if build_system.selection_count() <= 0:
+		hud.set_status("Nothing selected.")
+		return
+	build_system.clear_selection()
+	hud.set_status("Selection cleared.")
+
+
+func _on_upgrade_selected() -> void:
+	var result := build_system.upgrade_selected()
+	var upgraded: int = int(result.get("upgraded", 0))
+	var spent: int = int(result.get("spent", 0))
+	var failed: int = int(result.get("failed_afford", 0))
+	if upgraded > 0:
+		hud.set_status("Upgraded %d tower(s) (-%d gold).%s" % [
+			upgraded,
+			spent,
+			" Not enough gold for %d." % failed if failed > 0 else "",
+		])
+	elif failed > 0:
+		hud.set_status("Not enough gold to upgrade.")
+	else:
+		hud.set_status("Select towers under +3 to upgrade (walls can't upgrade).")
+
+
+func _on_final_element_selected(element_id: String) -> void:
+	var result := build_system.apply_final_selected(element_id)
+	var applied: int = int(result.get("applied", 0))
+	var spent: int = int(result.get("spent", 0))
+	var failed: int = int(result.get("failed_afford", 0))
+	var label := TowerData.final_element_label(element_id)
+	if applied > 0:
+		hud.set_status("Final %s on %d tower(s) (-%d gold).%s" % [
+			label,
+			applied,
+			spent,
+			" Not enough gold for %d." % failed if failed > 0 else "",
+		])
+	elif failed > 0:
+		hud.set_status("Not enough gold for final %s." % label)
+	else:
+		hud.set_status("Need +3 upgrades before choosing a final elemental buff.")
+
+
+func _on_skip_timer() -> void:
+	if wave_manager.phase == WaveManager.Phase.PREP:
+		if wave_manager.start_round():
+			hud.set_status("Round started — build timer running, then waves begin.")
+		else:
+			hud.set_status("Keep a path open from spawn to exit, then Start Round.")
+		return
+	if wave_manager.phase == WaveManager.Phase.WAVE:
+		if wave_manager.try_skip_timer():
+			var bonus := wave_manager.last_early_send_bonus
+			if bonus > 0:
+				hud.set_status("Early send — next wave incoming (+%d gold)." % bonus)
+			else:
+				hud.set_status("Early send — next wave incoming.")
+		elif not wave_manager.skip_unlocked:
+			hud.set_status("Kill 25% of enemies to unlock Send Next Wave.")
+		elif not wave_manager.has_open_path():
+			hud.set_status("Can't early-send — keep a path open spawn to exit.")
+		else:
+			hud.set_status("Can't early-send right now.")
+		return
+	if wave_manager.try_skip_timer():
+		var bonus := wave_manager.last_early_send_bonus
+		if bonus > 0:
+			hud.set_status("Timer skipped — wave starting (+%d gold)." % bonus)
+		else:
+			hud.set_status("Timer skipped — wave starting.")
+	elif wave_manager.phase == WaveManager.Phase.INTERMISSION:
+		if not wave_manager.skip_unlocked:
+			hud.set_status("Can't skip — unlock was not earned.")
+		elif not wave_manager.can_send_wave():
+			hud.set_status("Can't skip — keep a path open spawn to exit.")
+		else:
+			hud.set_status("Can't skip right now.")
+	else:
+		hud.set_status("No timer to skip right now.")
+
+
+func _on_wave_started(wave: int, banner: String) -> void:
+	hud.set_banner(banner)
+	# Banner lives in the top bar; keep status short so text doesn't stack/overlap.
+	hud.set_status("Wave %d started." % wave)
+
+
+func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
+	hud.set_banner("")
+	if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
+		# Full-clear rotate is handled by map_rotate_requested; early-send waits until the board empties.
+		if wave_manager.pending_map_rotate_wave > 0:
+			hud.set_status("Wave %d sector goal hit — clear the board for a new map." % wave)
+		return
+	if bonus_gold > 0:
+		hud.set_status("Wave %d cleared — %d kills, +%d bonus gold. Next wave on timer." % [wave, kills, bonus_gold])
+	else:
+		hud.set_status("Wave %d cleared — %d kills. Next wave on timer." % [wave, kills])
+
+
+func _on_map_rotate_requested(wave: int) -> void:
+	var kills_on_map := game_state.kills_this_map
+	var carry_gold := WaveScaler.map_rotate_gold(game_state.difficulty, kills_on_map)
+	for child in projectiles.get_children():
+		child.queue_free()
+	wave_manager.clear_enemies()
+	game_state.begin_next_map_sector(carry_gold)
+	_apply_run_map(true)
+	build_system.refresh_after_reset()
+	build_system.select_tower_type("gunner")
+	hud.highlight_tower("gunner")
+	hud.set_banner("")
+	hud.refresh_run_labels()
+	wave_manager.begin_run()
+	hud.update_timer(0.0, true, "prep")
+	hud.set_status(
+		"Map %d — wave %d sector cleared (%d kills → %d gold). Rebuild, then Start Round." % [
+			game_state.map_sector,
+			wave,
+			kills_on_map,
+			carry_gold,
+		]
+	)
+
+
+func _apply_run_map(new_random: bool) -> void:
+	if grid == null:
+		return
+	if WaveScaler.is_random_mode(Session.game_mode if game_state == null else game_state.game_mode):
+		if new_random or not grid.is_random_layout:
+			grid.reset(false)
+	else:
+		grid.reset(true)
+
+
+func _mark_debug_used() -> void:
+	game_state.mark_debug_used()
+	hud.set_status("Debug used — this run can't be saved to the leaderboard.")
+
+
+func _debug_add_gold(amount: int) -> void:
+	_mark_debug_used()
+	game_state.add_gold(amount)
+
+
+func _debug_add_lives(amount: int) -> void:
+	_mark_debug_used()
+	game_state.lives += amount
+	game_state.lives_changed.emit(game_state.lives)
+
+
+func _debug_set_wave(wave_number: int) -> void:
+	_mark_debug_used()
+	wave_manager.jump_to_wave(wave_number)
+	hud.set_banner("")
+	hud.set_status("Jumped — next wave soon (skip available). Debug run: no leaderboard.")
+
+
+func _debug_force_next_wave() -> void:
+	_mark_debug_used()
+	if wave_manager.force_next_wave():
+		hud.set_status("Debug: forced next wave (no leaderboard this run).")
+	else:
+		hud.set_status("Debug: can't force wave — keep a path open spawn to exit.")
+
+
+func _debug_clear_enemies() -> void:
+	_mark_debug_used()
+	wave_manager.clear_enemies()
+	hud.set_banner("")
+	wave_manager.force_intermission(WaveScaler.INTERMISSION_TIME, true)
+	hud.set_status("Enemies cleared — intermission started. Debug run: no leaderboard.")
+
+
+func _debug_god_mode(enabled: bool) -> void:
+	_mark_debug_used()
+	game_state.god_mode = enabled
+	debug_panel.set_god_mode_ui(enabled)
+
+
+func _on_end_run_confirmed() -> void:
+	if game_state == null or game_state.is_game_over:
+		return
+	var wave_reached := maxi(game_state.wave, game_state.highest_wave)
+	game_state.is_game_over = true
+	wave_manager.clear_enemies()
+	for child in projectiles.get_children():
+		child.queue_free()
+	if game_state.debug_used:
+		hud.set_status("Run ended — debug used, leaderboard entry blocked.")
+	else:
+		hud.set_status("Run ended — checking leaderboard for wave %d..." % wave_reached)
+	call_deferred("_boot_leaderboard", wave_reached)
+
+
+func _on_game_over_to_leaderboard(wave_reached: int) -> void:
+	if game_state.debug_used:
+		hud.set_status("Game over — debug used, leaderboard entry blocked.")
+	else:
+		hud.set_status("Game over — loading leaderboard...")
+	wave_manager.phase = WaveManager.Phase.PREP
+	call_deferred("_boot_leaderboard", wave_reached)
+
+
+func _boot_leaderboard(wave_reached: int) -> void:
+	Session.go_leaderboard(wave_reached, game_state.debug_used, game_state.difficulty)
+
+
+func restart_run() -> void:
+	for child in projectiles.get_children():
+		child.queue_free()
+	game_state.reset_run(Session.difficulty, Session.game_mode)
+	_apply_run_map(true)
+	build_system.refresh_after_reset()
+	hud.set_banner("")
+	hud.highlight_tower("gunner")
+	build_system.select_tower_type("gunner")
+	hud.refresh_run_labels()
+	wave_manager.begin_run()
+	if WaveScaler.is_random_mode(game_state.game_mode):
+		hud.set_status("Random map %d — build a path, then Start Round." % game_state.map_sector)
+	else:
+		hud.set_status("Build your maze, then press Start Round.")
+	hud.update_timer(0.0, true, "prep")

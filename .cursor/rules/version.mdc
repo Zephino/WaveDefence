@@ -1,0 +1,35 @@
+---
+description: Project version must be bumped once per modifying user message (XX.XX.XX)
+alwaysApply: true
+---
+
+# Version Rule
+
+Update the project version every time a user message results in one or more project modifications.
+
+## Format
+
+`XX.XX.XX` — starting version: `00.01.00`
+
+## Increment
+
+For each completed modifying user message, increase by `00.00.01` once.
+
+Examples:
+
+- `00.01.00` → `00.01.01`
+- `00.01.98` → `00.01.99`
+- `00.01.99` → `00.02.00`
+- `00.99.99` → `01.00.00`
+
+When a section reaches `99`, the next increment rolls over into the section to the left.
+
+## Change-set scope
+
+- Multiple modifications in one user message = **one** version increment.
+- Do not increment multiple times for changes within the same user message.
+
+## Storage
+
+- Canonical version: root `VERSION` file.
+- Before finishing, verify the current version is updated everywhere it is stored, displayed, or referenced.

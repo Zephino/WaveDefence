@@ -1,0 +1,21 @@
+---
+description: Validate untrusted input and protect credentials and private data
+alwaysApply: true
+---
+
+# Protect Data and Secrets
+
+## Inputs and boundaries
+
+- Validate untrusted input before using it in queries, file paths, commands, or external requests.
+- Use parameterized APIs and appropriate encoding instead of building executable strings from input.
+- Enforce existing access checks where the project has users or protected data.
+
+## Secrets and logs
+
+- Do not hardcode passwords, tokens, private keys, or other credentials.
+- Use the project's existing secret or environment configuration method.
+- Avoid logging sensitive values; redact them from errors and examples.
+- Never commit real secrets or private data in test fixtures.
+
+When changing data handling, check that the original permissions and privacy behavior still hold. Flag a discovered secret or data exposure without repeating the secret in chat or a commit.

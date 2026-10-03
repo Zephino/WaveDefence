@@ -1,0 +1,40 @@
+# Godot 4+
+.godot/
+*.translation
+export.cfg
+build/
+*.apk
+*.apk.idsig
+*.aab
+*.ipa
+*.zip
+*.pck
+*.exe
+*.console.exe
+pc_export_log.txt
+phone_export_log.txt
+
+# Web build for GitHub Pages (docs/) must include pck/wasm
+!docs/
+!docs/**
+
+# Keep release folder helper files; binaries already ignored above
+!pc/README.txt
+!phone/README.txt
+!phone/android/README.txt
+!phone/ios/README.txt
+!pc/.gdignore
+!phone/.gdignore
+!phone/android/.gdignore
+!phone/ios/.gdignore
+
+# Leaderboard API deps / secrets
+leaderboard-api/node_modules/
+leaderboard-api/.wrangler/
+.env
+.env.*
+
+# Launcher diagnostics
+godot_launch.log
+godot_stdout.log
+launcher_out.txt

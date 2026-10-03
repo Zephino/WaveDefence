@@ -1,0 +1,524 @@
+class_name UIHud
+extends CanvasLayer
+
+signal skip_timer_pressed
+signal sell_pressed
+signal deselect_pressed
+signal upgrade_pressed
+signal final_element_pressed(element_id: String)
+signal tower_type_selected(tower_id: String)
+signal end_run_confirmed
+signal multi_select_changed(enabled: bool)
+
+var game_state: GameState
+var multi_select_enabled: bool = false
+
+var gold_label: Label
+var lives_label: Label
+var wave_label: Label
+var difficulty_label: Label
+var mode_label: Label
+var enemies_label: Label
+var banner_label: Label
+var version_label: Label
+var status_label: Label
+var timer_label: Label
+var skip_button: Button
+var sell_button: Button
+var deselect_button: Button
+var upgrade_button: Button
+var multi_select_button: Button
+var end_run_button: Button
+var final_buttons: Dictionary = {}
+var tower_buttons: Dictionary = {}
+var board_tooltip: PanelContainer
+var board_tooltip_label: Label
+var _end_run_overlay: Control
+var _tooltip_hide_at_msec: int = 0
+
+
+func setup(p_state: GameState, version_text: String) -> void:
+	game_state = p_state
+	_build_ui(version_text)
+	game_state.gold_changed.connect(_on_gold_changed)
+	game_state.lives_changed.connect(_on_lives_changed)
+	game_state.wave_changed.connect(_on_wave_changed)
+	_on_gold_changed(game_state.gold)
+	_on_lives_changed(game_state.lives)
+	_on_wave_changed(game_state.wave)
+	call_deferred("_clear_gui_focus")
+
+
+func _build_ui(version_text: String) -> void:
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+
+	var top := HBoxContainer.new()
+	top.position = Vector2(12, 8)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_theme_constant_override("separation", 18)
+	root.add_child(top)
+
+	gold_label = Label.new()
+	lives_label = Label.new()
+	wave_label = Label.new()
+	difficulty_label = Label.new()
+	difficulty_label.modulate = Color(0.72, 0.82, 0.95)
+	mode_label = Label.new()
+	mode_label.modulate = Color(0.78, 0.7, 0.9)
+	banner_label = Label.new()
+	banner_label.visible = false
+	banner_label.modulate = Color(1.0, 0.82, 0.28)
+	enemies_label = Label.new()
+	enemies_label.modulate = Color(0.9, 0.75, 0.65)
+	version_label = Label.new()
+	version_label.text = "v%s" % version_text
+	version_label.modulate = Color(0.7, 0.75, 0.8)
+	top.add_child(gold_label)
+	top.add_child(lives_label)
+	top.add_child(wave_label)
+	top.add_child(difficulty_label)
+	top.add_child(mode_label)
+	top.add_child(banner_label)
+	top.add_child(enemies_label)
+	top.add_child(version_label)
+	refresh_run_labels()
+	update_enemies_remaining(0, 0, 0)
+
+	# Status sits under the top bar only — never shares a row with Gold/Wave/banner.
+	status_label = Label.new()
+	status_label.position = Vector2(GameLayout.board_origin().x, 40)
+	status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_label.modulate = Color(0.75, 0.8, 0.85)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
+	root.add_child(status_label)
+
+	var dual_sides := GameLayout.use_touch_ui()
+	var left_box := _make_side_panel(root, GameLayout.sidebar_rect(), not dual_sides)
+	_fill_shop_column(left_box)
+
+	var action_parent: VBoxContainer = left_box
+	if dual_sides:
+		# Phone: actions use the right gutter so nothing needs a scrollbar.
+		action_parent = _make_side_panel(root, GameLayout.right_sidebar_rect(), false)
+		var actions_title := Label.new()
+		actions_title.text = "Actions"
+		actions_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		action_parent.add_child(actions_title)
+	else:
+		var spacer := Control.new()
+		spacer.custom_minimum_size = Vector2(0, 4)
+		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		left_box.add_child(spacer)
+
+	_fill_actions_column(action_parent)
+
+	board_tooltip = PanelContainer.new()
+	board_tooltip.visible = false
+	board_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	board_tooltip.z_index = 50
+	root.add_child(board_tooltip)
+	board_tooltip_label = Label.new()
+	board_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	board_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	board_tooltip_label.custom_minimum_size = Vector2(220, 0)
+	board_tooltip.add_child(board_tooltip_label)
+
+	_build_end_run_confirm(root)
+
+	highlight_tower("gunner")
+	update_upgrade_buttons(false, 0, false, 0)
+
+
+func _build_end_run_confirm(root: Control) -> void:
+	_end_run_overlay = Control.new()
+	_end_run_overlay.visible = false
+	_end_run_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_end_run_overlay.z_index = 80
+	_end_run_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(_end_run_overlay)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_end_run_overlay.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_end_run_overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(420, 210)
+	center.add_child(panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	panel.add_child(box)
+
+	var pad_top := Control.new()
+	pad_top.custom_minimum_size = Vector2(0, 8)
+	pad_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(pad_top)
+
+	var title := Label.new()
+	title.text = "End this run?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 26)
+	box.add_child(title)
+
+	var body := Label.new()
+	body.text = "Your wave score will be checked against the leaderboard.\nThis cannot be undone."
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.modulate = Color(0.8, 0.82, 0.86)
+	box.add_child(body)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(row)
+
+	var btn_h := 48.0 if GameLayout.use_touch_ui() else 40.0
+	var cancel := Button.new()
+	cancel.text = "Cancel"
+	cancel.focus_mode = Control.FOCUS_NONE
+	cancel.custom_minimum_size = Vector2(140, btn_h)
+	cancel.pressed.connect(hide_end_run_confirm)
+	row.add_child(cancel)
+
+	var confirm := Button.new()
+	confirm.text = "End Run"
+	confirm.focus_mode = Control.FOCUS_NONE
+	confirm.custom_minimum_size = Vector2(140, btn_h)
+	confirm.modulate = Color(1.15, 0.85, 0.75)
+	confirm.pressed.connect(_on_end_run_confirmed)
+	row.add_child(confirm)
+
+
+func show_end_run_confirm() -> void:
+	if game_state != null and game_state.is_game_over:
+		return
+	if _end_run_overlay:
+		_end_run_overlay.visible = true
+		_clear_gui_focus()
+
+
+func hide_end_run_confirm() -> void:
+	if _end_run_overlay:
+		_end_run_overlay.visible = false
+	_clear_gui_focus()
+
+
+func _on_end_run_confirmed() -> void:
+	hide_end_run_confirm()
+	end_run_confirmed.emit()
+
+
+func show_board_tower_tooltip_for(tower: Tower, screen_pos: Vector2) -> void:
+	if board_tooltip == null:
+		return
+	if tower == null or not is_instance_valid(tower):
+		board_tooltip.visible = false
+		return
+	board_tooltip_label.text = TowerData.tooltip_for_tower(tower)
+	board_tooltip.reset_size()
+	var tip_size := board_tooltip.get_combined_minimum_size()
+	var pos := screen_pos + Vector2(18, 18)
+	var view := Vector2(GameLayout.VIEW_WIDTH, GameLayout.VIEW_HEIGHT)
+	pos.x = minf(pos.x, view.x - tip_size.x - 8.0)
+	pos.y = minf(pos.y, view.y - tip_size.y - 8.0)
+	board_tooltip.position = pos
+	board_tooltip.visible = true
+	_tooltip_hide_at_msec = 0
+
+
+## Touch-friendly inspect: pin tooltip near the board for a few seconds.
+func show_touch_tower_info(tower: Tower) -> void:
+	if tower == null or not is_instance_valid(tower):
+		return
+	var anchor := GameLayout.board_origin() + Vector2(12, 56)
+	show_board_tower_tooltip_for(tower, anchor)
+	_tooltip_hide_at_msec = Time.get_ticks_msec() + 2800
+
+
+func hide_board_tower_tooltip() -> void:
+	if board_tooltip:
+		board_tooltip.visible = false
+	_tooltip_hide_at_msec = 0
+
+
+func tick_tooltips() -> void:
+	if _tooltip_hide_at_msec > 0 and Time.get_ticks_msec() >= _tooltip_hide_at_msec:
+		hide_board_tower_tooltip()
+
+
+func is_tooltip_pinned() -> bool:
+	return _tooltip_hide_at_msec > 0
+
+
+func _toggle_multi_select() -> void:
+	multi_select_enabled = not multi_select_enabled
+	_refresh_multi_select_button()
+	multi_select_changed.emit(multi_select_enabled)
+
+
+func _refresh_multi_select_button() -> void:
+	if multi_select_button == null:
+		return
+	multi_select_button.text = "Multi: On" if multi_select_enabled else "Multi: Off"
+	multi_select_button.modulate = Color(1.15, 1.1, 0.7) if multi_select_enabled else Color.WHITE
+
+
+func _make_side_panel(root: Control, rect: Rect2, with_scroll: bool) -> VBoxContainer:
+	var side_panel := PanelContainer.new()
+	side_panel.position = rect.position
+	side_panel.size = rect.size
+	side_panel.custom_minimum_size = rect.size
+	side_panel.clip_contents = true
+	root.add_child(side_panel)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 5)
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	if with_scroll:
+		var scroll := ScrollContainer.new()
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		side_panel.add_child(scroll)
+		scroll.add_child(column)
+	else:
+		side_panel.add_child(column)
+	return column
+
+
+func _fill_shop_column(sidebar: VBoxContainer) -> void:
+	var shop_title := Label.new()
+	shop_title.text = "Towers"
+	shop_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sidebar.add_child(shop_title)
+
+	var tower_btn_h := GameLayout.button_height(26.0)
+	for tower_id in TowerData.get_ids():
+		var def := TowerData.get_def(tower_id)
+		var btn := _sidebar_button("%s (%d)" % [def["display_name"], def["cost"]], tower_btn_h)
+		btn.tooltip_text = TowerData.tooltip_for(tower_id)
+		btn.pressed.connect(_on_tower_button.bind(tower_id))
+		sidebar.add_child(btn)
+		tower_buttons[tower_id] = btn
+
+
+func _fill_actions_column(sidebar: VBoxContainer) -> void:
+	timer_label = Label.new()
+	timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer_label.text = "Next wave: --"
+	timer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	timer_label.modulate = Color(0.85, 0.9, 0.7)
+	sidebar.add_child(timer_label)
+
+	var action_h := GameLayout.button_height(28.0)
+	skip_button = _sidebar_button("Skip Timer", action_h)
+	skip_button.disabled = true
+	skip_button.tooltip_text = "Skip the countdown when unlocked"
+	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
+	sidebar.add_child(skip_button)
+
+	upgrade_button = _sidebar_button("Upgrade", action_h)
+	upgrade_button.disabled = true
+	upgrade_button.tooltip_text = "Select towers to upgrade (3 levels, then a final elemental buff)"
+	upgrade_button.pressed.connect(func() -> void: upgrade_pressed.emit())
+	sidebar.add_child(upgrade_button)
+
+	var final_row := HBoxContainer.new()
+	final_row.add_theme_constant_override("separation", 3)
+	final_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sidebar.add_child(final_row)
+	var final_h := GameLayout.button_height(26.0)
+	for element_id in TowerData.FINAL_ELEMENTS:
+		var label := TowerData.final_element_label(element_id)
+		var short := label.substr(0, 3)
+		var fbtn := Button.new()
+		fbtn.text = short
+		fbtn.focus_mode = Control.FOCUS_NONE
+		fbtn.custom_minimum_size = Vector2(0, final_h)
+		fbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fbtn.disabled = true
+		fbtn.tooltip_text = "Final upgrade: %s" % label
+		fbtn.pressed.connect(func() -> void: final_element_pressed.emit(element_id))
+		final_row.add_child(fbtn)
+		final_buttons[element_id] = fbtn
+
+	sell_button = _sidebar_button("Sell Selected", action_h)
+	sell_button.disabled = true
+	sell_button.pressed.connect(func() -> void: sell_pressed.emit())
+	sidebar.add_child(sell_button)
+
+	multi_select_button = _sidebar_button("Multi: Off", GameLayout.button_height(26.0))
+	multi_select_button.tooltip_text = "Toggle multi-select (touch-friendly Ctrl/Shift)"
+	multi_select_button.pressed.connect(_toggle_multi_select)
+	sidebar.add_child(multi_select_button)
+	_refresh_multi_select_button()
+
+	deselect_button = _sidebar_button("Deselect", GameLayout.button_height(26.0))
+	deselect_button.disabled = true
+	deselect_button.tooltip_text = "Clear tower selection"
+	deselect_button.pressed.connect(func() -> void: deselect_pressed.emit())
+	sidebar.add_child(deselect_button)
+
+	end_run_button = _sidebar_button("End Run", action_h)
+	end_run_button.tooltip_text = "End this run and check the leaderboard"
+	end_run_button.pressed.connect(show_end_run_confirm)
+	sidebar.add_child(end_run_button)
+
+	var help := Label.new()
+	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.text = GameLayout.help_text()
+	help.modulate = Color(0.6, 0.65, 0.7)
+	sidebar.add_child(help)
+
+
+func _sidebar_button(text: String, height: float) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(0, height)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.clip_text = true
+	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	return btn
+
+
+func _clear_gui_focus() -> void:
+	var vp := get_viewport()
+	if vp:
+		vp.gui_release_focus()
+
+
+func _on_tower_button(tower_id: String) -> void:
+	highlight_tower(tower_id)
+	tower_type_selected.emit(tower_id)
+
+
+func highlight_tower(tower_id: String) -> void:
+	for id in tower_buttons.keys():
+		var btn: Button = tower_buttons[id]
+		btn.modulate = Color(1.2, 1.15, 0.7) if id == tower_id else Color.WHITE
+
+
+func set_banner(text: String) -> void:
+	var cleaned := text.strip_edges()
+	banner_label.text = cleaned
+	banner_label.visible = cleaned != ""
+	banner_label.tooltip_text = cleaned
+
+
+func set_status(text: String) -> void:
+	status_label.text = text
+
+
+func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
+	match mode:
+		"prep":
+			timer_label.text = "Build freely"
+			skip_button.text = "Start Round"
+			skip_button.disabled = false
+			skip_button.tooltip_text = "Start the build timer, then waves begin"
+		"intermission":
+			timer_label.text = "Next wave: %.1fs" % seconds_left
+			skip_button.text = "Skip Timer"
+			skip_button.disabled = not can_skip
+			if can_skip:
+				skip_button.tooltip_text = "Start the next wave now"
+			else:
+				skip_button.tooltip_text = "Path blocked or skip not available"
+		_:
+			timer_label.text = "Wave in progress"
+			if can_skip:
+				skip_button.text = "Send Next Wave"
+				skip_button.disabled = false
+				skip_button.tooltip_text = "Start the next wave now for bonus gold (leftover enemies stay)"
+			else:
+				skip_button.text = "Send Next Wave"
+				skip_button.disabled = true
+				skip_button.tooltip_text = "Kill 25% of enemies to unlock early send"
+
+
+func update_enemies_remaining(remaining: int, alive: int, queued: int) -> void:
+	if enemies_label == null:
+		return
+	if remaining <= 0:
+		enemies_label.text = "Left: --"
+		enemies_label.tooltip_text = "Enemies left until the board clears"
+		return
+	enemies_label.text = "Left: %d" % remaining
+	enemies_label.tooltip_text = "%d on map, %d still spawning" % [alive, queued]
+
+
+func set_skip_hint_ready() -> void:
+	status_label.text = "25% kills — Send Next Wave for bonus gold (next enemies start now)."
+
+
+func update_sell_button(count: int, sell_total: int) -> void:
+	if count <= 0:
+		sell_button.text = "Sell Selected"
+		sell_button.disabled = true
+		sell_button.tooltip_text = "Select towers to sell"
+		if deselect_button:
+			deselect_button.disabled = true
+	else:
+		sell_button.text = "Sell x%d" % count
+		sell_button.disabled = false
+		sell_button.tooltip_text = "Refund about %d gold" % sell_total
+		if deselect_button:
+			deselect_button.disabled = false
+			deselect_button.tooltip_text = "Clear %d selected tower(s) (Esc / right-click)" % count
+
+
+func update_upgrade_buttons(can_stat: bool, upgrade_cost: int, can_final: bool, final_cost: int) -> void:
+	if upgrade_button:
+		upgrade_button.disabled = not can_stat
+		if can_stat:
+			upgrade_button.text = "Upgrade (%d)" % upgrade_cost
+			upgrade_button.tooltip_text = "Upgrade selected towers by 1 level (%d gold total)" % upgrade_cost
+		else:
+			upgrade_button.text = "Upgrade"
+			upgrade_button.tooltip_text = "Select towers under +3 to upgrade"
+	for element_id in final_buttons.keys():
+		var btn: Button = final_buttons[element_id]
+		btn.disabled = not can_final
+		var label := TowerData.final_element_label(element_id)
+		if can_final:
+			btn.tooltip_text = "Final %s upgrade (%d gold total)" % [label, final_cost]
+		else:
+			btn.tooltip_text = "Final %s — needs +3 upgrades first" % label
+
+
+func refresh_run_labels() -> void:
+	if game_state == null:
+		return
+	if difficulty_label:
+		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
+	if mode_label:
+		if WaveScaler.is_random_mode(game_state.game_mode):
+			mode_label.text = "Random M%d" % game_state.map_sector
+		else:
+			mode_label.text = "Classic"
+
+
+func _on_gold_changed(gold: int) -> void:
+	gold_label.text = "Gold: %d" % gold
+
+
+func _on_lives_changed(lives: int) -> void:
+	lives_label.text = "Lives: %d" % lives
+
+
+func _on_wave_changed(wave: int) -> void:
+	wave_label.text = "Wave: %d" % wave

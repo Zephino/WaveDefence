@@ -1,0 +1,32 @@
+class_name OnlineConfig
+extends RefCounted
+
+## Public worldwide boards (read). Updated by the Cloudflare Worker via GitHub API.
+const LEADERBOARD_READ_URL := "https://raw.githubusercontent.com/Zephino/WaveDefence/main/leaderboard.json"
+
+## Cloudflare Worker origin only (no path, no trailing slash).
+## Set this after deploying leaderboard-api/ (see that folder's README).
+## Example: "https://wave-defence-leaderboard.your-account.workers.dev"
+const API_BASE_URL := ""
+
+## Reject absurd client-reported waves (server enforces the same).
+const MAX_WAVE_SANITY := 100000
+
+
+static func read_url() -> String:
+	return LEADERBOARD_READ_URL.strip_edges()
+
+
+static func post_url() -> String:
+	var base := API_BASE_URL.strip_edges().trim_suffix("/")
+	if base.is_empty():
+		return ""
+	return base + "/leaderboard"
+
+
+static func can_read() -> bool:
+	return not read_url().is_empty()
+
+
+static func can_post() -> bool:
+	return not post_url().is_empty()

@@ -1,0 +1,16 @@
+---
+description: Keep functions and modules focused without needless abstraction
+alwaysApply: true
+---
+
+# Keep Functions Focused
+
+## When adding or editing code
+
+1. Give each function a clear responsibility and a name that describes it.
+2. Separate complex steps when doing so makes behavior easier to understand or test.
+3. Reuse an existing helper when it fits; remove duplicated logic introduced by the change.
+4. Keep data flow and side effects visible.
+5. Prefer straightforward code over extra layers for a single use case.
+
+Do not split code into tiny wrappers just to satisfy a line count. Do not rewrite working functions outside the approved scope. If a larger refactor is needed to make the requested change safe, explain its impact before expanding the work.

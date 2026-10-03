@@ -1,0 +1,17 @@
+---
+description: Investigate reproducible failures and trace their underlying cause
+alwaysApply: true
+---
+
+# Bug Investigation
+
+When asked to fix a bug:
+
+1. Gather the observed behavior, expected behavior, error output, and steps that trigger it.
+2. Reproduce the failure when practical, or explain which evidence is available if reproduction is impossible.
+3. Trace the failing path through relevant code, data, and configuration.
+4. Narrow the cause with logs, a focused test, or a small read-only diagnostic.
+5. State the evidence for the likely root cause before changing code.
+6. Fix the cause within the approved scope, then rerun the reproduction and a relevant regression check.
+
+Do not hide a failure by catching and ignoring it or changing an unrelated setting. If the evidence points to a different scope than the approved work, explain the change in scope before editing.
