@@ -71,7 +71,7 @@ func _build_ui() -> void:
 		fs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		fs_hint.custom_minimum_size = Vector2(420, 0)
 		fs_hint.add_theme_font_size_override("font_size", 17)
-		fs_hint.text = "Rotate to landscape · tap to try fullscreen\n(iPhone: Share → Add to Home Screen for best view)"
+		fs_hint.text = "Tap for fullscreen · phone can stay upright (auto-rotates view)\nFor app-like view: open in Chrome, or Add to Home Screen"
 		center.add_child(fs_hint)
 
 	center.add_child(_spacer(8))

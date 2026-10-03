@@ -1,3 +1,14 @@
+## Version 00.01.61
+Date: 10/03/2026
+Time: 11:36 AM
+
+### Changes
+- Mobile web: **CSS 90° rotate** when the phone is upright so the game fills the screen as landscape without relying on OS orientation lock
+- Stronger fullscreen attempts; tip to **Open in Chrome** / Add to Home Screen when Discord/in-app browsers block the top-bar hide
+
+### Reason
+In-app browsers keep the URL bar, and orientation.lock often fails — CSS rotate + real Chrome/PWA is the practical path.
+
 ## Version 00.01.60
 Date: 10/03/2026
 Time: 11:31 AM

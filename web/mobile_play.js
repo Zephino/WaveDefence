@@ -1,6 +1,7 @@
-/* Mobile browser helpers: rotate prompt + best-effort fullscreen/landscape. */
+/* Mobile web: CSS 90° landscape fill + best-effort fullscreen (hides browser chrome when allowed). */
 (function () {
-	var overlay = null;
+	var banner = null;
+	var appliedPortraitCss = false;
 
 	function isPortrait() {
 		try {
@@ -9,69 +10,177 @@
 				if (window.matchMedia("(orientation: landscape)").matches) return false;
 			}
 		} catch (e) {}
-		return window.innerHeight > window.innerWidth;
+		return (window.innerHeight || 0) > (window.innerWidth || 0);
 	}
 
-	function ensureOverlay() {
-		if (overlay) return overlay;
-		overlay = document.createElement("div");
-		overlay.id = "wd-rotate-overlay";
-		overlay.innerHTML =
-			'<div style="max-width:20rem;padding:1.25rem;font-family:system-ui,sans-serif;">' +
-			'<div style="font-size:2.5rem;line-height:1;margin-bottom:0.75rem;">↻</div>' +
-			"<div style=\"font-size:1.25rem;font-weight:700;margin-bottom:0.5rem;\">Rotate your phone</div>" +
-			"<div style=\"font-size:0.95rem;opacity:0.9;line-height:1.35;\">" +
-			"This game plays in <b>landscape</b>. Turn your phone sideways." +
-			"<br><br>On iPhone, Safari often blocks fullscreen — for the best view use " +
-			"<b>Share → Add to Home Screen</b>, then open that icon." +
-			"</div></div>";
-		overlay.style.cssText = [
+	function isStandalone() {
+		try {
+			if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+			if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) return true;
+			if (navigator.standalone === true) return true;
+		} catch (e) {}
+		return false;
+	}
+
+	function isInAppBrowser() {
+		var ua = navigator.userAgent || "";
+		// Discord / Facebook / Instagram / etc. custom tabs often block fullscreen.
+		if (/Discord|FBAN|FBAV|Instagram|Line\//i.test(ua)) return true;
+		// Android Custom Tab chrome often exposes an "X" close affordance; UA still says Chrome.
+		try {
+			if (document.referrer && /discord\.com|discordapp\.com/i.test(document.referrer)) return true;
+		} catch (e) {}
+		return false;
+	}
+
+	function canvasEl() {
+		return document.getElementById("canvas");
+	}
+
+	function clearCanvasCss(c) {
+		if (!c) return;
+		c.style.position = "";
+		c.style.left = "";
+		c.style.top = "";
+		c.style.width = "";
+		c.style.height = "";
+		c.style.maxWidth = "";
+		c.style.maxHeight = "";
+		c.style.transform = "";
+		c.style.transformOrigin = "";
+		c.style.margin = "";
+		c.style.zIndex = "";
+	}
+
+	/** When the phone is upright (portrait), rotate the game 90° so it fills the screen as landscape. */
+	function applyCssLandscape() {
+		var c = canvasEl();
+		if (!c) return;
+
+		if (!isPortrait()) {
+			if (appliedPortraitCss) {
+				clearCanvasCss(c);
+				appliedPortraitCss = false;
+				notifyGodotResize();
+			}
+			// Fill the landscape browser viewport.
+			c.style.width = "100vw";
+			c.style.height = "100vh";
+			c.style.maxWidth = "100vw";
+			c.style.maxHeight = "100vh";
+			return;
+		}
+
+		var w = window.innerWidth || document.documentElement.clientWidth;
+		var h = window.innerHeight || document.documentElement.clientHeight;
+		c.style.position = "fixed";
+		c.style.left = "50%";
+		c.style.top = "50%";
+		// After rotate(90deg), width maps to visual height and height to visual width.
+		c.style.width = h + "px";
+		c.style.height = w + "px";
+		c.style.maxWidth = "none";
+		c.style.maxHeight = "none";
+		c.style.transformOrigin = "center center";
+		c.style.transform = "translate(-50%, -50%) rotate(90deg)";
+		c.style.zIndex = "1";
+		c.style.margin = "0";
+		appliedPortraitCss = true;
+		notifyGodotResize();
+	}
+
+	function notifyGodotResize() {
+		try {
+			window.dispatchEvent(new Event("resize"));
+		} catch (e) {}
+	}
+
+	function ensureBanner() {
+		if (banner) return banner;
+		banner = document.createElement("div");
+		banner.id = "wd-fs-banner";
+		banner.style.cssText = [
 			"position:fixed",
-			"inset:0",
-			"z-index:2147483647",
+			"left:0",
+			"right:0",
+			"bottom:0",
+			"z-index:2147483646",
 			"display:none",
-			"align-items:center",
-			"justify-content:center",
-			"text-align:center",
-			"color:#f2f4f6",
-			"background:rgba(8,10,14,0.96)",
-			"touch-action:none",
+			"padding:10px 12px",
+			"background:rgba(12,14,18,0.94)",
+			"color:#f0f3f6",
+			"font:14px/1.35 system-ui,sans-serif",
+			"border-top:1px solid rgba(255,255,255,0.12)",
 		].join(";");
-		document.body.appendChild(overlay);
-		return overlay;
+		banner.innerHTML =
+			'<div style="display:flex;gap:10px;align-items:flex-start;">' +
+			'<div style="flex:1;">' +
+			"<b>Want the real fullscreen app look?</b><br>" +
+			"This Discord/in-app browser blocks it. Tap <b>⋮ → Open in Chrome</b>, " +
+			"or <b>Add to Home screen</b>, then open that icon." +
+			"</div>" +
+			'<button type="button" id="wd-fs-banner-x" style="background:#333;color:#fff;border:0;border-radius:6px;padding:6px 10px;">OK</button>' +
+			"</div>";
+		document.body.appendChild(banner);
+		var btn = banner.querySelector("#wd-fs-banner-x");
+		if (btn) {
+			btn.addEventListener("click", function () {
+				banner.style.display = "none";
+				try {
+					sessionStorage.setItem("wd_fs_banner_dismissed", "1");
+				} catch (e) {}
+			});
+		}
+		return banner;
 	}
 
-	function refreshRotatePrompt() {
-		var el = ensureOverlay();
-		el.style.display = isPortrait() ? "flex" : "none";
-	}
-
-	function getFullscreenElement() {
-		return (
-			document.fullscreenElement ||
-			document.webkitFullscreenElement ||
-			document.msFullscreenElement ||
-			null
-		);
+	function refreshBanner() {
+		var el = ensureBanner();
+		var dismissed = false;
+		try {
+			dismissed = sessionStorage.getItem("wd_fs_banner_dismissed") === "1";
+		} catch (e) {}
+		var show =
+			!isStandalone() &&
+			!dismissed &&
+			(isInAppBrowser() || !document.fullscreenElement);
+		// Only nag when fullscreen clearly failed after a gesture, or in-app browser.
+		if (isInAppBrowser() && !dismissed) {
+			el.style.display = "block";
+		} else if (!show) {
+			el.style.display = "none";
+		}
 	}
 
 	function requestFullscreen() {
-		var el = document.getElementById("canvas") || document.documentElement;
-		var req =
-			el.requestFullscreen ||
-			el.webkitRequestFullscreen ||
-			el.webkitRequestFullScreen ||
-			el.msRequestFullscreen;
-		if (!req) return Promise.resolve(false);
-		try {
-			var out = req.call(el);
-			if (out && typeof out.then === "function") {
-				return out.then(function () { return true; }).catch(function () { return false; });
+		var targets = [
+			canvasEl(),
+			document.documentElement,
+			document.body,
+		].filter(Boolean);
+
+		function tryOne(i) {
+			if (i >= targets.length) return Promise.resolve(false);
+			var el = targets[i];
+			var req =
+				el.requestFullscreen ||
+				el.webkitRequestFullscreen ||
+				el.webkitRequestFullScreen ||
+				el.msRequestFullscreen;
+			if (!req) return tryOne(i + 1);
+			try {
+				var out = req.call(el, { navigationUI: "hide" });
+				if (out && typeof out.then === "function") {
+					return out.then(function () { return true; }).catch(function () {
+						return tryOne(i + 1);
+					});
+				}
+				return Promise.resolve(!!(document.fullscreenElement || document.webkitFullscreenElement));
+			} catch (e) {
+				return tryOne(i + 1);
 			}
-			return Promise.resolve(true);
-		} catch (e) {
-			return Promise.resolve(false);
 		}
+		return tryOne(0);
 	}
 
 	function lockLandscape() {
@@ -92,45 +201,71 @@
 	}
 
 	function enterPlayMode() {
-		refreshRotatePrompt();
-		// Fullscreen first (required on many Androids before orientation.lock works).
-		return requestFullscreen().then(function () {
-			return lockLandscape();
-		}).then(function () {
-			refreshRotatePrompt();
-			try {
-				window.scrollTo(0, 1);
-			} catch (e) {}
-			return true;
-		});
+		applyCssLandscape();
+		return requestFullscreen()
+			.then(function (ok) {
+				if (!ok && (isInAppBrowser() || !isStandalone())) {
+					refreshBanner();
+					var el = ensureBanner();
+					if (!isInAppBrowser()) {
+						// Soft tip if normal Chrome still refused fullscreen.
+						try {
+							if (sessionStorage.getItem("wd_fs_banner_dismissed") !== "1") {
+								el.style.display = "block";
+								el.querySelector("div").innerHTML =
+									"<div style=\"display:flex;gap:10px;align-items:flex-start;\">" +
+									'<div style="flex:1;"><b>Fullscreen blocked</b><br>' +
+									"Tap again, or use Chrome menu → <b>Add to Home screen</b> for an app-like view.</div>" +
+									'<button type="button" id="wd-fs-banner-x" style="background:#333;color:#fff;border:0;border-radius:6px;padding:6px 10px;">OK</button></div>';
+								var b = el.querySelector("#wd-fs-banner-x");
+								if (b) {
+									b.onclick = function () {
+										el.style.display = "none";
+										sessionStorage.setItem("wd_fs_banner_dismissed", "1");
+									};
+								}
+							}
+						} catch (e) {}
+					}
+				}
+				return lockLandscape();
+			})
+			.then(function () {
+				applyCssLandscape();
+				try {
+					window.scrollTo(0, 1);
+				} catch (e) {}
+				return true;
+			});
 	}
 
 	window.WaveDefenceMobile = {
 		enterPlayMode: enterPlayMode,
-		refreshRotatePrompt: refreshRotatePrompt,
+		applyCssLandscape: applyCssLandscape,
 		isPortrait: isPortrait,
+		refreshRotatePrompt: applyCssLandscape,
 	};
 
 	function boot() {
-		ensureOverlay();
-		refreshRotatePrompt();
-		window.addEventListener("resize", refreshRotatePrompt);
-		window.addEventListener("orientationchange", function () {
-			setTimeout(refreshRotatePrompt, 50);
-			setTimeout(refreshRotatePrompt, 300);
+		applyCssLandscape();
+		if (isInAppBrowser()) refreshBanner();
+		window.addEventListener("resize", function () {
+			applyCssLandscape();
 		});
-		document.addEventListener("fullscreenchange", refreshRotatePrompt);
-		document.addEventListener("webkitfullscreenchange", refreshRotatePrompt);
-		// First user gesture anywhere on the page (captures better than Godot alone).
-		function onFirstGesture() {
+		window.addEventListener("orientationchange", function () {
+			setTimeout(applyCssLandscape, 50);
+			setTimeout(applyCssLandscape, 250);
+			setTimeout(applyCssLandscape, 600);
+		});
+		document.addEventListener("fullscreenchange", applyCssLandscape);
+		document.addEventListener("webkitfullscreenchange", applyCssLandscape);
+
+		function onGesture() {
 			enterPlayMode();
-			document.removeEventListener("pointerdown", onFirstGesture, true);
-			document.removeEventListener("touchstart", onFirstGesture, true);
-			document.removeEventListener("click", onFirstGesture, true);
 		}
-		document.addEventListener("pointerdown", onFirstGesture, true);
-		document.addEventListener("touchstart", onFirstGesture, true);
-		document.addEventListener("click", onFirstGesture, true);
+		document.addEventListener("pointerdown", onGesture, true);
+		document.addEventListener("touchstart", onGesture, true);
+		document.addEventListener("click", onGesture, true);
 	}
 
 	if (document.readyState === "loading") {
