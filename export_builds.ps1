@@ -120,7 +120,40 @@ if ($doWeb) {
     }
     # GitHub Pages: skip Jekyll so wasm/pck paths work.
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline
-    Write-Host "OK: docs/ (GitHub Pages)" -ForegroundColor Green
+    # Bust phone/browser caches so VERSION updates show without a manual hard refresh.
+    $ver = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
+    $htmlPath = Join-Path $ProjectRoot "docs\index.html"
+    $html = Get-Content $htmlPath -Raw
+    $bust = @"
+<script>
+(function () {
+	var VER = "$ver";
+	function withVer(url) {
+		if (!url || typeof url !== "string") return url;
+		if (!/\.(pck|wasm|js)(\?|$)/i.test(url)) return url;
+		return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(VER);
+	}
+	var _fetch = window.fetch;
+	window.fetch = function (input, init) {
+		if (typeof input === "string") input = withVer(input);
+		else if (input && typeof Request !== "undefined" && input instanceof Request) {
+			input = new Request(withVer(input.url), input);
+		}
+		return _fetch.call(this, input, init);
+	};
+	var XO = XMLHttpRequest.prototype.open;
+	XMLHttpRequest.prototype.open = function (method, url) {
+		arguments[1] = withVer(url);
+		return XO.apply(this, arguments);
+	};
+})();
+</script>
+"@
+    if ($html -notmatch [regex]::Escape("var VER = `"$ver`"")) {
+        $html = $html -replace "</head>", ($bust + "</head>")
+        Set-Content -Path $htmlPath -Value $html -NoNewline
+    }
+    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver)" -ForegroundColor Green
 }
 
 Write-Host ""

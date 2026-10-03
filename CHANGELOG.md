@@ -1,3 +1,13 @@
+## Version 00.01.59
+Date: 10/03/2026
+Time: 11:26 AM
+
+### Changes
+- Web export cache-busts `.pck` / `.wasm` / `.js` with the VERSION query so phones pick up new builds without a hard refresh
+
+### Reason
+GitHub Pages was serving a fresh 00.01.58 build, but phone browsers still showed cached 00.01.56.
+
 ## Version 00.01.58
 Date: 10/03/2026
 Time: 11:24 AM
