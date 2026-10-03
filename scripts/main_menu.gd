@@ -98,6 +98,15 @@ func _build_ui() -> void:
 			boards_label.text = "Leaderboards: Global" if ok else "Leaderboards: Local (offline)"
 	)
 
+	if GameLayout.is_mobile_device() and OS.has_feature("web"):
+		var fs_hint := Label.new()
+		fs_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fs_hint.modulate = Color(0.75, 0.7, 0.45)
+		fs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		fs_hint.custom_minimum_size = Vector2(420, 0)
+		fs_hint.text = "Tap anywhere for fullscreen · rotate to landscape"
+		center.add_child(fs_hint)
+
 
 func _boards_status_text() -> String:
 	match OnlineLeaderboard.last_source:

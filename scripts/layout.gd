@@ -43,9 +43,50 @@ static func debug_panel_rect() -> Rect2:
 	return right_sidebar_rect()
 
 
+## Cached web-mobile probe: -1 unknown, 0 no, 1 yes.
+static var _web_mobile_cache: int = -1
+
+
+## True for native mobile runtimes and mobile browsers (not desktop PCs).
+static func is_mobile_device() -> bool:
+	if OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile"):
+		return true
+	if OS.has_feature("web"):
+		return _is_web_mobile()
+	return false
+
+
+static func _is_web_mobile() -> bool:
+	if _web_mobile_cache >= 0:
+		return _web_mobile_cache == 1
+	var detected := false
+	if OS.has_feature("web"):
+		var result = JavaScriptBridge.eval(
+			"""
+			(function () {
+				try {
+					var ua = navigator.userAgent || '';
+					var uaMobile = /Android|iPhone|iPad|iPod|Mobile|Tablet|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+					var touch = (navigator.maxTouchPoints || 0) > 0;
+					var small = Math.min(screen.width || 0, screen.height || 0) > 0
+						&& Math.min(screen.width || 0, screen.height || 0) <= 920;
+					var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+					return (uaMobile || (touch && small) || (coarse && small)) ? '1' : '0';
+				} catch (e) {
+					return '0';
+				}
+			})()
+			""",
+			true
+		)
+		detected = str(result).strip_edges() == "1"
+	_web_mobile_cache = 1 if detected else 0
+	return detected
+
+
 ## True on phones/tablets or when a touchscreen is the practical input.
 static func use_touch_ui() -> bool:
-	if OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios"):
+	if is_mobile_device():
 		return true
 	if DisplayServer.is_touchscreen_available():
 		var size := DisplayServer.screen_get_size()

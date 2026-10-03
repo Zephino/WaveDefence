@@ -14,6 +14,8 @@ After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from 
 
 Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
 
+On **phones**, the game detects a mobile browser, prefers **landscape**, and enters **fullscreen** after the first tap (browsers block auto-fullscreen). Desktop browsers are left windowed.
+
 Rebuild the site files:
 
 ```powershell
@@ -150,7 +152,7 @@ Expect `SMOKE_TEST_OK`.
 
 ## Mobile / touch
 
-The game supports phones and tablets (landscape; auto-rotates either landscape direction, and releases orientation when the app is closed or backgrounded):
+The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen:
 
 - **Drag** on the board to paint-place
 - **Tap** a tower to select + show its info card

@@ -1,3 +1,16 @@
+## Version 00.01.57
+Date: 10/03/2026
+Time: 11:19 AM
+
+### Changes
+- Detect mobile devices including **mobile browsers** (`GameLayout.is_mobile_device`)
+- On mobile: lock **sensor landscape** and enter **fullscreen** (web: after first tap, as browsers require a gesture)
+- Desktop browsers/PCs are not forced fullscreen
+- Web export viewport / mobile web-app meta tags for phone browsers
+
+### Reason
+Phone web play should match Android’s landscape fullscreen feel without affecting desktop players.
+
 ## Version 00.01.56
 Date: 10/03/2026
 Time: 10:44 AM
