@@ -1,3 +1,14 @@
+## Version 00.01.62
+Date: 10/03/2026
+Time: 11:41 AM
+
+### Changes
+- Stop re-requesting fullscreen / forcing canvas resize on **every** mobile tap (was black-flashing the WebGL view)
+- Fullscreen is one-shot after the first gesture; CSS landscape only updates when orientation changes
+
+### Reason
+Button presses on the phone web build were blanking the screen until another tap.
+
 ## Version 00.01.61
 Date: 10/03/2026
 Time: 11:36 AM

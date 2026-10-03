@@ -1,7 +1,9 @@
-/* Mobile web: CSS 90° landscape fill + best-effort fullscreen (hides browser chrome when allowed). */
+/* Mobile web: CSS 90° landscape fill + one-shot fullscreen (avoid black flashes on every tap). */
 (function () {
 	var banner = null;
-	var appliedPortraitCss = false;
+	var mode = ""; // "" | "portrait-css" | "landscape-fill"
+	var fullscreenAttempted = false;
+	var enterInFlight = false;
 
 	function isPortrait() {
 		try {
@@ -24,13 +26,15 @@
 
 	function isInAppBrowser() {
 		var ua = navigator.userAgent || "";
-		// Discord / Facebook / Instagram / etc. custom tabs often block fullscreen.
 		if (/Discord|FBAN|FBAV|Instagram|Line\//i.test(ua)) return true;
-		// Android Custom Tab chrome often exposes an "X" close affordance; UA still says Chrome.
 		try {
 			if (document.referrer && /discord\.com|discordapp\.com/i.test(document.referrer)) return true;
 		} catch (e) {}
 		return false;
+	}
+
+	function isFullscreen() {
+		return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
 	}
 
 	function canvasEl() {
@@ -52,22 +56,32 @@
 		c.style.zIndex = "";
 	}
 
-	/** When the phone is upright (portrait), rotate the game 90° so it fills the screen as landscape. */
+	function notifyGodotResize() {
+		// Debounced — firing resize on every tap blanks the WebGL canvas on many phones.
+		if (notifyGodotResize._t) clearTimeout(notifyGodotResize._t);
+		notifyGodotResize._t = setTimeout(function () {
+			try {
+				window.dispatchEvent(new Event("resize"));
+			} catch (e) {}
+		}, 120);
+	}
+
+	/** Apply CSS only when orientation mode actually changes. */
 	function applyCssLandscape() {
 		var c = canvasEl();
 		if (!c) return;
 
-		if (!isPortrait()) {
-			if (appliedPortraitCss) {
-				clearCanvasCss(c);
-				appliedPortraitCss = false;
-				notifyGodotResize();
-			}
-			// Fill the landscape browser viewport.
+		var want = isPortrait() ? "portrait-css" : "landscape-fill";
+		if (want === mode) return;
+		mode = want;
+
+		if (want === "landscape-fill") {
+			clearCanvasCss(c);
 			c.style.width = "100vw";
 			c.style.height = "100vh";
 			c.style.maxWidth = "100vw";
 			c.style.maxHeight = "100vh";
+			notifyGodotResize();
 			return;
 		}
 
@@ -76,7 +90,6 @@
 		c.style.position = "fixed";
 		c.style.left = "50%";
 		c.style.top = "50%";
-		// After rotate(90deg), width maps to visual height and height to visual width.
 		c.style.width = h + "px";
 		c.style.height = w + "px";
 		c.style.maxWidth = "none";
@@ -85,14 +98,7 @@
 		c.style.transform = "translate(-50%, -50%) rotate(90deg)";
 		c.style.zIndex = "1";
 		c.style.margin = "0";
-		appliedPortraitCss = true;
 		notifyGodotResize();
-	}
-
-	function notifyGodotResize() {
-		try {
-			window.dispatchEvent(new Event("resize"));
-		} catch (e) {}
 	}
 
 	function ensureBanner() {
@@ -116,8 +122,8 @@
 			'<div style="display:flex;gap:10px;align-items:flex-start;">' +
 			'<div style="flex:1;">' +
 			"<b>Want the real fullscreen app look?</b><br>" +
-			"This Discord/in-app browser blocks it. Tap <b>⋮ → Open in Chrome</b>, " +
-			"or <b>Add to Home screen</b>, then open that icon." +
+			"In-app browsers (Discord, etc.) block it. Tap <b>⋮ → Open in Chrome</b>, " +
+			"or <b>Add to Home screen</b>." +
 			"</div>" +
 			'<button type="button" id="wd-fs-banner-x" style="background:#333;color:#fff;border:0;border-radius:6px;padding:6px 10px;">OK</button>' +
 			"</div>";
@@ -134,34 +140,23 @@
 		return banner;
 	}
 
-	function refreshBanner() {
-		var el = ensureBanner();
+	function showFsTip() {
 		var dismissed = false;
 		try {
 			dismissed = sessionStorage.getItem("wd_fs_banner_dismissed") === "1";
 		} catch (e) {}
-		var show =
-			!isStandalone() &&
-			!dismissed &&
-			(isInAppBrowser() || !document.fullscreenElement);
-		// Only nag when fullscreen clearly failed after a gesture, or in-app browser.
-		if (isInAppBrowser() && !dismissed) {
-			el.style.display = "block";
-		} else if (!show) {
-			el.style.display = "none";
-		}
+		if (dismissed || isStandalone()) return;
+		ensureBanner().style.display = "block";
 	}
 
 	function requestFullscreen() {
-		var targets = [
-			canvasEl(),
-			document.documentElement,
-			document.body,
-		].filter(Boolean);
+		if (isFullscreen()) return Promise.resolve(true);
+		var targets = [document.documentElement, document.body, canvasEl()].filter(Boolean);
 
 		function tryOne(i) {
 			if (i >= targets.length) return Promise.resolve(false);
 			var el = targets[i];
+			// Prefer documentElement — fullscreen on the WebGL canvas often blacks out Godot.
 			var req =
 				el.requestFullscreen ||
 				el.webkitRequestFullscreen ||
@@ -175,7 +170,7 @@
 						return tryOne(i + 1);
 					});
 				}
-				return Promise.resolve(!!(document.fullscreenElement || document.webkitFullscreenElement));
+				return Promise.resolve(isFullscreen());
 			} catch (e) {
 				return tryOne(i + 1);
 			}
@@ -186,56 +181,44 @@
 	function lockLandscape() {
 		try {
 			if (screen.orientation && screen.orientation.lock) {
-				return screen.orientation
-					.lock("landscape")
-					.then(function () { return true; })
-					.catch(function () {
-						return screen.orientation
-							.lock("landscape-primary")
-							.then(function () { return true; })
-							.catch(function () { return false; });
+				return screen.orientation.lock("landscape").catch(function () {
+					return screen.orientation.lock("landscape-primary").catch(function () {
+						return false;
 					});
+				});
 			}
 		} catch (e) {}
 		return Promise.resolve(false);
 	}
 
-	function enterPlayMode() {
+	/**
+	 * @param {object} [opts]
+	 * @param {boolean} [opts.forceFullscreen] — request FS even if we already tried
+	 */
+	function enterPlayMode(opts) {
+		opts = opts || {};
 		applyCssLandscape();
+
+		var needFs = opts.forceFullscreen || (!fullscreenAttempted && !isFullscreen());
+		if (!needFs || enterInFlight) {
+			return Promise.resolve(true);
+		}
+		enterInFlight = true;
+		fullscreenAttempted = true;
+
 		return requestFullscreen()
 			.then(function (ok) {
-				if (!ok && (isInAppBrowser() || !isStandalone())) {
-					refreshBanner();
-					var el = ensureBanner();
-					if (!isInAppBrowser()) {
-						// Soft tip if normal Chrome still refused fullscreen.
-						try {
-							if (sessionStorage.getItem("wd_fs_banner_dismissed") !== "1") {
-								el.style.display = "block";
-								el.querySelector("div").innerHTML =
-									"<div style=\"display:flex;gap:10px;align-items:flex-start;\">" +
-									'<div style="flex:1;"><b>Fullscreen blocked</b><br>' +
-									"Tap again, or use Chrome menu → <b>Add to Home screen</b> for an app-like view.</div>" +
-									'<button type="button" id="wd-fs-banner-x" style="background:#333;color:#fff;border:0;border-radius:6px;padding:6px 10px;">OK</button></div>';
-								var b = el.querySelector("#wd-fs-banner-x");
-								if (b) {
-									b.onclick = function () {
-										el.style.display = "none";
-										sessionStorage.setItem("wd_fs_banner_dismissed", "1");
-									};
-								}
-							}
-						} catch (e) {}
-					}
-				}
+				if (!ok) showFsTip();
 				return lockLandscape();
 			})
 			.then(function () {
 				applyCssLandscape();
-				try {
-					window.scrollTo(0, 1);
-				} catch (e) {}
+				enterInFlight = false;
 				return true;
+			})
+			.catch(function () {
+				enterInFlight = false;
+				return false;
 			});
 	}
 
@@ -248,24 +231,35 @@
 
 	function boot() {
 		applyCssLandscape();
-		if (isInAppBrowser()) refreshBanner();
+		if (isInAppBrowser()) showFsTip();
+
 		window.addEventListener("resize", function () {
 			applyCssLandscape();
 		});
 		window.addEventListener("orientationchange", function () {
-			setTimeout(applyCssLandscape, 50);
-			setTimeout(applyCssLandscape, 250);
-			setTimeout(applyCssLandscape, 600);
+			mode = ""; // force recompute after rotate
+			setTimeout(applyCssLandscape, 80);
+			setTimeout(applyCssLandscape, 300);
 		});
-		document.addEventListener("fullscreenchange", applyCssLandscape);
-		document.addEventListener("webkitfullscreenchange", applyCssLandscape);
+		document.addEventListener("fullscreenchange", function () {
+			mode = "";
+			applyCssLandscape();
+		});
+		document.addEventListener("webkitfullscreenchange", function () {
+			mode = "";
+			applyCssLandscape();
+		});
 
-		function onGesture() {
-			enterPlayMode();
+		// One gesture only for fullscreen — repeating it on every button tap caused black flashes.
+		function onFirstGesture() {
+			enterPlayMode({ forceFullscreen: true });
+			document.removeEventListener("pointerdown", onFirstGesture, true);
+			document.removeEventListener("touchstart", onFirstGesture, true);
+			document.removeEventListener("click", onFirstGesture, true);
 		}
-		document.addEventListener("pointerdown", onGesture, true);
-		document.addEventListener("touchstart", onGesture, true);
-		document.addEventListener("click", onGesture, true);
+		document.addEventListener("pointerdown", onFirstGesture, true);
+		document.addEventListener("touchstart", onFirstGesture, true);
+		document.addEventListener("click", onFirstGesture, true);
 	}
 
 	if (document.readyState === "loading") {
