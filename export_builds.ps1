@@ -156,8 +156,11 @@ if ($doWeb) {
 })();
 </script>
 "@
-    $html = $html -replace "</head>", ($inject + "</head>")
-    Set-Content -Path $htmlPath -Value $html -NoNewline
+    # Use Insert — PowerShell -replace treats $ in the inject as backrefs and can drop the tag.
+    $headIdx = $html.IndexOf("</head>")
+    if ($headIdx -lt 0) { throw "docs/index.html missing </head>" }
+    $html = $html.Insert($headIdx, $inject)
+    [System.IO.File]::WriteAllText($htmlPath, $html)
     Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper)" -ForegroundColor Green
 }
 

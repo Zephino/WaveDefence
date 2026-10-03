@@ -312,6 +312,7 @@ func _fill_shop_column(sidebar: VBoxContainer) -> void:
 		btn.pressed.connect(_on_tower_button.bind(tower_id))
 		sidebar.add_child(btn)
 		tower_buttons[tower_id] = btn
+	_refresh_shop_buttons()
 
 
 func _fill_actions_column(sidebar: VBoxContainer) -> void:
@@ -402,14 +403,50 @@ func _clear_gui_focus() -> void:
 
 
 func _on_tower_button(tower_id: String) -> void:
+	if game_state != null and not TowerData.is_unlocked(tower_id, game_state.wave):
+		set_status("Unlocks at wave %d" % TowerData.unlock_wave(tower_id))
+		return
 	highlight_tower(tower_id)
 	tower_type_selected.emit(tower_id)
 
 
+func _refresh_shop_buttons() -> void:
+	if tower_buttons.is_empty():
+		return
+	var wave := game_state.wave if game_state else 0
+	var selected_id := ""
+	for id in tower_buttons.keys():
+		var existing: Button = tower_buttons[id]
+		if existing.modulate.r > 1.1 and TowerData.is_unlocked(id, wave):
+			selected_id = id
+			break
+	for tower_id in tower_buttons.keys():
+		var btn: Button = tower_buttons[tower_id]
+		var def := TowerData.get_def(tower_id)
+		var unlocked := TowerData.is_unlocked(tower_id, wave)
+		var cost := int(def.get("cost", 0))
+		var name := str(def.get("display_name", tower_id))
+		if unlocked:
+			btn.text = "%s (%d)" % [name, cost]
+			btn.disabled = false
+			btn.tooltip_text = TowerData.tooltip_for(tower_id)
+			btn.modulate = Color(1.2, 1.15, 0.7) if tower_id == selected_id else Color.WHITE
+		else:
+			var need := TowerData.unlock_wave(tower_id)
+			btn.text = "%s (W%d)" % [name, need]
+			btn.disabled = true
+			btn.tooltip_text = "%s\nLocked — reach wave %d" % [TowerData.tooltip_for(tower_id), need]
+			btn.modulate = Color(0.55, 0.55, 0.55)
+
+
 func highlight_tower(tower_id: String) -> void:
+	var wave := game_state.wave if game_state else 0
 	for id in tower_buttons.keys():
 		var btn: Button = tower_buttons[id]
-		btn.modulate = Color(1.2, 1.15, 0.7) if id == tower_id else Color.WHITE
+		if not TowerData.is_unlocked(id, wave):
+			btn.modulate = Color(0.55, 0.55, 0.55)
+		else:
+			btn.modulate = Color(1.2, 1.15, 0.7) if id == tower_id else Color.WHITE
 
 
 func set_banner(text: String) -> void:
@@ -443,7 +480,7 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 			if can_skip:
 				skip_button.text = "Send Next Wave"
 				skip_button.disabled = false
-				skip_button.tooltip_text = "Start the next wave now for bonus gold (leftover enemies stay)"
+				skip_button.tooltip_text = "Start the next wave now for bonus gold (alive enemies stay; unspawned leftovers are dropped)"
 			else:
 				skip_button.text = "Send Next Wave"
 				skip_button.disabled = true
@@ -522,3 +559,4 @@ func _on_lives_changed(lives: int) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	wave_label.text = "Wave: %d" % wave
+	_refresh_shop_buttons()

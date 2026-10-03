@@ -27,6 +27,8 @@ func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_ene
 
 ## Select the shop tower type to place. Does not replace existing towers — sell first.
 func select_tower_type(tower_id: String) -> void:
+	if not TowerData.is_unlocked(tower_id, game_state.wave if game_state else 0):
+		return
 	selected_tower_id = tower_id
 	selection_changed.emit(selected_tower_id)
 
@@ -53,6 +55,8 @@ func can_place_at(cell: Vector2i) -> bool:
 	if not grid.in_bounds(cell):
 		return false
 	if cell == grid.spawn_cell or cell == grid.exit_cell:
+		return false
+	if not TowerData.is_unlocked(selected_tower_id, game_state.wave):
 		return false
 	var cost: int = int(TowerData.get_def(selected_tower_id)["cost"])
 	if not game_state.can_afford(cost):

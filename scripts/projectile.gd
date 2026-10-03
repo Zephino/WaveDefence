@@ -12,7 +12,16 @@ var color: Color = Color.WHITE
 var alive: bool = true
 
 
-func setup(p_target: Enemy, p_damage: float, p_splash: float, p_effect: String, p_effect_data: Dictionary, p_enemies: Node, p_color: Color) -> void:
+func setup(
+	p_target: Enemy,
+	p_damage: float,
+	p_splash: float,
+	p_effect: String,
+	p_effect_data: Dictionary,
+	p_enemies: Node,
+	p_color: Color,
+	p_speed: float = 320.0
+) -> void:
 	target = p_target
 	damage = p_damage
 	splash_radius = p_splash
@@ -20,6 +29,7 @@ func setup(p_target: Enemy, p_damage: float, p_splash: float, p_effect: String, 
 	effect_data = p_effect_data
 	enemy_container = p_enemies
 	color = p_color
+	speed = maxf(p_speed, 40.0)
 
 
 func _process(delta: float) -> void:

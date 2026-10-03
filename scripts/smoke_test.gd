@@ -201,6 +201,52 @@ func _run() -> void:
 			flying_in_15 += 1
 	if flying_in_15 <= 0:
 		errors.append("wave 15 spawn queue should include flying enemies")
+
+	# Early-send must not keep stacking unspawned leftovers (Classic late-game freeze).
+	waves.clear_enemies()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	waves.begin_run()
+	if not waves.start_round():
+		errors.append("start_round failed before early-send pressure test")
+	else:
+		waves.force_intermission(0.01, true)
+		if not waves.send_next_wave():
+			errors.append("send_next_wave failed before early-send pressure test")
+		else:
+			# Over pressure: early-send must refuse (prevents wave-60 freezes).
+			waves.spawn_queue.clear()
+			for _i in 80:
+				waves.spawn_queue.append({
+					"hp": 10.0, "speed": 60.0, "bounty": 1,
+					"boss": false, "flying": false, "wave": state.wave, "counts_kill": false,
+				})
+			waves.enemies_alive = 8
+			waves.skip_unlocked = true
+			waves.phase = waves.Phase.WAVE
+			waves.wave_active = true
+			waves.spawning = true
+			if waves.can_send_wave_early():
+				errors.append("early-send should block when board pressure is maxed")
+			# Under pressure with leftovers: send must drop the unspawned queue.
+			waves.spawn_queue.clear()
+			for _i in 18:
+				waves.spawn_queue.append({
+					"hp": 10.0, "speed": 60.0, "bounty": 1,
+					"boss": false, "flying": false, "wave": state.wave, "counts_kill": false,
+				})
+			waves.enemies_alive = 8
+			waves.skip_unlocked = true
+			waves.phase = waves.Phase.WAVE
+			waves.wave_active = true
+			waves.spawning = true
+			var leftovers_before := waves.spawn_queue.size()
+			if not waves.send_wave_early():
+				errors.append("send_wave_early should work under pressure cap")
+			elif waves.spawn_queue.size() >= leftovers_before:
+				errors.append(
+					"early-send should drop unspawned leftovers (queue stayed >= %d)" % leftovers_before
+				)
+			waves.clear_enemies()
 	if WaveScaler.boss_banner(22).find("AIR MIX") < 0:
 		errors.append("wave 22 banner should mention AIR MIX")
 	if not WaveScaler.is_speed_wave(7):
@@ -248,6 +294,50 @@ func _run() -> void:
 		errors.append("antiair should deal no ground damage")
 	if "spike" not in TowerData.get_ids() or "antiair" not in TowerData.get_ids():
 		errors.append("spike and antiair should be in tower id list")
+
+	# Gatling: wave-30 unlock, expensive ultra-fast special.
+	var gatling_def := TowerData.get_def("gatling")
+	if int(gatling_def.get("cost", 0)) < 25000:
+		errors.append("gatling should cost at least 25000")
+	if float(gatling_def.get("fire_rate", 0.0)) < 10.0:
+		errors.append("gatling should fire very fast")
+	if TowerData.unlock_wave("gatling") != 30:
+		errors.append("gatling should unlock at wave 30")
+	if TowerData.is_unlocked("gatling", 29):
+		errors.append("gatling should be locked before wave 30")
+	if not TowerData.is_unlocked("gatling", 30):
+		errors.append("gatling should unlock at wave 30+")
+	build.select_tower_type("gunner")
+	state.set_wave(10)
+	state_add_gold(build, 30000)
+	build.select_tower_type("gatling")
+	if build.selected_tower_id == "gatling":
+		errors.append("gatling select should fail before unlock wave")
+	var gat_cell := Vector2i(7, 3)
+	# Force type to exercise the unlock check inside can_place_at.
+	build.selected_tower_id = "gatling"
+	if build.can_place_at(gat_cell):
+		errors.append("gatling place should fail before unlock wave")
+	state.set_wave(30)
+	build.select_tower_type("gatling")
+	if build.selected_tower_id != "gatling":
+		errors.append("gatling select should work at wave 30")
+	elif not build.can_place_at(gat_cell):
+		errors.append("gatling should be placeable at wave 30 with enough gold")
+	else:
+		if not build.try_place_at(grid.cell_to_world_center(gat_cell)):
+			errors.append("gatling place failed at wave 30")
+		else:
+			var gat := grid.get_tower_at(gat_cell)
+			if gat == null or gat.tower_id != "gatling":
+				errors.append("expected gatling on board")
+			# Other towers can still be built around it.
+			build.select_tower_type("rapid")
+			var around := Vector2i(8, 3)
+			if build.can_place_at(around):
+				build.try_place_at(grid.cell_to_world_center(around))
+			if grid.get_tower_at(around) == null or grid.get_tower_at(around).tower_id != "rapid":
+				errors.append("should be able to build other towers beside gatling")
 
 	# Upgrade path: 3 stats then final elemental.
 	build.clear_selection()

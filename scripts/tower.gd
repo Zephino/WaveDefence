@@ -118,7 +118,8 @@ func _fire_at(target: Enemy) -> void:
 		effect,
 		def,
 		enemy_container,
-		def.get("color", Color.WHITE)
+		def.get("color", Color.WHITE),
+		float(def.get("projectile_speed", 320.0))
 	)
 	proj.global_position = global_position
 	projectile_container.add_child(proj)
@@ -151,6 +152,11 @@ func _draw() -> void:
 	elif tower_id == "antiair":
 		draw_circle(Vector2(0, -2), 4.0, Color(0.85, 0.92, 1.0))
 		draw_line(Vector2(-10, 6), Vector2(10, 6), Color(0.85, 0.92, 1.0), 2.0)
+	elif tower_id == "gatling":
+		draw_circle(Vector2(0, 0), 5.0, Color(0.2, 0.18, 0.16))
+		draw_line(Vector2(-2, -2), Vector2(12, -6), Color(0.98, 0.75, 0.35), 2.2)
+		draw_line(Vector2(-2, 0), Vector2(12, 0), Color(0.98, 0.75, 0.35), 2.2)
+		draw_line(Vector2(-2, 2), Vector2(12, 6), Color(0.98, 0.75, 0.35), 2.2)
 	# Upgrade pips along the bottom edge.
 	for i in TowerData.MAX_STAT_UPGRADES:
 		var pip_color := Color(0.95, 0.85, 0.35) if i < upgrade_level else Color(0.2, 0.2, 0.22)

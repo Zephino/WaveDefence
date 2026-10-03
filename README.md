@@ -94,7 +94,7 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 - That starts a **build countdown**, then waves auto-run with intermissions between them.
 - After **Start Round**, the build countdown is always skippable (small gold bonus for time left).
 - After a wave ends, the break timer is always skippable (small gold bonus for time left).
-- Kill **25%** of a wave to unlock **Send Next Wave**: next-wave enemies start spawning immediately while leftovers stay on the map, plus a slight early-send gold bonus.
+- Kill **25%** of a wave to unlock **Send Next Wave**: next-wave enemies start spawning immediately while enemies already on the map stay; unspawned leftovers from the current wave are dropped. Plus a slight early-send gold bonus. Early-send is blocked if the board is already very crowded.
 - Boss every **10** waves; **two bosses** every **50** waves.
 - **Flying boss** every **15** waves — flies an **S-curve** over walls/towers (air creeps use the same style).
 - Light flying **scouts** start around **wave 8**; after **wave 20** every wave mixes air with ground (banner **AIR MIX**).
@@ -118,8 +118,9 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 | Lightning | 80 | Chain damage; strong vs air (2.0×) |
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |
+| Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
 
-Air/ground multipliers and `target_filter` (`any` / `ground` / `air`) are tunable in `data/towers.gd`.
+Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`.
 
 Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**.
 

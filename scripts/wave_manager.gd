@@ -14,6 +14,9 @@ signal enemies_remaining_changed(remaining: int, alive: int, queued: int)
 
 enum Phase { PREP, INTERMISSION, WAVE }
 
+## Cap alive + queued enemies. Early-send is blocked above this to prevent late-game freezes.
+const MAX_BOARD_PRESSURE := 72
+
 var grid: GameGrid
 var pathfinder: Pathfinder
 var game_state: GameState
@@ -34,6 +37,9 @@ var intermission_left: float = 0.0
 var last_early_send_bonus: int = 0
 ## If set, rotate the Random map once the board fully clears (survives early-send past 25/50…).
 var pending_map_rotate_wave: int = 0
+## Cached ground path; rebuilt only when towers change (not every spawn).
+var _cached_ground_path: PackedVector2Array = PackedVector2Array()
+var _path_dirty: bool = true
 
 
 func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_enemies: Node) -> void:
@@ -58,24 +64,39 @@ func enemies_remaining() -> int:
 	return enemies_alive + spawn_queue.size()
 
 
+func board_pressure() -> int:
+	return enemies_alive + spawn_queue.size()
+
+
 func _emit_enemies_remaining() -> void:
 	enemies_remaining_changed.emit(enemies_remaining(), enemies_alive, spawn_queue.size())
+
+
+func invalidate_ground_path() -> void:
+	_path_dirty = true
+
+
+func _ensure_ground_path() -> PackedVector2Array:
+	if _path_dirty or _cached_ground_path.size() < 2:
+		pathfinder.rebuild()
+		_cached_ground_path = pathfinder.get_world_path()
+		_path_dirty = false
+	return _cached_ground_path
 
 
 func start_round() -> bool:
 	## Player pressed Start Round after free-build prep.
 	if phase != Phase.PREP or game_state.is_game_over:
 		return false
-	pathfinder.rebuild()
-	if pathfinder.get_world_path().size() < 2:
+	invalidate_ground_path()
+	if _ensure_ground_path().size() < 2:
 		return false
 	_start_intermission(WaveScaler.INITIAL_BUILD_TIME, true)
 	return true
 
 
 func has_open_path() -> bool:
-	pathfinder.rebuild()
-	return pathfinder.get_world_path().size() >= 2
+	return _ensure_ground_path().size() >= 2
 
 
 func can_send_wave() -> bool:
@@ -86,6 +107,9 @@ func can_send_wave() -> bool:
 
 func can_send_wave_early() -> bool:
 	if game_state.is_game_over or phase != Phase.WAVE or not skip_unlocked:
+		return false
+	# Stacking early-sends with leftovers was freezing Classic around wave 50–60.
+	if board_pressure() >= MAX_BOARD_PRESSURE:
 		return false
 	return has_open_path()
 
@@ -117,8 +141,7 @@ func try_skip_timer() -> bool:
 func send_next_wave() -> bool:
 	if not can_send_wave():
 		return false
-	pathfinder.rebuild()
-	var world_path := pathfinder.get_world_path()
+	var world_path := _ensure_ground_path()
 	if world_path.size() < 2:
 		return false
 
@@ -139,14 +162,14 @@ func send_next_wave() -> bool:
 	return true
 
 
-## Start the next wave immediately while leftover enemies from the current wave stay on the map.
+## Start the next wave immediately while living enemies stay on the map.
 func send_wave_early() -> bool:
 	if not can_send_wave_early():
 		return false
 	return _begin_overlapping_next_wave(true)
 
 
-## Keep living enemies / leftover spawn queue; start the next wave's spawns immediately.
+## Keep living enemies; drop unspawned leftovers; start the next wave's spawns immediately.
 func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	if award_bonuses and phase == Phase.WAVE and game_state.wave > 0:
 		var finished_wave := game_state.wave
@@ -164,22 +187,14 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	else:
 		last_early_send_bonus = 0
 
-	# Keep living enemies. Next-wave spawns go first; any unspawned leftovers follow.
-	var leftover: Array[Dictionary] = []
-	for spec in spawn_queue:
-		leftover.append(spec)
+	# Keep living enemies on the board, but drop unspawned leftovers.
+	# Re-appending leftovers each early-send stacked hundreds of entities by mid/late Classic.
 	spawn_queue.clear()
 
 	var wave := game_state.advance_wave()
 	var banner := WaveScaler.boss_banner(wave)
 	_build_spawn_queue(wave)
-	var new_count := spawn_queue.size()
-	for spec in leftover:
-		var copy: Dictionary = spec.duplicate()
-		# Leftover slots must not inflate the new wave's 25% kill requirement.
-		copy["counts_kill"] = false
-		spawn_queue.append(copy)
-	enemies_this_wave_total = new_count
+	enemies_this_wave_total = spawn_queue.size()
 
 	phase = Phase.WAVE
 	wave_active = true
@@ -312,8 +327,7 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 			phase += 0.55
 		world_path = grid.build_air_s_path(phase)
 	else:
-		pathfinder.rebuild()
-		world_path = pathfinder.get_world_path()
+		world_path = _ensure_ground_path()
 		if world_path.size() < 2:
 			return false
 	var enemy := Enemy.new()
@@ -440,8 +454,8 @@ func force_next_wave() -> bool:
 
 
 func repath_living_enemies() -> void:
-	pathfinder.rebuild()
-	var world_path := pathfinder.get_world_path()
+	invalidate_ground_path()
+	var world_path := _ensure_ground_path()
 	for child in enemy_container.get_children():
 		if child is Enemy:
 			(child as Enemy).set_path(world_path)

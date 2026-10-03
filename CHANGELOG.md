@@ -1,3 +1,27 @@
+## Version 00.01.67
+Date: 10/03/2026
+Time: 2:50 PM
+
+### Changes
+- New **Gatling** tower: 25000 gold, unlocks at wave 30, extreme fire rate (fast projectiles)
+- Shop shows locked towers as `(W30)` until unlocked; other towers can still be built around Gatling
+
+### Reason
+Add a late-game special tower for Classic/Random runs past wave 30.
+
+## Version 00.01.66
+Date: 10/03/2026
+Time: 2:41 PM
+
+### Changes
+- Early-send no longer re-queues unspawned leftovers (was stacking hundreds of enemies by ~wave 60 Classic)
+- Block Send Next Wave when board pressure (alive + queued) hits a hard cap
+- Cache ground path between spawns; rebuild only when towers change
+- Fix web export post-process so version cache-bust + mobile helper actually stay in `docs/index.html`
+
+### Reason
+Classic runs around wave 60 were freezing/crashing under stacked early-send load.
+
 ## Version 00.01.65
 Date: 10/03/2026
 Time: 1:48 PM

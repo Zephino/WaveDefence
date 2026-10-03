@@ -161,10 +161,25 @@ const TYPES := {
 		"air_damage_mult": 1.0,
 		"ground_damage_mult": 0.0,
 	},
+	"gatling": {
+		"display_name": "Gatling",
+		"blurb": "Late-game special. Extreme fire rate shreds lanes. One tile — build other towers around it. Unlocks at wave 30.",
+		"cost": 25000,
+		"damage": 14.0,
+		"range": 135.0,
+		"fire_rate": 18.0,
+		"splash_radius": 0.0,
+		"color": Color(0.95, 0.55, 0.2),
+		"effect": "none",
+		"projectile_speed": 1100.0,
+		"air_damage_mult": 1.2,
+		"unlock_wave": 30,
+	},
 }
 
+
 static func get_ids() -> Array:
-	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair"]
+	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair", "gatling"]
 
 
 static func get_def(tower_id: String) -> Dictionary:
@@ -173,6 +188,18 @@ static func get_def(tower_id: String) -> Dictionary:
 
 static func is_wall(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_wall", false))
+
+
+## Wave number when the shop unlocks this tower (0 / missing = always available).
+static func unlock_wave(tower_id: String) -> int:
+	return int(get_def(tower_id).get("unlock_wave", 0))
+
+
+static func is_unlocked(tower_id: String, current_wave: int) -> bool:
+	var need := unlock_wave(tower_id)
+	if need <= 0:
+		return true
+	return current_wave >= need
 
 
 static func sell_value(tower_id: String) -> int:
@@ -353,6 +380,9 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 	var blurb := str(base.get("blurb", "")).strip_edges()
 	if blurb != "":
 		lines.append(blurb)
+	var need_wave := unlock_wave(tower_id)
+	if need_wave > 0:
+		lines.append("Unlocks at wave %d" % need_wave)
 	if bool(base.get("is_wall", false)):
 		return "\n".join(lines)
 
