@@ -124,17 +124,14 @@ if ($doWeb) {
     $htmlPath = Join-Path $ProjectRoot "docs\index.html"
     $html = Get-Content $htmlPath -Raw
 
-    # Mobile rotate/fullscreen helper (browsers cannot fully force this without help).
+    # Mobile helper + cache-bust (always rewrite so VERSION bumps replace old tags).
     $mobileJsSrc = Join-Path $ProjectRoot "web\mobile_play.js"
     $mobileJsDst = Join-Path $ProjectRoot "docs\mobile_play.js"
     Copy-Item -Force $mobileJsSrc $mobileJsDst
-    $mobileTag = "<script src=`"mobile_play.js?v=$ver`"></script>"
-    if ($html -notmatch "mobile_play\.js") {
-        $html = $html -replace "</head>", ($mobileTag + "</head>")
-    }
-
-    # Bust phone/browser caches so VERSION updates show without a manual hard refresh.
-    $bust = @"
+    $html = [regex]::Replace($html, '(?s)<script src="mobile_play\.js\?v=[^"]*"></script>', "")
+    $html = [regex]::Replace($html, '(?s)<script>\s*\(function \(\) \{\s*var VER = "[^"]*";.*?</script>', "")
+    $inject = @"
+<script src="mobile_play.js?v=$ver"></script>
 <script>
 (function () {
 	var VER = "$ver";
@@ -159,9 +156,7 @@ if ($doWeb) {
 })();
 </script>
 "@
-    if ($html -notmatch [regex]::Escape("var VER = `"$ver`"")) {
-        $html = $html -replace "</head>", ($bust + "</head>")
-    }
+    $html = $html -replace "</head>", ($inject + "</head>")
     Set-Content -Path $htmlPath -Value $html -NoNewline
     Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper)" -ForegroundColor Green
 }
