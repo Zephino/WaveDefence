@@ -184,15 +184,16 @@ if ($doWeb) {
     $swPath = Join-Path $ProjectRoot "docs\index.service.worker.js"
     if (Test-Path $swPath) {
         $sw = [System.IO.File]::ReadAllText($swPath)
-        $swNew = [regex]::Replace(
-            $sw,
-            "const CACHE_VERSION = '[^']*';",
-            { param($m) "const CACHE_VERSION = '$ver';" }
-        )
-        if ($swNew -eq $sw) {
-            Write-Host "WARN: could not stamp CACHE_VERSION in service worker" -ForegroundColor Yellow
+        # Avoid $ in .NET Replace replacements (and PS MatchEvaluator quirks).
+        $swTagged = "const CACHE_VERSION = '" + $ver + "';"
+        $swNew = [regex]::Replace($sw, "const CACHE_VERSION = '[^']*';", $swTagged)
+        if ($swNew -notmatch [regex]::Escape($swTagged)) {
+            throw "Failed to stamp CACHE_VERSION=$ver into service worker"
         }
         [System.IO.File]::WriteAllText($swPath, $swNew)
+    }
+    if ($html -notmatch [regex]::Escape('var VER = "' + $ver + '"')) {
+        throw "Failed to inject VER=$ver into docs/index.html"
     }
     Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper + SW)" -ForegroundColor Green
 }

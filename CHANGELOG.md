@@ -1,3 +1,14 @@
+## Version 00.01.72
+Date: 10/03/2026
+Time: 10:52 PM
+
+### Changes
+- Fix web export so `VER` inject and service-worker `CACHE_VERSION` actually ship to GitHub Pages
+- Keep menu version under the title and green Map/Monsters selection border
+
+### Reason
+Live site was still serving HTML/SW without cache-bust tags, so Incognito kept the old yellow menu.
+
 ## Version 00.01.71
 Date: 10/03/2026
 Time: 10:50 PM

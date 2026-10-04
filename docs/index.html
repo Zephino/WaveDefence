@@ -94,7 +94,48 @@ body {
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 <link rel="manifest" href="index.manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" /><meta name="mobile-web-app-capable" content="yes" /><meta name="apple-mobile-web-app-capable" content="yes" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" /><style>html,body{margin:0;padding:0;background:#000;overflow:hidden;touch-action:none;} #canvas{touch-action:none;}</style>
-	</head>
+	<script src="mobile_play.js?v=00.01.72"></script>
+<script>
+(function () {
+	var VER = "00.01.72";
+	var KEY = "wd_game_ver";
+	// Service worker ignores Ctrl+F5 â€” clear caches when VERSION changes.
+	try {
+		var prev = localStorage.getItem(KEY);
+		if (prev && prev !== VER && "serviceWorker" in navigator) {
+			localStorage.setItem(KEY, VER);
+			Promise.all([
+				navigator.serviceWorker.getRegistrations().then(function (regs) {
+					return Promise.all(regs.map(function (r) { return r.unregister(); }));
+				}),
+				caches.keys().then(function (keys) {
+					return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+				})
+			]).then(function () { location.reload(); });
+			return;
+		}
+		localStorage.setItem(KEY, VER);
+	} catch (e) {}
+	function withVer(url) {
+		if (!url || typeof url !== "string") return url;
+		if (!/\.(pck|wasm|js)(\?|$)/i.test(url)) return url;
+		return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(VER);
+	}
+	var _fetch = window.fetch;
+	window.fetch = function (input, init) {
+		if (typeof input === "string") input = withVer(input);
+		else if (input && typeof Request !== "undefined" && input instanceof Request) {
+			input = new Request(withVer(input.url), input);
+		}
+		return _fetch.call(this, input, init);
+	};
+	var XO = XMLHttpRequest.prototype.open;
+	XMLHttpRequest.prototype.open = function (method, url) {
+		arguments[1] = withVer(url);
+		return XO.apply(this, arguments);
+	};
+})();
+</script></head>
 	<body>
 		<canvas id="canvas">
 			Your browser does not support the canvas tag.
