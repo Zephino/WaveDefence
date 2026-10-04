@@ -94,30 +94,7 @@ body {
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 <link rel="manifest" href="index.manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" /><meta name="mobile-web-app-capable" content="yes" /><meta name="apple-mobile-web-app-capable" content="yes" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" /><style>html,body{margin:0;padding:0;background:#000;overflow:hidden;touch-action:none;} #canvas{touch-action:none;}</style>
-	<script src="mobile_play.js?v=00.01.68"></script>
-<script>
-(function () {
-	var VER = "00.01.68";
-	function withVer(url) {
-		if (!url || typeof url !== "string") return url;
-		if (!/\.(pck|wasm|js)(\?|$)/i.test(url)) return url;
-		return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(VER);
-	}
-	var _fetch = window.fetch;
-	window.fetch = function (input, init) {
-		if (typeof input === "string") input = withVer(input);
-		else if (input && typeof Request !== "undefined" && input instanceof Request) {
-			input = new Request(withVer(input.url), input);
-		}
-		return _fetch.call(this, input, init);
-	};
-	var XO = XMLHttpRequest.prototype.open;
-	XMLHttpRequest.prototype.open = function (method, url) {
-		arguments[1] = withVer(url);
-		return XO.apply(this, arguments);
-	};
-})();
-</script></head>
+	</head>
 	<body>
 		<canvas id="canvas">
 			Your browser does not support the canvas tag.
@@ -135,7 +112,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":164572,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":165868,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 

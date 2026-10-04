@@ -1,3 +1,37 @@
+## Version 00.01.71
+Date: 10/03/2026
+Time: 10:50 PM
+
+### Changes
+- Main menu version sits under the title (was below Quit and easy to miss on phones)
+- Selected Map / Monsters options use a thicker green border + green text (not yellow tint)
+- Ship web cache auto-clear + SW `CACHE_VERSION` stamp from prior fix
+
+### Reason
+Players still saw the old yellow highlight and thought the version vanished; phone scroll hid it under the menu.
+
+## Version 00.01.70
+Date: 10/03/2026
+Time: 10:46 PM
+
+### Changes
+- Web: on VERSION change, unregister the service worker and clear caches (Ctrl+F5 cannot)
+- Web export stamps `CACHE_VERSION` in the service worker from `VERSION`
+- Main menu Map / Monsters choices show a green border on the selected option
+
+### Reason
+Chrome keeps serving the old PWA cache; players could not hard-refresh to a new build.
+
+## Version 00.01.69
+Date: 10/03/2026
+Time: 10:44 PM
+
+### Changes
+- Main menu Map / Monsters choices show a green border on the selected option
+
+### Reason
+Make Classic vs Random selection easier to see at a glance.
+
 ## Version 00.01.68
 Date: 10/03/2026
 Time: 10:45 PM

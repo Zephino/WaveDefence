@@ -135,6 +135,24 @@ if ($doWeb) {
 <script>
 (function () {
 	var VER = "$ver";
+	var KEY = "wd_game_ver";
+	// Service worker ignores Ctrl+F5 — clear caches when VERSION changes.
+	try {
+		var prev = localStorage.getItem(KEY);
+		if (prev && prev !== VER && "serviceWorker" in navigator) {
+			localStorage.setItem(KEY, VER);
+			Promise.all([
+				navigator.serviceWorker.getRegistrations().then(function (regs) {
+					return Promise.all(regs.map(function (r) { return r.unregister(); }));
+				}),
+				caches.keys().then(function (keys) {
+					return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+				})
+			]).then(function () { location.reload(); });
+			return;
+		}
+		localStorage.setItem(KEY, VER);
+	} catch (e) {}
 	function withVer(url) {
 		if (!url || typeof url !== "string") return url;
 		if (!/\.(pck|wasm|js)(\?|$)/i.test(url)) return url;
@@ -161,7 +179,22 @@ if ($doWeb) {
     if ($headIdx -lt 0) { throw "docs/index.html missing </head>" }
     $html = $html.Insert($headIdx, $inject)
     [System.IO.File]::WriteAllText($htmlPath, $html)
-    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper)" -ForegroundColor Green
+
+    # Bump Godot PWA cache name so installs drop the old pack (Ctrl+F5 cannot).
+    $swPath = Join-Path $ProjectRoot "docs\index.service.worker.js"
+    if (Test-Path $swPath) {
+        $sw = [System.IO.File]::ReadAllText($swPath)
+        $swNew = [regex]::Replace(
+            $sw,
+            "const CACHE_VERSION = '[^']*';",
+            { param($m) "const CACHE_VERSION = '$ver';" }
+        )
+        if ($swNew -eq $sw) {
+            Write-Host "WARN: could not stamp CACHE_VERSION in service worker" -ForegroundColor Yellow
+        }
+        [System.IO.File]::WriteAllText($swPath, $swNew)
+    }
+    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper + SW)" -ForegroundColor Green
 }
 
 Write-Host ""

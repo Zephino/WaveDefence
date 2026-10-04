@@ -1,5 +1,9 @@
 extends Control
 
+const SELECT_BORDER := Color(0.35, 0.95, 0.45)
+const SELECT_BG := Color(0.16, 0.22, 0.18)
+const NORMAL_BG := Color(0.14, 0.16, 0.19)
+
 var version_label: Label
 var mode_buttons: Dictionary = {}
 var monster_mode_buttons: Dictionary = {}
@@ -64,6 +68,12 @@ func _build_ui() -> void:
 	subtitle.modulate = Color(0.7, 0.75, 0.8)
 	center.add_child(subtitle)
 
+	version_label = Label.new()
+	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	version_label.modulate = Color(0.55, 0.6, 0.65)
+	version_label.text = VersionInfo.label()
+	center.add_child(version_label)
+
 	center.add_child(_spacer(8))
 
 	var mode_label := Label.new()
@@ -125,13 +135,7 @@ func _build_ui() -> void:
 		center.add_child(_menu_button("Fullscreen", _on_fullscreen))
 	center.add_child(_menu_button("Quit", _on_quit))
 
-	version_label = Label.new()
-	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	version_label.modulate = Color(0.55, 0.6, 0.65)
-	version_label.text = VersionInfo.label()
-	center.add_child(_spacer(12))
-	center.add_child(version_label)
-
+	center.add_child(_spacer(8))
 	var boards_label := Label.new()
 	boards_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	boards_label.modulate = Color(0.5, 0.58, 0.62)
@@ -198,13 +202,49 @@ func _select_monster_mode(mode: int) -> void:
 func _refresh_mode_buttons() -> void:
 	for mode in mode_buttons.keys():
 		var btn: Button = mode_buttons[mode]
-		btn.modulate = Color(1.2, 1.15, 0.7) if int(mode) == selected_mode else Color.WHITE
+		_apply_choice_style(btn, int(mode) == selected_mode)
 
 
 func _refresh_monster_mode_buttons() -> void:
 	for mode in monster_mode_buttons.keys():
 		var btn: Button = monster_mode_buttons[mode]
-		btn.modulate = Color(1.2, 1.15, 0.7) if int(mode) == selected_monster_mode else Color.WHITE
+		_apply_choice_style(btn, int(mode) == selected_monster_mode)
+
+
+func _apply_choice_style(btn: Button, selected: bool) -> void:
+	# Don't use modulate for selection — it washes out StyleBox borders on web.
+	btn.modulate = Color.WHITE
+	btn.add_theme_color_override(
+		"font_color",
+		Color(0.75, 1.0, 0.8) if selected else Color(0.92, 0.94, 0.96)
+	)
+	btn.add_theme_color_override(
+		"font_hover_color",
+		Color(0.85, 1.0, 0.9) if selected else Color(1, 1, 1)
+	)
+	btn.add_theme_color_override(
+		"font_pressed_color",
+		Color(0.7, 0.95, 0.75) if selected else Color(0.85, 0.88, 0.9)
+	)
+	var box := StyleBoxFlat.new()
+	box.bg_color = SELECT_BG if selected else NORMAL_BG
+	box.set_border_width_all(4 if selected else 1)
+	box.border_color = SELECT_BORDER if selected else Color(0.28, 0.32, 0.36)
+	box.set_corner_radius_all(6)
+	box.content_margin_left = 12
+	box.content_margin_right = 12
+	box.content_margin_top = 8
+	box.content_margin_bottom = 8
+	# Draw border outside the fill so it stays visible on dark themes.
+	box.draw_center = true
+	var hover := box.duplicate() as StyleBoxFlat
+	hover.bg_color = box.bg_color.lightened(0.1)
+	hover.border_color = SELECT_BORDER if selected else Color(0.4, 0.45, 0.5)
+	var pressed := box.duplicate() as StyleBoxFlat
+	pressed.bg_color = box.bg_color.darkened(0.08)
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var sb: StyleBoxFlat = box if state == "normal" or state == "focus" or state == "disabled" else (hover if state == "hover" else pressed)
+		btn.add_theme_stylebox_override(state, sb.duplicate() as StyleBoxFlat)
 
 
 func _start_difficulty(difficulty: int) -> void:
