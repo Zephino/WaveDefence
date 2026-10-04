@@ -1,3 +1,14 @@
+## Version 00.01.75
+Date: 10/03/2026
+Time: 11:03 PM
+
+### Changes
+- Air creeps: HP ~70% of ground (was 85%), speed ~1.05× ground (was 1.15×)
+- Flying bosses: HP 8.5× creep (was 10×), slightly slower
+
+### Reason
+Air units were too hard to kill for the pathing advantage they already have.
+
 ## Version 00.01.74
 Date: 10/03/2026
 Time: 10:55 PM

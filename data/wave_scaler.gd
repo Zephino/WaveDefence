@@ -190,12 +190,13 @@ static func boss_bounty(wave: int) -> int:
 
 
 static func flying_creep_hp(wave: int) -> float:
-	return creep_hp(wave) * 0.85
+	# Glassier than ground — air already skips maze pathing.
+	return creep_hp(wave) * 0.7
 
 
 static func flying_creep_speed(wave: int) -> float:
 	var cap := SPEED_WAVE_MAX_SPEED if is_speed_wave(wave) else 160.0
-	return minf(creep_speed(wave) * 1.15, cap)
+	return minf(creep_speed(wave) * 1.05, cap)
 
 
 static func flying_creep_bounty(wave: int) -> int:
@@ -209,12 +210,12 @@ static func flying_boss_count(wave: int) -> int:
 
 
 static func flying_boss_hp(wave: int) -> float:
-	return creep_hp(wave) * 10.0
+	return creep_hp(wave) * 8.5
 
 
 static func flying_boss_speed(wave: int) -> float:
 	var base := minf(60.0 + wave * 1.5, 140.0)
-	var speed := maxf(base * 0.7, 45.0)
+	var speed := maxf(base * 0.65, 42.0)
 	if is_speed_wave(wave):
 		speed = minf(speed * 1.4, 150.0)
 	return speed

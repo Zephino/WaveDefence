@@ -246,6 +246,10 @@ func _run() -> void:
 		errors.append("wave 40 should include flying creeps")
 	if WaveScaler.ground_creep_count(40) + WaveScaler.flying_creep_count(40) != WaveScaler.creep_count(40):
 		errors.append("ground+air creep counts should equal creep_count")
+	if WaveScaler.flying_creep_hp(20) >= WaveScaler.creep_hp(20) * 0.75:
+		errors.append("flying creeps should be glassier than ~75% ground HP")
+	if WaveScaler.flying_boss_hp(15) >= WaveScaler.creep_hp(15) * 9.0:
+		errors.append("flying bosses should be under 9x creep HP")
 	# Confirm wave-15 spawn queue actually contains a flyer.
 	waves._build_spawn_queue(15)
 	var flying_in_15 := 0

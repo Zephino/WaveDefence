@@ -98,7 +98,7 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 - Kill **25%** of a wave to unlock **Send Next Wave**: next-wave enemies start spawning immediately while enemies already on the map stay; unspawned leftovers from the current wave are dropped. Plus a slight early-send gold bonus. Early-send is blocked if the board is already very crowded.
 - Boss every **10** waves; **two bosses** every **50** waves.
 - **Flying boss** every **15** waves — flies an **S-curve** over walls/towers (air creeps use the same style).
-- Light flying **scouts** start around **wave 8**; after **wave 20** every wave mixes air with ground (banner **AIR MIX**).
+- Light flying **scouts** start around **wave 8**; after **wave 20** every wave mixes air with ground (banner **AIR MIX**). Air creeps are glassier (~70% ground HP) and only slightly faster than ground.
 - Every **7** waves (**7, 14, 21…**) is a **SPEED WAVE** — much faster, glassier creeps and denser spawns.
 - Top bar **Left** shows enemies remaining until the board clears (on map + still spawning).
 - Kill enemies for gold. Leaks cost lives. Game over at 0 lives → leaderboard.
