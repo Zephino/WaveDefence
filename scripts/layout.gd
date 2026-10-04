@@ -38,9 +38,19 @@ static func right_sidebar_rect() -> Rect2:
 	return Rect2(x, y, maxf(width, 120.0), maxf(height, 200.0))
 
 
-## Right gutter used by the debug panel (same strip as the touch action sidebar).
+## Floating debug overlay centered over the board (does not cover sidebars).
 static func debug_panel_rect() -> Rect2:
-	return right_sidebar_rect()
+	var board := board_rect()
+	var width := 240.0
+	var height := minf(board.size.y - 16.0, 440.0)
+	var x := board.position.x + (board.size.x - width) * 0.5
+	var y := board.position.y + 8.0
+	return Rect2(x, y, width, height)
+
+
+## Shop left + actions right (desktop and mobile).
+static func use_dual_sidebars() -> bool:
+	return true
 
 
 ## Cached web-mobile probe: -1 unknown, 0 no, 1 yes.
@@ -114,4 +124,4 @@ static func button_height(desktop_height: float) -> float:
 static func help_text() -> String:
 	if use_touch_ui():
 		return "Drag to paint place\nLong-press tower = multi-select\nMulti toggle / Deselect\nTap tower for info"
-	return "Esc/right-click deselect\nCtrl/Shift multi-select\nUpgrade x3 then final\nF1 debug"
+	return "Esc/right-click deselect\nCtrl/Shift multi-select\nUpgrade x3 then final\nF1/~ debug overlay"

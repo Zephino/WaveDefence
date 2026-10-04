@@ -1,3 +1,14 @@
+## Version 00.01.74
+Date: 10/03/2026
+Time: 10:55 PM
+
+### Changes
+- PC HUD matches mobile: tower shop on the left, actions on the right
+- Debug (F1/~) is a floating overlay over the board instead of the right gutter
+
+### Reason
+Dual sidebars look better on desktop; debug needed a new home once Actions took the right strip.
+
 ## Version 00.01.73
 Date: 10/03/2026
 Time: 10:51 PM

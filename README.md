@@ -156,13 +156,19 @@ Expect `SMOKE_TEST_OK`.
 
 ## Mobile / touch
 
-The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen:
+The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
+
+**HUD (PC and mobile):** tower shop on the **left**, actions (timer / upgrade / sell / End Run) on the **right**.
+
+Mobile extras:
 
 - **Drag** on the board to paint-place
 - **Tap** a tower to select + show its info card
 - **Long-press** a tower to multi-select (or use right-side **Multi: On**)
 - **Deselect** button, or tap empty/unplaceable cells / outside the board
-- Larger buttons; shop on the **left**, actions on the **right** (no scrollbar)
+- Larger touch buttons
+
+**Debug (F1 / ~):** opens a floating panel over the board (does not cover the sidebars). Using debug makes the run ineligible for the leaderboard.
 
 ### Send / play packages
 

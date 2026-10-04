@@ -28,6 +28,17 @@ func _build() -> void:
 	panel.size = rect.size
 	panel.custom_minimum_size = rect.size
 	panel.clip_contents = true
+	# Dark overlay card over the board — leaves left/right sidebars free.
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.1, 0.13, 0.94)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.45, 0.55, 0.4, 0.9)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 
 	var scroll := ScrollContainer.new()

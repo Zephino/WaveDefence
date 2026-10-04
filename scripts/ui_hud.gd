@@ -100,13 +100,13 @@ func _build_ui(version_text: String) -> void:
 	status_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
 	root.add_child(status_label)
 
-	var dual_sides := GameLayout.use_touch_ui()
-	var left_box := _make_side_panel(root, GameLayout.sidebar_rect(), not dual_sides)
+	var dual_sides := GameLayout.use_dual_sidebars()
+	# Left shop may scroll if the tower list grows; actions stay on the right.
+	var left_box := _make_side_panel(root, GameLayout.sidebar_rect(), true)
 	_fill_shop_column(left_box)
 
 	var action_parent: VBoxContainer = left_box
 	if dual_sides:
-		# Phone: actions use the right gutter so nothing needs a scrollbar.
 		action_parent = _make_side_panel(root, GameLayout.right_sidebar_rect(), false)
 		var actions_title := Label.new()
 		actions_title.text = "Actions"
