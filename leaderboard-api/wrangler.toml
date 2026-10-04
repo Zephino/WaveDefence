@@ -1,18 +1,19 @@
 name = "wave-defence-leaderboard"
+workers_dev = true
 main = "src/index.js"
 compatibility_date = "2024-10-01"
 
 # Create with: npx wrangler kv namespace create LEADERBOARD_KV
 # Then paste the id below and uncomment.
-# [[kv_namespaces]]
-# binding = "LEADERBOARD_KV"
-# id = "YOUR_KV_NAMESPACE_ID"
+[[kv_namespaces]]
+binding = "LEADERBOARD_KV"
+id = "e3ceadc6e9af4470ad15484805392533"
 
 [vars]
 GITHUB_OWNER = "Zephino"
 GITHUB_REPO = "WaveDefence"
 GITHUB_PATH = "leaderboard.json"
-GITHUB_BRANCH = "main"
+GITHUB_BRANCH = "data"
 
 # Set secret (do not commit tokens):
 #   npx wrangler secret put GITHUB_TOKEN

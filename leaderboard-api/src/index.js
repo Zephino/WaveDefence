@@ -110,12 +110,17 @@ async function loadBoards(env) {
   const owner = env.GITHUB_OWNER || "Zephino";
   const repo = env.GITHUB_REPO || "WaveDefence";
   const path = env.GITHUB_PATH || "leaderboard.json";
-  const branch = env.GITHUB_BRANCH || "main";
+  const branch = env.GITHUB_BRANCH || "data";
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) return emptyBoards();
-  const data = await res.json();
-  return normalizeBoards(data);
+  try {
+    const data = await res.json();
+    return normalizeBoards(data);
+  } catch (err) {
+    console.log("loadBoards JSON parse failed:", String(err));
+    return emptyBoards();
+  }
 }
 
 async function saveBoards(env, boards) {
@@ -136,7 +141,7 @@ async function commitToGitHub(env, boards) {
   const owner = env.GITHUB_OWNER || "Zephino";
   const repo = env.GITHUB_REPO || "WaveDefence";
   const path = env.GITHUB_PATH || "leaderboard.json";
-  const branch = env.GITHUB_BRANCH || "main";
+  const branch = env.GITHUB_BRANCH || "data";
   const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -169,51 +174,60 @@ async function commitToGitHub(env, boards) {
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
-
-    const url = new URL(request.url);
-    if (url.pathname !== "/leaderboard" && url.pathname !== "/") {
-      return jsonResponse({ error: "not found" }, 404);
-    }
-
-    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-    if (!(await rateLimit(env, ip))) {
-      return jsonResponse({ error: "rate limited" }, 429);
-    }
-
-    if (request.method === "GET") {
-      const boards = await loadBoards(env);
-      return jsonResponse(boards);
-    }
-
-    if (request.method === "POST") {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return jsonResponse({ error: "invalid json" }, 400);
+    try {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders() });
       }
-      const name = sanitizeName(body.name);
-      const wave = parseInt(body.wave, 10) || 0;
-      const key = difficultyKey(body.difficulty);
-      if (!name) return jsonResponse({ error: "invalid name" }, 400);
-      if (wave <= 0 || wave > MAX_WAVE) return jsonResponse({ error: "invalid wave" }, 400);
 
-      const boards = await loadBoards(env);
-      const entries = boards[key] || [];
-      const qualifies =
-        entries.length < MAX_ENTRIES || wave >= (entries[MAX_ENTRIES - 1]?.wave ?? 0);
-      if (!qualifies) {
+      const url = new URL(request.url);
+      if (url.pathname !== "/leaderboard" && url.pathname !== "/") {
+        return jsonResponse({ error: "not found" }, 404);
+      }
+
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      try {
+        if (!(await rateLimit(env, ip))) {
+          return jsonResponse({ error: "rate limited" }, 429);
+        }
+      } catch (err) {
+        console.log("rateLimit failed:", String(err));
+      }
+
+      if (request.method === "GET") {
+        const boards = await loadBoards(env);
         return jsonResponse(boards);
       }
-      entries.push({ name, wave });
-      boards[key] = sortAndTrim(entries);
-      const saved = await saveBoards(env, boards);
-      return jsonResponse(saved);
-    }
 
-    return jsonResponse({ error: "method not allowed" }, 405);
+      if (request.method === "POST") {
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return jsonResponse({ error: "invalid json" }, 400);
+        }
+        const name = sanitizeName(body.name);
+        const wave = parseInt(body.wave, 10) || 0;
+        const key = difficultyKey(body.difficulty);
+        if (!name) return jsonResponse({ error: "invalid name" }, 400);
+        if (wave <= 0 || wave > MAX_WAVE) return jsonResponse({ error: "invalid wave" }, 400);
+
+        const boards = await loadBoards(env);
+        const entries = boards[key] || [];
+        const qualifies =
+          entries.length < MAX_ENTRIES || wave >= (entries[MAX_ENTRIES - 1]?.wave ?? 0);
+        if (!qualifies) {
+          return jsonResponse(boards);
+        }
+        entries.push({ name, wave });
+        boards[key] = sortAndTrim(entries);
+        const saved = await saveBoards(env, boards);
+        return jsonResponse(saved);
+      }
+
+      return jsonResponse({ error: "method not allowed" }, 405);
+    } catch (err) {
+      console.log("worker error:", String(err && err.stack ? err.stack : err));
+      return jsonResponse({ error: "server error", detail: String(err && err.message ? err.message : err) }, 500);
+    }
   },
 };

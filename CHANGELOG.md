@@ -1,3 +1,65 @@
+﻿## Version 00.01.82
+Date: 10/03/2026
+Time: 11:30 PM
+
+### Changes
+- Set live leaderboard `API_BASE_URL` to `https://wave-defence-leaderboard.thebotcoder.workers.dev`
+- Deployed Cloudflare Worker; fixed invalid JSON on the `data` branch; hardened Worker error handling
+
+### Reason
+Finish Cloudflare upload path so scores can sync worldwide.
+
+## Version 00.01.81
+Date: 10/03/2026
+Time: 11:27 PM
+
+### Changes
+- Setup app: handle missing `workers.dev` subdomain, add **Retry deploy only** button, enable `workers_dev` in wrangler.toml
+
+### Reason
+First deploy got stuck because Cloudflare requires a one-time workers.dev subdomain registration.
+
+## Version 00.01.80
+Date: 10/03/2026
+Time: 11:25 PM
+
+### Changes
+- Fixed Windows setup app encoding so PowerShell can parse `Setup-Leaderboard.ps1` (ASCII-only text)
+
+### Reason
+Em-dashes in the script were mis-decoded and crashed the helper on launch.
+
+## Version 00.01.79
+Date: 10/03/2026
+Time: 11:22 PM
+
+### Changes
+- Added Windows leaderboard setup app: `leaderboard-api/Setup-Leaderboard.bat` + `Setup-Leaderboard.ps1`
+
+### Reason
+Give a double-click guided UI for Cloudflare/GitHub token/deploy so setup does not require bash or pasting secrets into chat.
+
+## Version 00.01.78
+Date: 10/03/2026
+Time: 11:21 PM
+
+### Changes
+- Added `leaderboard-api/setup-leaderboard.sh` one-shot Cloudflare setup (login, KV, GitHub secret, deploy)
+
+### Reason
+Make Worker setup a single script the user can run locally without pasting secrets into chat.
+
+## Version 00.01.77
+Date: 10/03/2026
+Time: 11:17 PM
+
+### Changes
+- Shared leaderboards read/write the dedicated GitHub **`data`** branch (`leaderboard.json` only)
+- Worker `GITHUB_BRANCH` and client `LEADERBOARD_READ_URL` point at `data` instead of `main`
+
+### Reason
+Keep score commits off the game history on `main`.
+
 ## Version 00.01.76
 Date: 10/03/2026
 Time: 11:12 PM
@@ -5,7 +67,7 @@ Time: 11:12 PM
 ### Changes
 - Leaderboard fetch no longer wipes local scores when global upload is not configured (merge instead of replace)
 - Re-apply pending unsynced scores after a remote replace when upload is configured
-- Clearer UI: “Saved on this device” / “Local (this device)” until `API_BASE_URL` is set
+- Clearer UI: â€œSaved on this deviceâ€ / â€œLocal (this device)â€ until `API_BASE_URL` is set
 
 ### Reason
 Scores looked unsaved because the empty GitHub `leaderboard.json` was overwriting local boards on every sync, and the Cloudflare Worker URL was never set so uploads could not run.
@@ -15,8 +77,8 @@ Date: 10/03/2026
 Time: 11:03 PM
 
 ### Changes
-- Air creeps: HP ~70% of ground (was 85%), speed ~1.05× ground (was 1.15×)
-- Flying bosses: HP 8.5× creep (was 10×), slightly slower
+- Air creeps: HP ~70% of ground (was 85%), speed ~1.05Ã— ground (was 1.15Ã—)
+- Flying bosses: HP 8.5Ã— creep (was 10Ã—), slightly slower
 
 ### Reason
 Air units were too hard to kill for the pathing advantage they already have.
@@ -171,11 +233,11 @@ Date: 10/03/2026
 Time: 11:36 AM
 
 ### Changes
-- Mobile web: **CSS 90° rotate** when the phone is upright so the game fills the screen as landscape without relying on OS orientation lock
+- Mobile web: **CSS 90Â° rotate** when the phone is upright so the game fills the screen as landscape without relying on OS orientation lock
 - Stronger fullscreen attempts; tip to **Open in Chrome** / Add to Home Screen when Discord/in-app browsers block the top-bar hide
 
 ### Reason
-In-app browsers keep the URL bar, and orientation.lock often fails — CSS rotate + real Chrome/PWA is the practical path.
+In-app browsers keep the URL bar, and orientation.lock often fails â€” CSS rotate + real Chrome/PWA is the practical path.
 
 ## Version 00.01.60
 Date: 10/03/2026
@@ -209,7 +271,7 @@ Time: 11:24 AM
 - Scrollable main menu on phones so controls stay reachable
 
 ### Reason
-Phone players could not see the “tap for fullscreen” message.
+Phone players could not see the â€œtap for fullscreenâ€ message.
 
 ## Version 00.01.57
 Date: 10/03/2026
@@ -222,7 +284,7 @@ Time: 11:19 AM
 - Web export viewport / mobile web-app meta tags for phone browsers
 
 ### Reason
-Phone web play should match Android’s landscape fullscreen feel without affecting desktop players.
+Phone web play should match Androidâ€™s landscape fullscreen feel without affecting desktop players.
 
 ## Version 00.01.56
 Date: 10/03/2026
@@ -279,11 +341,11 @@ Date: 10/03/2026
 Time: 1:36 AM
 
 ### Changes
-- Renamed game mode **Endless** → **Random** (menu, HUD, docs)
-- Menu button text: “Random — shifting maps every 25 waves”
+- Renamed game mode **Endless** â†’ **Random** (menu, HUD, docs)
+- Menu button text: â€œRandom â€” shifting maps every 25 wavesâ€
 
 ### Reason
-Both modes are endless wave runs; “Endless” was confusing next to Classic.
+Both modes are endless wave runs; â€œEndlessâ€ was confusing next to Classic.
 
 ## Version 00.01.51
 Date: 10/03/2026
@@ -325,7 +387,7 @@ Time: 1:28 AM
 
 ### Changes
 - Separate leaderboards for Easy / Medium / Hard (tabs on the leaderboard screen)
-- Scores save to the board for the run’s difficulty; old single-board saves migrate to Medium
+- Scores save to the board for the runâ€™s difficulty; old single-board saves migrate to Medium
 
 ### Reason
 Easy and Hard runs were sharing one scoreboard, so difficulties were not comparable.
@@ -378,7 +440,7 @@ Date: 10/03/2026
 Time: 1:13 AM
 
 ### Changes
-- Final Fire/Ice/Poison/Lightning upgrades are light buffs that keep the tower’s type and primary effect
+- Final Fire/Ice/Poison/Lightning upgrades are light buffs that keep the towerâ€™s type and primary effect
 - Same-element finals strengthen the existing effect; different elements add a mild bonus (e.g. Burn + Ice still burns and slows a little)
 
 ### Reason
@@ -416,7 +478,7 @@ Time: 12:46 AM
 - Simplified Android preset (non-Gradle APK) and ignored release binary folders in the editor
 
 ### Reason
-The release folders need the actual install/run files, kept in sync by re-exporting after code changes—not duplicate source trees.
+The release folders need the actual install/run files, kept in sync by re-exporting after code changesâ€”not duplicate source trees.
 
 ## Version 00.01.39
 Date: 10/03/2026
@@ -424,7 +486,7 @@ Time: 12:19 AM
 
 ### Changes
 - Split release outputs into `pc/` and `phone/` folders
-- Windows export → `pc/WaveDefence.exe`; Android export → `phone/WaveDefence.apk`
+- Windows export â†’ `pc/WaveDefence.exe`; Android export â†’ `phone/WaveDefence.apk`
 - Added a short README in each folder for sending / installing
 
 ### Reason
@@ -526,7 +588,7 @@ Date: 10/02/2026
 Time: 11:47 PM
 
 ### Changes
-- **Cannon** is now the boss-focused tower: 2.4× boss damage, prioritizes bosses in range
+- **Cannon** is now the boss-focused tower: 2.4Ã— boss damage, prioritizes bosses in range
 - Slightly less effective vs normal creeps and air; longer range, tighter splash
 - Damage multipliers now support `boss_damage_mult` / `creep_damage_mult`
 
@@ -648,7 +710,7 @@ Time: 11:28 PM
 ### Changes
 - Debug **Force Next Wave** (panel + **N**) starts the next wave immediately
 - Bypasses prep/build/intermission timers and the 25% skip unlock
-- Clears live enemies first; still requires an open spawn→exit path
+- Clears live enemies first; still requires an open spawnâ†’exit path
 
 ### Reason
 Playtesting needed a way to force the next round even when no skip timer was available.
@@ -725,7 +787,7 @@ Time: 11:17 PM
 
 ### Changes
 - Waves auto-start on timers after Start (initial build + intermissions between waves)
-- Skip Timer unlocks after killing 25% of a wave’s enemies (first build timer always skippable)
+- Skip Timer unlocks after killing 25% of a waveâ€™s enemies (first build timer always skippable)
 - HUD shows countdown; Send Wave replaced with Skip Timer
 
 ### Reason
@@ -736,7 +798,7 @@ Date: 10/02/2026
 Time: 11:14 PM
 
 ### Changes
-- Fixed wall→tower upgrade briefly opening the cell so enemies could repath through it
+- Fixed wallâ†’tower upgrade briefly opening the cell so enemies could repath through it
 - Wall replace no longer emits remove mid-swap; tower place also triggers enemy repath
 
 ### Reason
@@ -874,3 +936,4 @@ Time: 10:43 PM
 
 ### Reason
 Implement the approved maze-builder endless tower defence plan as a standalone Godot game with easy playtesting and tunable balance data.
+

@@ -76,7 +76,7 @@ On launch you get:
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
-**Shared scores:** boards are stored in repo [`leaderboard.json`](leaderboard.json). Clients **read** from GitHub; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes that file (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. Until that URL is set, scores **save on this device only** (fetch merges remote into local so empties do not wipe your runs). With upload configured, a qualifying score is pushed on submit and again when you leave the leaderboard if still pending.
+**Shared scores:** live boards live on the **`data`** branch as [`leaderboard.json`](https://github.com/Zephino/WaveDefence/blob/data/leaderboard.json) (kept off `main` so score updates don’t clutter game history). Clients **read** that file; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes the same path on `data` (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. Until that URL is set, scores **save on this device only** (fetch merges remote into local so empties do not wipe your runs). With upload configured, a qualifying score is pushed on submit and again when you leave the leaderboard if still pending.
 
 ## How to play
 
@@ -224,8 +224,9 @@ Optional custom domain (not free): point your domain at GitHub Pages so the link
 - `scripts/` — game systems
 - `data/` — tunable numbers
 - `docs/` — Web / GitHub Pages build
-- `leaderboard.json` — shared worldwide top-10 boards
-- `leaderboard-api/` — Cloudflare Worker (POST gateway → GitHub)
+- `data` branch / `leaderboard.json` — shared worldwide top-10 boards (Worker writes here)
+- `leaderboard-api/` — Cloudflare Worker (POST gateway → GitHub `data` branch)
+- `leaderboard.json` on `main` — empty stub / local reference only
 - `pc/` — Windows play package
 - `phone/android/` — Android APK
 - `phone/ios/` — iOS IPA (exported on Mac)

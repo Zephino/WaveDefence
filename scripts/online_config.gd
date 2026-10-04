@@ -1,13 +1,14 @@
 class_name OnlineConfig
 extends RefCounted
 
-## Public worldwide boards (read). Updated by the Cloudflare Worker via GitHub API.
-const LEADERBOARD_READ_URL := "https://raw.githubusercontent.com/Zephino/WaveDefence/main/leaderboard.json"
+## Public worldwide boards (read) from the dedicated `data` branch.
+## Updated by the Cloudflare Worker via GitHub API (does not touch main).
+const LEADERBOARD_READ_URL := "https://raw.githubusercontent.com/Zephino/WaveDefence/data/leaderboard.json"
 
 ## Cloudflare Worker origin only (no path, no trailing slash).
 ## Set this after deploying leaderboard-api/ (see that folder's README).
 ## Example: "https://wave-defence-leaderboard.your-account.workers.dev"
-const API_BASE_URL := ""
+const API_BASE_URL := "https://wave-defence-leaderboard.thebotcoder.workers.dev"
 
 ## Reject absurd client-reported waves (server enforces the same).
 const MAX_WAVE_SANITY := 100000

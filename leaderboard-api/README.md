@@ -4,41 +4,45 @@ Cloudflare Worker that:
 
 - Serves `GET /leaderboard` (Easy / Medium / Hard top 10)
 - Accepts `POST /leaderboard` with `{ "name", "wave", "difficulty" }`
-- Saves to Workers KV (fast) and commits `leaderboard.json` on [Zephino/WaveDefence](https://github.com/Zephino/WaveDefence)
+- Saves to Workers KV (fast) and commits `leaderboard.json` on the **`data`** branch of [Zephino/WaveDefence](https://github.com/Zephino/WaveDefence) (not `main`)
 
 Apps never hold a GitHub token. Only this Worker does.
 
 ## One-time setup
 
 1. Create a free [Cloudflare](https://dash.cloudflare.com/) account.
-2. Create a fine-grained GitHub PAT (or classic) with **Contents: Read and write** on `Zephino/WaveDefence` only.
-3. From this folder:
+2. Create a fine-grained GitHub PAT (or classic) with **Contents: Read and write** on `Zephino/WaveDefence` only. Keep the token ready — you will paste it into the terminal (not into chat).
+3. **Windows (easiest):** double-click [`Setup-Leaderboard.bat`](Setup-Leaderboard.bat)  
+   Or from this folder:
+
+```powershell
+.\Setup-Leaderboard.bat
+```
+
+The app walks you through Cloudflare signup, the GitHub token page, paste-token, login, KV, secret, and deploy. It writes `API_BASE_URL` into `scripts/online_config.gd`. Your token is sent to Cloudflare only (password field; not saved in the game).
+
+**Git Bash / WSL / macOS / Linux:**
+
+```bash
+bash setup-leaderboard.sh
+```
+
+**Manual steps (same as the script):**
 
 ```bash
 npm install
 npx wrangler login
 npx wrangler kv namespace create LEADERBOARD_KV
-```
-
-4. Copy the KV id into `wrangler.toml` (`[[kv_namespaces]]` binding `LEADERBOARD_KV`).
-5. Store the GitHub token:
-
-```bash
+# paste id into wrangler.toml [[kv_namespaces]]
 npx wrangler secret put GITHUB_TOKEN
-```
-
-6. Deploy:
-
-```bash
 npm run deploy
 ```
 
-7. Copy the Worker URL (e.g. `https://wave-defence-leaderboard.<account>.workers.dev`) into  
-   `scripts/online_config.gd` → `API_BASE_URL` (no trailing slash).
-8. Rebuild / re-export the game so clients can POST scores.
+4. Confirm `scripts/online_config.gd` → `API_BASE_URL` is the Worker URL (no trailing slash, no `/leaderboard`).
+5. Rebuild / re-export the game so clients can POST scores.
 
 Until `API_BASE_URL` is set, clients still **read** worldwide boards from  
-`https://raw.githubusercontent.com/Zephino/WaveDefence/main/leaderboard.json`.
+`https://raw.githubusercontent.com/Zephino/WaveDefence/data/leaderboard.json`.
 
 ## Local test
 
