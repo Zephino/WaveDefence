@@ -56,6 +56,19 @@ func _run() -> void:
 	if not LeaderboardStore.qualifies(int(easy[LeaderboardStore.MAX_ENTRIES - 1]["wave"]), WaveScaler.Difficulty.EASY):
 		errors.append("tie with last place should qualify")
 
+	# Merge must keep local scores when remote is empty (upload not configured).
+	LeaderboardStore.add_score("KeepMe", 42, WaveScaler.Difficulty.MEDIUM)
+	if not LeaderboardStore.merge_boards_from_remote({"easy": [], "medium": [], "hard": []}):
+		errors.append("merge empty remote should succeed")
+	var after_merge := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM)
+	var kept := false
+	for e in after_merge:
+		if str(e.get("name", "")) == "KeepMe" and int(e.get("wave", 0)) == 42:
+			kept = true
+			break
+	if not kept:
+		errors.append("merge with empty remote must keep local KeepMe score")
+
 	# Cleanup test save
 	if FileAccess.file_exists(LeaderboardStore.SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(LeaderboardStore.SAVE_PATH))

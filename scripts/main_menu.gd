@@ -143,12 +143,14 @@ func _build_ui() -> void:
 	boards_label.text = _boards_status_text()
 	center.add_child(boards_label)
 	OnlineLeaderboard.boards_updated.connect(
-		func(ok: bool) -> void:
-			boards_label.text = "Leaderboards: Global" if ok else "Leaderboards: Local (offline)"
+		func(_ok: bool) -> void:
+			boards_label.text = _boards_status_text()
 	)
 
 
 func _boards_status_text() -> String:
+	if not OnlineConfig.can_post():
+		return "Leaderboards: Local (this device)"
 	match OnlineLeaderboard.last_source:
 		"global":
 			return "Leaderboards: Global"

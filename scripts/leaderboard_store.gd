@@ -162,3 +162,34 @@ static func replace_boards_from_remote(data: Dictionary) -> bool:
 			boards[key] = []
 	save_boards(boards)
 	return true
+
+
+## Merge remote boards into local (keeps local scores when upload is unavailable).
+static func merge_boards_from_remote(data: Dictionary) -> bool:
+	if typeof(data) != TYPE_DICTIONARY:
+		return false
+	var local := load_boards()
+	var boards := _empty_boards()
+	for key in BOARD_KEYS:
+		var combined: Array = []
+		combined.append_array(local.get(key, []))
+		if data.has(key) and typeof(data[key]) == TYPE_ARRAY:
+			combined.append_array(data[key])
+		boards[key] = _dedupe_sort_and_trim(combined)
+	save_boards(boards)
+	return true
+
+
+static func _dedupe_sort_and_trim(entries: Array) -> Array:
+	var seen := {}
+	var unique: Array = []
+	for item in entries:
+		var entry := _normalize_entry(item)
+		if entry.is_empty() or int(entry["wave"]) <= 0 or str(entry["name"]).is_empty():
+			continue
+		var sig := "%s|%d" % [str(entry["name"]), int(entry["wave"])]
+		if seen.has(sig):
+			continue
+		seen[sig] = true
+		unique.append(entry)
+	return _sort_and_trim(unique)

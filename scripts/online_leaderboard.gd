@@ -218,4 +218,26 @@ func _apply_remote_boards(text: String) -> bool:
 	var data = JSON.parse_string(text.strip_edges())
 	if typeof(data) != TYPE_DICTIONARY:
 		return false
-	return LeaderboardStore.replace_boards_from_remote(data)
+	# Without a POST API, remote replace would wipe local submits (empty GitHub file).
+	var ok: bool
+	if OnlineConfig.can_post():
+		ok = LeaderboardStore.replace_boards_from_remote(data)
+		_reapply_pending_local()
+	else:
+		ok = LeaderboardStore.merge_boards_from_remote(data)
+	return ok
+
+
+## Keep an unsynced pending score visible after a remote replace.
+func _reapply_pending_local() -> void:
+	var pending := load_pending()
+	if pending.is_empty():
+		return
+	if bool(pending.get("done", false)) or not bool(pending.get("needed", false)):
+		return
+	var name := LeaderboardStore.sanitize_name(str(pending.get("name", "")))
+	var wave := int(pending.get("wave", 0))
+	var difficulty := int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM))
+	if name.is_empty() or wave <= 0:
+		return
+	LeaderboardStore.add_score(name, wave, difficulty)

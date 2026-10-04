@@ -156,6 +156,9 @@ func _build_ui() -> void:
 
 
 func _refresh_source_label() -> void:
+	if not OnlineConfig.can_post():
+		source_label.text = "Local boards (global upload not set up yet)"
+		return
 	match OnlineLeaderboard.last_source:
 		"global":
 			source_label.text = "Global boards (online)"
@@ -224,19 +227,37 @@ func _on_submit() -> void:
 		status_label.text = "Enter a valid name (letters, numbers, spaces)."
 		return
 	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty)
-	OnlineLeaderboard.queue_pending_score(cleaned, wave_score, score_difficulty)
 	can_enter = false
 	entry_box.visible = false
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
-	status_label.text = "Saved %s — wave %d (%s). Syncing when online…" % [
-		cleaned,
-		wave_score,
-		WaveScaler.difficulty_label(score_difficulty),
-	]
 	_refresh_list()
-	# Try immediate online push; leave-page will retry if needed.
-	OnlineLeaderboard.push_score(cleaned, wave_score, score_difficulty)
+	if OnlineConfig.can_post():
+		OnlineLeaderboard.queue_pending_score(cleaned, wave_score, score_difficulty)
+		status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
+			cleaned,
+			wave_score,
+			WaveScaler.difficulty_label(score_difficulty),
+		]
+		var ok := await OnlineLeaderboard.push_score(cleaned, wave_score, score_difficulty)
+		if not is_inside_tree():
+			return
+		if ok:
+			status_label.text = "Saved %s — wave %d (%s) on the global board." % [
+				cleaned,
+				wave_score,
+				WaveScaler.difficulty_label(score_difficulty),
+			]
+		else:
+			status_label.text = "Saved %s locally — upload will retry when you leave." % cleaned
+		_refresh_list()
+		_refresh_source_label()
+	else:
+		status_label.text = "Saved %s — wave %d (%s) on this device." % [
+			cleaned,
+			wave_score,
+			WaveScaler.difficulty_label(score_difficulty),
+		]
 
 
 func _on_skip_entry() -> void:

@@ -1,3 +1,15 @@
+## Version 00.01.76
+Date: 10/03/2026
+Time: 11:12 PM
+
+### Changes
+- Leaderboard fetch no longer wipes local scores when global upload is not configured (merge instead of replace)
+- Re-apply pending unsynced scores after a remote replace when upload is configured
+- Clearer UI: “Saved on this device” / “Local (this device)” until `API_BASE_URL` is set
+
+### Reason
+Scores looked unsaved because the empty GitHub `leaderboard.json` was overwriting local boards on every sync, and the Cloudflare Worker URL was never set so uploads could not run.
+
 ## Version 00.01.75
 Date: 10/03/2026
 Time: 11:03 PM

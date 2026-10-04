@@ -76,7 +76,7 @@ On launch you get:
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
-**Shared scores:** boards are stored in repo [`leaderboard.json`](leaderboard.json). Clients **read** from GitHub; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes that file (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. After a match, a qualifying score is pushed when you submit and again when you leave the leaderboard if it has not synced yet. Offline play uses the last cached / local `user://leaderboard.json`.
+**Shared scores:** boards are stored in repo [`leaderboard.json`](leaderboard.json). Clients **read** from GitHub; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes that file (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. Until that URL is set, scores **save on this device only** (fetch merges remote into local so empties do not wipe your runs). With upload configured, a qualifying score is pushed on submit and again when you leave the leaderboard if still pending.
 
 ## How to play
 
