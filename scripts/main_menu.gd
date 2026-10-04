@@ -2,11 +2,14 @@ extends Control
 
 var version_label: Label
 var mode_buttons: Dictionary = {}
+var monster_mode_buttons: Dictionary = {}
 var selected_mode: int = WaveScaler.GameMode.CLASSIC
+var selected_monster_mode: int = WaveScaler.MonsterMode.CLASSIC
 
 
 func _ready() -> void:
 	selected_mode = Session.game_mode
+	selected_monster_mode = Session.monster_mode
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
 
@@ -64,7 +67,7 @@ func _build_ui() -> void:
 	center.add_child(_spacer(8))
 
 	var mode_label := Label.new()
-	mode_label.text = "Choose mode"
+	mode_label.text = "Map"
 	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mode_label.modulate = Color(0.75, 0.8, 0.85)
 	center.add_child(mode_label)
@@ -78,6 +81,24 @@ func _build_ui() -> void:
 		WaveScaler.GameMode.RANDOM
 	))
 	_refresh_mode_buttons()
+
+	center.add_child(_spacer(6))
+
+	var monster_label := Label.new()
+	monster_label.text = "Monsters"
+	monster_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	monster_label.modulate = Color(0.75, 0.8, 0.85)
+	center.add_child(monster_label)
+
+	center.add_child(_monster_mode_button(
+		"Classic — standard wave mix",
+		WaveScaler.MonsterMode.CLASSIC
+	))
+	center.add_child(_monster_mode_button(
+		"Randomize — elemental resists (grow with waves)",
+		WaveScaler.MonsterMode.RANDOMIZE
+	))
+	_refresh_monster_mode_buttons()
 
 	center.add_child(_spacer(6))
 
@@ -138,6 +159,12 @@ func _mode_button(text: String, mode: int) -> Button:
 	return btn
 
 
+func _monster_mode_button(text: String, mode: int) -> Button:
+	var btn := _menu_button(text, func() -> void: _select_monster_mode(mode))
+	monster_mode_buttons[mode] = btn
+	return btn
+
+
 func _menu_button(text: String, cb: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
@@ -162,14 +189,26 @@ func _select_mode(mode: int) -> void:
 	_refresh_mode_buttons()
 
 
+func _select_monster_mode(mode: int) -> void:
+	selected_monster_mode = mode
+	Session.monster_mode = mode
+	_refresh_monster_mode_buttons()
+
+
 func _refresh_mode_buttons() -> void:
 	for mode in mode_buttons.keys():
 		var btn: Button = mode_buttons[mode]
 		btn.modulate = Color(1.2, 1.15, 0.7) if int(mode) == selected_mode else Color.WHITE
 
 
+func _refresh_monster_mode_buttons() -> void:
+	for mode in monster_mode_buttons.keys():
+		var btn: Button = monster_mode_buttons[mode]
+		btn.modulate = Color(1.2, 1.15, 0.7) if int(mode) == selected_monster_mode else Color.WHITE
+
+
 func _start_difficulty(difficulty: int) -> void:
-	Session.go_game(difficulty, selected_mode)
+	Session.go_game(difficulty, selected_mode, selected_monster_mode)
 
 
 func _on_leaderboard() -> void:

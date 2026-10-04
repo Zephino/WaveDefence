@@ -105,7 +105,10 @@ func _apply_bonus_chain() -> void:
 	for i in bonus_count:
 		if current == null or not is_instance_valid(current) or not current.alive:
 			break
-		_apply_to_enemy(current, dmg, false)
+		# Bonus chain is lightning-flavored even when the tower's primary effect is not.
+		var chain_mult := TowerData.target_damage_mult(effect_data, current.is_flying, current.is_boss)
+		if chain_mult > 0.0:
+			current.take_damage(dmg * chain_mult * current.resist_mult("lightning"))
 		hit.append(current)
 		_spawn_bolt(from_pos, current.global_position)
 		from_pos = current.global_position
@@ -152,40 +155,58 @@ func _apply_to_enemy(enemy: Enemy, dmg: float, apply_effects: bool) -> void:
 	var mult := TowerData.target_damage_mult(effect_data, enemy.is_flying, enemy.is_boss)
 	if mult <= 0.0:
 		return
-	enemy.take_damage(dmg * mult)
+	var primary_el := _primary_element()
+	var hit_mult := mult * enemy.resist_mult(primary_el)
+	enemy.take_damage(dmg * hit_mult)
 	if not apply_effects:
 		return
 	match effect:
 		"burn":
+			var r := enemy.resist_mult("burn")
 			enemy.apply_burn(
-				float(effect_data.get("burn_dps", 4.0)) * mult,
-				float(effect_data.get("burn_duration", 3.0))
+				float(effect_data.get("burn_dps", 4.0)) * mult * r,
+				float(effect_data.get("burn_duration", 3.0)) * r
 			)
 		"freeze":
-			enemy.apply_slow(float(effect_data.get("slow_factor", 0.45)), float(effect_data.get("slow_duration", 2.0)))
+			var r := enemy.resist_mult("freeze")
+			# Resisted freeze: milder slow (higher factor) and shorter duration.
+			var base_slow := float(effect_data.get("slow_factor", 0.45))
+			var resisted_slow := lerpf(base_slow, 1.0, 1.0 - r)
+			enemy.apply_slow(resisted_slow, float(effect_data.get("slow_duration", 2.0)) * r)
 		"poison":
+			var r := enemy.resist_mult("poison")
 			enemy.apply_poison(
-				float(effect_data.get("poison_dps", 3.0)) * mult,
-				float(effect_data.get("poison_duration", 4.0))
+				float(effect_data.get("poison_dps", 3.0)) * mult * r,
+				float(effect_data.get("poison_duration", 4.0)) * r
 			)
 	_apply_bonus_effects(enemy, mult)
 
 
+func _primary_element() -> String:
+	match effect:
+		"burn", "freeze", "poison", "lightning":
+			return effect
+		_:
+			return ""
+
+
 func _apply_bonus_effects(enemy: Enemy, mult: float) -> void:
 	if effect_data.has("bonus_burn_dps"):
+		var r := enemy.resist_mult("burn")
 		enemy.apply_burn(
-			float(effect_data.get("bonus_burn_dps", 0.0)) * mult,
-			float(effect_data.get("bonus_burn_duration", 0.0))
+			float(effect_data.get("bonus_burn_dps", 0.0)) * mult * r,
+			float(effect_data.get("bonus_burn_duration", 0.0)) * r
 		)
 	if effect_data.has("bonus_slow_factor"):
-		enemy.apply_slow(
-			float(effect_data.get("bonus_slow_factor", 0.72)),
-			float(effect_data.get("bonus_slow_duration", 0.0))
-		)
+		var r := enemy.resist_mult("freeze")
+		var base_slow := float(effect_data.get("bonus_slow_factor", 0.72))
+		var resisted_slow := lerpf(base_slow, 1.0, 1.0 - r)
+		enemy.apply_slow(resisted_slow, float(effect_data.get("bonus_slow_duration", 0.0)) * r)
 	if effect_data.has("bonus_poison_dps"):
+		var r := enemy.resist_mult("poison")
 		enemy.apply_poison(
-			float(effect_data.get("bonus_poison_dps", 0.0)) * mult,
-			float(effect_data.get("bonus_poison_duration", 0.0))
+			float(effect_data.get("bonus_poison_dps", 0.0)) * mult * r,
+			float(effect_data.get("bonus_poison_duration", 0.0)) * r
 		)
 
 

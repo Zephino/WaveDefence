@@ -5,6 +5,8 @@ extends RefCounted
 
 enum Difficulty { EASY, MEDIUM, HARD }
 enum GameMode { CLASSIC, RANDOM }
+## Independent of map mode: Classic spawns (no resists) vs Randomize elemental types.
+enum MonsterMode { CLASSIC, RANDOMIZE }
 
 const STARTING_GOLD_EASY := 350
 const STARTING_GOLD_MEDIUM := 200
@@ -46,8 +48,20 @@ static func mode_label(mode: int) -> String:
 			return "Classic"
 
 
+static func monster_mode_label(mode: int) -> String:
+	match mode:
+		MonsterMode.RANDOMIZE:
+			return "Randomize"
+		_:
+			return "Classic"
+
+
 static func is_random_mode(mode: int) -> bool:
 	return mode == GameMode.RANDOM
+
+
+static func is_randomize_monsters(mode: int) -> bool:
+	return mode == MonsterMode.RANDOMIZE
 
 
 static func should_rotate_map_after_wave(mode: int, wave: int) -> bool:

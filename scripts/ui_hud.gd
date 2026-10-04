@@ -18,6 +18,7 @@ var lives_label: Label
 var wave_label: Label
 var difficulty_label: Label
 var mode_label: Label
+var monsters_label: Label
 var enemies_label: Label
 var banner_label: Label
 var version_label: Label
@@ -68,6 +69,8 @@ func _build_ui(version_text: String) -> void:
 	difficulty_label.modulate = Color(0.72, 0.82, 0.95)
 	mode_label = Label.new()
 	mode_label.modulate = Color(0.78, 0.7, 0.9)
+	monsters_label = Label.new()
+	monsters_label.modulate = Color(0.85, 0.7, 0.65)
 	banner_label = Label.new()
 	banner_label.visible = false
 	banner_label.modulate = Color(1.0, 0.82, 0.28)
@@ -81,6 +84,7 @@ func _build_ui(version_text: String) -> void:
 	top.add_child(wave_label)
 	top.add_child(difficulty_label)
 	top.add_child(mode_label)
+	top.add_child(monsters_label)
 	top.add_child(banner_label)
 	top.add_child(enemies_label)
 	top.add_child(version_label)
@@ -544,9 +548,15 @@ func refresh_run_labels() -> void:
 		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
 	if mode_label:
 		if WaveScaler.is_random_mode(game_state.game_mode):
-			mode_label.text = "Random M%d" % game_state.map_sector
+			mode_label.text = "Map: Random M%d" % game_state.map_sector
 		else:
-			mode_label.text = "Classic"
+			mode_label.text = "Map: Classic"
+	if monsters_label:
+		monsters_label.text = "Monsters: %s" % WaveScaler.monster_mode_label(game_state.monster_mode)
+		if WaveScaler.is_randomize_monsters(game_state.monster_mode):
+			monsters_label.tooltip_text = "Elemental resists grow with waves (all 4 by wave %d)" % MonsterTypes.RESISTS_AT_WAVE_4
+		else:
+			monsters_label.tooltip_text = "Standard wave mix — no elemental resists"
 
 
 func _on_gold_changed(gold: int) -> void:

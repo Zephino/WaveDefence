@@ -1,3 +1,15 @@
+## Version 00.01.68
+Date: 10/03/2026
+Time: 10:45 PM
+
+### Changes
+- Main menu **Monsters** row: Classic (standard mix) or Randomize (elemental types)
+- Randomize monsters (Ember/Frost/Venom/Spark/Brute) have slight Fire/Ice/Poison/Lightning resists that grow to all 4 by wave 50
+- HUD shows Map + Monsters mode; elemental hits/DoTs respect resists
+
+### Reason
+Let players control spawn flavor independently of map mode, with late-wave resist pressure.
+
 ## Version 00.01.67
 Date: 10/03/2026
 Time: 2:50 PM

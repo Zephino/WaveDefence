@@ -12,6 +12,10 @@ var is_boss: bool = false
 var is_flying: bool = false
 ## Wave this enemy belongs to (used so early-send leftovers don't inflate the new wave's kill % ).
 var wave_index: int = 0
+## Randomize-mode type id (empty in Classic monsters).
+var monster_type: String = ""
+## Element id → damage reduction 0..1 (burn / freeze / poison / lightning).
+var element_resists: Dictionary = {}
 var path: PackedVector2Array = PackedVector2Array()
 var path_index: int = 0
 var alive: bool = true
@@ -34,7 +38,9 @@ func setup(
 	p_bounty: int,
 	p_boss: bool,
 	p_flying: bool = false,
-	p_wave_index: int = 0
+	p_wave_index: int = 0,
+	p_monster_type: String = "",
+	p_element_resists: Dictionary = {}
 ) -> void:
 	path = p_path
 	max_hp = p_hp
@@ -44,6 +50,8 @@ func setup(
 	is_boss = p_boss
 	is_flying = p_flying
 	wave_index = p_wave_index
+	monster_type = p_monster_type
+	element_resists = p_element_resists.duplicate() if not p_element_resists.is_empty() else MonsterTypes.empty_resists()
 	if is_flying:
 		_radius = 15.0
 		_base_color = Color(0.45, 0.7, 1.0)
@@ -53,11 +61,25 @@ func setup(
 	else:
 		_radius = 10.0
 		_base_color = Color(0.85, 0.35, 0.35)
+	if monster_type != "":
+		_base_color = _base_color.lerp(MonsterTypes.tint_color(monster_type), 0.7)
 	# Path points are grid-local (same space as this node's parent offset).
 	if path.size() > 0:
 		position = path[0]
 		path_index = 1 if path.size() > 1 else 0
 	queue_redraw()
+
+
+## Damage multiplier after elemental resist (1.0 = full damage).
+func resist_mult(element_id: String) -> float:
+	if element_id.is_empty() or element_resists.is_empty():
+		return 1.0
+	var reduction := clampf(float(element_resists.get(element_id, 0.0)), 0.0, 0.9)
+	return 1.0 - reduction
+
+
+func resist_for(element_id: String) -> float:
+	return clampf(float(element_resists.get(element_id, 0.0)), 0.0, 0.9)
 
 
 func _process(delta: float) -> void:

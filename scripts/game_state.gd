@@ -12,6 +12,7 @@ var lives: int = WaveScaler.STARTING_LIVES
 var wave: int = 0
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
 var game_mode: int = WaveScaler.GameMode.CLASSIC
+var monster_mode: int = WaveScaler.MonsterMode.CLASSIC
 var god_mode: bool = false
 var is_game_over: bool = false
 var highest_wave: int = 0
@@ -29,11 +30,13 @@ func _ready() -> void:
 	reset_run()
 
 
-func reset_run(p_difficulty: int = -1, p_mode: int = -1) -> void:
+func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -1) -> void:
 	if p_difficulty >= 0:
 		difficulty = p_difficulty
 	if p_mode >= 0:
 		game_mode = p_mode
+	if p_monster_mode >= 0:
+		monster_mode = p_monster_mode
 	gold = WaveScaler.starting_gold_for(difficulty)
 	lives = WaveScaler.STARTING_LIVES
 	wave = 0

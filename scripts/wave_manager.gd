@@ -40,6 +40,7 @@ var pending_map_rotate_wave: int = 0
 ## Cached ground path; rebuilt only when towers change (not every spawn).
 var _cached_ground_path: PackedVector2Array = PackedVector2Array()
 var _path_dirty: bool = true
+var _spawn_rng := RandomNumberGenerator.new()
 
 
 func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_enemies: Node) -> void:
@@ -230,54 +231,77 @@ func _emit_timer() -> void:
 
 func _build_spawn_queue(wave: int) -> void:
 	spawn_queue.clear()
+	_spawn_rng.randomize()
 	var ground_left := WaveScaler.ground_creep_count(wave)
 	var air_left := WaveScaler.flying_creep_count(wave)
 	# Interleave ground and air creeps so late waves feel mixed, not batched.
 	while ground_left > 0 or air_left > 0:
 		if ground_left > 0:
-			spawn_queue.append({
-				"hp": WaveScaler.creep_hp(wave),
-				"speed": WaveScaler.creep_speed(wave),
-				"bounty": WaveScaler.creep_bounty(wave),
-				"boss": false,
-				"flying": false,
-				"wave": wave,
-				"counts_kill": true,
-			})
+			spawn_queue.append(_make_spawn_spec(
+				wave,
+				WaveScaler.creep_hp(wave),
+				WaveScaler.creep_speed(wave),
+				WaveScaler.creep_bounty(wave),
+				false,
+				false
+			))
 			ground_left -= 1
 		if air_left > 0:
-			spawn_queue.append({
-				"hp": WaveScaler.flying_creep_hp(wave),
-				"speed": WaveScaler.flying_creep_speed(wave),
-				"bounty": WaveScaler.flying_creep_bounty(wave),
-				"boss": false,
-				"flying": true,
-				"wave": wave,
-				"counts_kill": true,
-			})
+			spawn_queue.append(_make_spawn_spec(
+				wave,
+				WaveScaler.flying_creep_hp(wave),
+				WaveScaler.flying_creep_speed(wave),
+				WaveScaler.flying_creep_bounty(wave),
+				false,
+				true
+			))
 			air_left -= 1
 	var bosses := WaveScaler.boss_count(wave)
 	for i in bosses:
-		spawn_queue.append({
-			"hp": WaveScaler.boss_hp(wave),
-			"speed": WaveScaler.boss_speed(wave),
-			"bounty": WaveScaler.boss_bounty(wave),
-			"boss": true,
-			"flying": false,
-			"wave": wave,
-			"counts_kill": true,
-		})
+		spawn_queue.append(_make_spawn_spec(
+			wave,
+			WaveScaler.boss_hp(wave),
+			WaveScaler.boss_speed(wave),
+			WaveScaler.boss_bounty(wave),
+			true,
+			false
+		))
 	var flyers := WaveScaler.flying_boss_count(wave)
 	for i in flyers:
-		spawn_queue.append({
-			"hp": WaveScaler.flying_boss_hp(wave),
-			"speed": WaveScaler.flying_boss_speed(wave),
-			"bounty": WaveScaler.flying_boss_bounty(wave),
-			"boss": true,
-			"flying": true,
-			"wave": wave,
-			"counts_kill": true,
-		})
+		spawn_queue.append(_make_spawn_spec(
+			wave,
+			WaveScaler.flying_boss_hp(wave),
+			WaveScaler.flying_boss_speed(wave),
+			WaveScaler.flying_boss_bounty(wave),
+			true,
+			true
+		))
+
+
+func _make_spawn_spec(
+	wave: int,
+	hp: float,
+	speed: float,
+	bounty: int,
+	boss: bool,
+	flying: bool
+) -> Dictionary:
+	var spec := {
+		"hp": hp,
+		"speed": speed,
+		"bounty": bounty,
+		"boss": boss,
+		"flying": flying,
+		"wave": wave,
+		"counts_kill": true,
+		"monster_type": "",
+		"element_resists": MonsterTypes.empty_resists(),
+	}
+	if game_state != null and WaveScaler.is_randomize_monsters(game_state.monster_mode):
+		var type_id := MonsterTypes.pick_type(_spawn_rng, flying)
+		spec["monster_type"] = type_id
+		spec["element_resists"] = MonsterTypes.build_resists(type_id, wave, _spawn_rng)
+	return spec
 
 
 func _process(delta: float) -> void:
@@ -339,7 +363,9 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 		int(spec["bounty"]),
 		bool(spec["boss"]),
 		flying,
-		int(spec.get("wave", game_state.wave))
+		int(spec.get("wave", game_state.wave)),
+		str(spec.get("monster_type", "")),
+		spec.get("element_resists", MonsterTypes.empty_resists()) as Dictionary
 	)
 	enemy.died.connect(_on_enemy_died)
 	enemy.leaked.connect(_on_enemy_leaked)

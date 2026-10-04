@@ -65,9 +65,10 @@ No addons or extra packages required.
 
 On launch you get:
 
-- **Classic / Random** — pick a mode, then a difficulty
-  - **Classic** — fixed map (current layout)
-  - **Random** — randomized spawn/exit and rock tiles; every **25** waves the board rebuilds, towers clear, lives reset, and gold is based on kills on that map (`max(starting gold, kills × 3)`)
+- **Map** — Classic (fixed layout) or **Random** (shifting maps every **25** waves; towers clear, lives reset, gold from kills on that map)
+- **Monsters** — independent of map:
+  - **Classic** — standard ground/air/boss mix (no elemental resists)
+  - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
 - **Easy / Medium / Hard** — begin a run (starting gold **350 / 200 / 100**)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Web, PC, Android, and iOS **pull the same worldwide boards** when online (cached locally). Runs that opened/used the debug menu cannot be submitted.
 - **Fullscreen** (web) — request browser fullscreen
@@ -142,6 +143,7 @@ Panel also: **Force Next Wave**, jump to wave 10/15/50, god mode, restart.
 Tune balance in:
 
 - `data/towers.gd` — costs and combat stats
+- `data/monster_types.gd` — Randomize monster roster and resist growth
 - `data/wave_scaler.gd` — wave scaling, lives, starting gold
 
 ## Headless smoke test

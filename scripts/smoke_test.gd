@@ -90,9 +90,62 @@ func _run() -> void:
 	var rotate_gold := WaveScaler.map_rotate_gold(WaveScaler.Difficulty.MEDIUM, 80)
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
+
+	# Monster modes: Classic has no resists; Randomize tags types and grows resists.
+	if MonsterTypes.resist_slot_count(1) != 1:
+		errors.append("early waves should have 1 resist slot")
+	if MonsterTypes.resist_slot_count(MonsterTypes.RESISTS_AT_WAVE_4) != 4:
+		errors.append("late waves should unlock all 4 resists")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var late_resists := MonsterTypes.build_resists("ember", MonsterTypes.RESISTS_AT_WAVE_4, rng)
+	var active_resists := 0
+	for el in MonsterTypes.ELEMENTS:
+		if float(late_resists.get(el, 0.0)) > 0.0:
+			active_resists += 1
+	if active_resists != 4:
+		errors.append("wave %d resists should cover all 4 elements, got %d" % [
+			MonsterTypes.RESISTS_AT_WAVE_4, active_resists
+		])
+	if float(late_resists.get("burn", 0.0)) < MonsterTypes.RESIST_STRENGTH - 0.001:
+		errors.append("ember affinity burn should stay active at full resist count")
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC, WaveScaler.MonsterMode.CLASSIC)
+	waves._build_spawn_queue(5)
+	if waves.spawn_queue.is_empty():
+		errors.append("classic monster spawn queue empty")
+	else:
+		var classic_spec: Dictionary = waves.spawn_queue[0]
+		if str(classic_spec.get("monster_type", "")) != "":
+			errors.append("classic monsters should not set monster_type")
+		if float(classic_spec.get("element_resists", {}).get("burn", 0.0)) > 0.0:
+			errors.append("classic monsters should have zero elemental resists")
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC, WaveScaler.MonsterMode.RANDOMIZE)
+	waves._build_spawn_queue(12)
+	if waves.spawn_queue.is_empty():
+		errors.append("randomize monster spawn queue empty")
+	else:
+		var rnd_spec: Dictionary = waves.spawn_queue[0]
+		if str(rnd_spec.get("monster_type", "")) == "":
+			errors.append("randomize monsters should set monster_type")
+		var rnd_resists: Dictionary = rnd_spec.get("element_resists", {})
+		var rnd_active := 0
+		for el in MonsterTypes.ELEMENTS:
+			if float(rnd_resists.get(el, 0.0)) > 0.0:
+				rnd_active += 1
+		if rnd_active < 1:
+			errors.append("randomize monsters should have at least one resist")
+	# Resist reduces matching elemental hit damage.
+	var resist_enemy := Enemy.new()
+	resist_enemy.element_resists = {"burn": 0.25, "freeze": 0.0, "poison": 0.0, "lightning": 0.0}
+	if not is_equal_approx(resist_enemy.resist_mult("burn"), 0.75):
+		errors.append("burn resist_mult should be 0.75")
+	if not is_equal_approx(resist_enemy.resist_mult("freeze"), 1.0):
+		errors.append("unrelated element should take full damage")
+	resist_enemy.free()
+
 	grid.reset(true)
 	build.pathfinder.rebuild()
-	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC, WaveScaler.MonsterMode.CLASSIC)
 
 	# Place a wall, then build a gunner over it (placement clears selection).
 	build.select_tower_type("wall")

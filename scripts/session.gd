@@ -16,6 +16,8 @@ var pending_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
 ## Classic (fixed map) or Random (shifting maps). Kept across Play Again.
 var game_mode: int = WaveScaler.GameMode.CLASSIC
+## Classic (formula spawns) or Randomize (elemental monster types). Kept across Play Again.
+var monster_mode: int = WaveScaler.MonsterMode.CLASSIC
 
 ## Pending worldwide push (set when the player submits a name after a match).
 var global_push_name: String = ""
@@ -52,11 +54,17 @@ func go_menu() -> void:
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 
-func go_game(selected_difficulty: int = -1, selected_mode: int = -1) -> void:
+func go_game(
+	selected_difficulty: int = -1,
+	selected_mode: int = -1,
+	selected_monster_mode: int = -1
+) -> void:
 	if selected_difficulty >= 0:
 		difficulty = selected_difficulty
 	if selected_mode >= 0:
 		game_mode = selected_mode
+	if selected_monster_mode >= 0:
+		monster_mode = selected_monster_mode
 	pending_wave_score = -1
 	pending_debug_used = false
 	get_tree().change_scene_to_file(GAME_SCENE)

@@ -66,6 +66,7 @@ func _setup_systems() -> void:
 	game_state.name = "GameState"
 	game_state.difficulty = Session.difficulty
 	game_state.game_mode = Session.game_mode
+	game_state.monster_mode = Session.monster_mode
 	add_child(game_state)
 
 	pathfinder = Pathfinder.new(grid)
@@ -560,7 +561,7 @@ func _boot_leaderboard(wave_reached: int) -> void:
 func restart_run() -> void:
 	for child in projectiles.get_children():
 		child.queue_free()
-	game_state.reset_run(Session.difficulty, Session.game_mode)
+	game_state.reset_run(Session.difficulty, Session.game_mode, Session.monster_mode)
 	_apply_run_map(true)
 	build_system.refresh_after_reset()
 	hud.set_banner("")
