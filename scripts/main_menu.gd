@@ -1,8 +1,9 @@
 extends Control
 
-const SELECT_BORDER := Color(0.35, 0.95, 0.45)
-const SELECT_BG := Color(0.16, 0.22, 0.18)
+const SELECT_BORDER := Color(0.32, 0.62, 0.4)
+const SELECT_BG := Color(0.12, 0.16, 0.14)
 const NORMAL_BG := Color(0.14, 0.16, 0.19)
+const SELECT_FONT := Color(0.78, 0.88, 0.8)
 
 var version_label: Label
 var mode_buttons: Dictionary = {}
@@ -216,32 +217,32 @@ func _apply_choice_style(btn: Button, selected: bool) -> void:
 	btn.modulate = Color.WHITE
 	btn.add_theme_color_override(
 		"font_color",
-		Color(0.75, 1.0, 0.8) if selected else Color(0.92, 0.94, 0.96)
+		SELECT_FONT if selected else Color(0.92, 0.94, 0.96)
 	)
 	btn.add_theme_color_override(
 		"font_hover_color",
-		Color(0.85, 1.0, 0.9) if selected else Color(1, 1, 1)
+		SELECT_FONT.lightened(0.08) if selected else Color(1, 1, 1)
 	)
 	btn.add_theme_color_override(
 		"font_pressed_color",
-		Color(0.7, 0.95, 0.75) if selected else Color(0.85, 0.88, 0.9)
+		SELECT_FONT.darkened(0.08) if selected else Color(0.85, 0.88, 0.9)
 	)
 	var box := StyleBoxFlat.new()
 	box.bg_color = SELECT_BG if selected else NORMAL_BG
-	box.set_border_width_all(4 if selected else 1)
+	box.set_border_width_all(3 if selected else 1)
 	box.border_color = SELECT_BORDER if selected else Color(0.28, 0.32, 0.36)
 	box.set_corner_radius_all(6)
 	box.content_margin_left = 12
 	box.content_margin_right = 12
 	box.content_margin_top = 8
 	box.content_margin_bottom = 8
-	# Draw border outside the fill so it stays visible on dark themes.
 	box.draw_center = true
 	var hover := box.duplicate() as StyleBoxFlat
-	hover.bg_color = box.bg_color.lightened(0.1)
-	hover.border_color = SELECT_BORDER if selected else Color(0.4, 0.45, 0.5)
+	hover.bg_color = box.bg_color.lightened(0.06)
+	hover.border_color = SELECT_BORDER.lightened(0.08) if selected else Color(0.4, 0.45, 0.5)
 	var pressed := box.duplicate() as StyleBoxFlat
-	pressed.bg_color = box.bg_color.darkened(0.08)
+	pressed.bg_color = box.bg_color.darkened(0.06)
+
 	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
 		var sb: StyleBoxFlat = box if state == "normal" or state == "focus" or state == "disabled" else (hover if state == "hover" else pressed)
 		btn.add_theme_stylebox_override(state, sb.duplicate() as StyleBoxFlat)

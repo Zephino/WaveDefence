@@ -1,3 +1,13 @@
+## Version 00.01.73
+Date: 10/03/2026
+Time: 10:51 PM
+
+### Changes
+- Soften selected Map / Monsters green border and text (less bright)
+
+### Reason
+Selection highlight was too neon.
+
 ## Version 00.01.72
 Date: 10/03/2026
 Time: 10:52 PM
