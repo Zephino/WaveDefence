@@ -115,8 +115,19 @@ if ($doIos) {
 if ($doWeb) {
     Write-Host "==> Exporting Web -> docs/index.html (GitHub Pages)" -ForegroundColor Cyan
     & $godot --headless --path $ProjectRoot --export-release "Web" "docs/index.html"
-    if (-not (Test-Path "docs\index.html")) {
-        throw "Web export did not create docs/index.html (exit $LASTEXITCODE)"
+    $godotExit = $LASTEXITCODE
+    if ($godotExit -ne 0 -or -not (Test-Path "docs\index.html")) {
+        throw "Web export did not create docs/index.html (exit $godotExit)"
+    }
+    # Godot can flush console after exit; wait until the pack size settles before stamping.
+    $pckPath = Join-Path $ProjectRoot "docs\index.pck"
+    $prevSize = -1
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Test-Path $pckPath)) { Start-Sleep -Milliseconds 200; continue }
+        $size = (Get-Item $pckPath).Length
+        if ($size -gt 0 -and $size -eq $prevSize) { break }
+        $prevSize = $size
+        Start-Sleep -Milliseconds 200
     }
     # GitHub Pages: skip Jekyll so wasm/pck paths work.
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline
@@ -192,8 +203,16 @@ if ($doWeb) {
         }
         [System.IO.File]::WriteAllText($swPath, $swNew)
     }
-    if ($html -notmatch [regex]::Escape('var VER = "' + $ver + '"')) {
-        throw "Failed to inject VER=$ver into docs/index.html"
+    # Verify on disk — in-memory checks can pass while a late Godot write overwrites the stamp.
+    $htmlOnDisk = [System.IO.File]::ReadAllText($htmlPath)
+    if ($htmlOnDisk -notmatch [regex]::Escape('var VER = "' + $ver + '"')) {
+        throw "Failed to inject VER=$ver into docs/index.html (missing after write)"
+    }
+    if (Test-Path $swPath) {
+        $swOnDisk = [System.IO.File]::ReadAllText($swPath)
+        if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $ver + "';")) {
+            throw "Failed to stamp CACHE_VERSION=$ver into service worker (missing after write)"
+        }
     }
     Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper + SW)" -ForegroundColor Green
 }

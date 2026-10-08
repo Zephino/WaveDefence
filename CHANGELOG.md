@@ -1,4 +1,15 @@
-﻿## Version 00.01.84
+﻿## Version 00.01.85
+Date: 10/07/2026
+Time: 11:35 PM
+
+### Changes
+- Rebuilt and shipped the GitHub Pages web build in `docs/` through **00.01.85** (includes Command tower + SNAKE boss from 00.01.83–84)
+- Hardened `export_builds.ps1 -WebOnly` so version/cache stamps are verified on disk after Godot finishes writing
+
+### Reason
+Live site was still on 00.01.82 because newer features were never re-exported to `docs/`.
+
+## Version 00.01.84
 Date: 10/07/2026
 Time: 11:30 PM
 
