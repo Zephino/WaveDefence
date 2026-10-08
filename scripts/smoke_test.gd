@@ -386,6 +386,16 @@ func _run() -> void:
 		errors.append("antiair should deal no ground damage")
 	if "spike" not in TowerData.get_ids() or "antiair" not in TowerData.get_ids():
 		errors.append("spike and antiair should be in tower id list")
+	if "command" not in TowerData.get_ids():
+		errors.append("command tower should be in tower id list")
+	if not TowerData.is_command("command"):
+		errors.append("command should be flagged is_command")
+	if CommandAbilities.cost("airstrike") <= 0:
+		errors.append("airstrike should cost gold each use")
+	if CommandAbilities.cross_cells(Vector2i(3, 3)).size() != 5:
+		errors.append("airstrike cross should be 5 cells")
+	if CommandAbilities.get_ids().size() < 4:
+		errors.append("command should offer 4 abilities")
 
 	# Gatling: wave-30 unlock, expensive ultra-fast special.
 	var gatling_def := TowerData.get_def("gatling")

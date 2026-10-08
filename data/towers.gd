@@ -175,11 +175,23 @@ const TYPES := {
 		"air_damage_mult": 1.2,
 		"unlock_wave": 30,
 	},
+	"command": {
+		"display_name": "Command",
+		"blurb": "Support hub. Does not shoot. Click it, then buy an ability each time you want to use it (Air Strike, Supply Drop, Barricade, Flare).",
+		"cost": 100,
+		"damage": 0.0,
+		"range": 0.0,
+		"fire_rate": 0.0,
+		"splash_radius": 0.0,
+		"color": Color(0.55, 0.62, 0.38),
+		"effect": "none",
+		"is_command": true,
+	},
 }
 
 
 static func get_ids() -> Array:
-	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair", "gatling"]
+	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair", "gatling", "command"]
 
 
 static func get_def(tower_id: String) -> Dictionary:
@@ -188,6 +200,10 @@ static func get_def(tower_id: String) -> Dictionary:
 
 static func is_wall(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_wall", false))
+
+
+static func is_command(tower_id: String) -> bool:
+	return bool(get_def(tower_id).get("is_command", false))
 
 
 ## Wave number when the shop unlocks this tower (0 / missing = always available).
@@ -215,13 +231,13 @@ static func sell_value_for_tower(tower: Tower) -> int:
 
 
 static func can_upgrade_tower(tower: Tower) -> bool:
-	if tower == null or is_wall(tower.tower_id):
+	if tower == null or is_wall(tower.tower_id) or is_command(tower.tower_id):
 		return false
 	return tower.upgrade_level < MAX_STAT_UPGRADES
 
 
 static func can_apply_final(tower: Tower) -> bool:
-	if tower == null or is_wall(tower.tower_id):
+	if tower == null or is_wall(tower.tower_id) or is_command(tower.tower_id):
 		return false
 	return tower.upgrade_level >= MAX_STAT_UPGRADES and tower.final_element == ""
 
@@ -255,7 +271,7 @@ static func final_upgrade_cost(tower_id: String) -> int:
 
 static func combat_def(tower_id: String, upgrade_level: int, final_element: String = "") -> Dictionary:
 	var d: Dictionary = get_def(tower_id).duplicate(true)
-	if bool(d.get("is_wall", false)):
+	if bool(d.get("is_wall", false)) or bool(d.get("is_command", false)):
 		return d
 	var level := clampi(upgrade_level, 0, MAX_STAT_UPGRADES)
 	for _i in level:
@@ -383,7 +399,9 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 	var need_wave := unlock_wave(tower_id)
 	if need_wave > 0:
 		lines.append("Unlocks at wave %d" % need_wave)
-	if bool(base.get("is_wall", false)):
+	if bool(base.get("is_wall", false)) or bool(base.get("is_command", false)):
+		if bool(base.get("is_command", false)):
+			lines.append("No auto-fire. Select this tower, then buy an ability each use.")
 		return "\n".join(lines)
 
 	lines.append("Upgrades: %d/%d stat + final elemental buff" % [upgrade_level, MAX_STAT_UPGRADES])

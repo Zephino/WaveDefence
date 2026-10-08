@@ -25,6 +25,9 @@ const LONG_PRESS_SEC := 0.45
 const TAP_MOVE_PX := 18.0
 var _touch_ui: bool = false
 var _multi_select_mode: bool = false
+## Command tower pay-per-use aim mode.
+var _aim_ability_id: String = ""
+var _aim_command_tower: Tower = null
 
 
 func _ready() -> void:
@@ -97,12 +100,13 @@ func _setup_ui() -> void:
 	hud.deselect_pressed.connect(_on_deselect)
 	hud.upgrade_pressed.connect(_on_upgrade_selected)
 	hud.final_element_pressed.connect(_on_final_element_selected)
+	hud.command_ability_pressed.connect(_on_command_ability_pressed)
 	hud.tower_type_selected.connect(_on_tower_type_selected)
 	hud.multi_select_changed.connect(func(on: bool) -> void:
 		_multi_select_mode = on
 		hud.set_status("Multi-select %s." % ("ON — tap towers to add/remove" if on else "OFF"))
 	)
-	build_system.selected_towers_changed.connect(hud.update_sell_button)
+	build_system.selected_towers_changed.connect(_on_selected_towers_changed)
 	build_system.selection_upgrade_changed.connect(hud.update_upgrade_buttons)
 	hud.end_run_confirmed.connect(_on_end_run_confirmed)
 	game_state.game_over.connect(_on_game_over_to_leaderboard)
@@ -216,7 +220,7 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 
 	if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		var local_map := get_global_mouse_position() - map_offset
-		if _is_on_board(local_map) or build_system.selection_count() > 0:
+		if not _aim_ability_id.is_empty() or _is_on_board(local_map) or build_system.selection_count() > 0:
 			_on_deselect()
 			get_viewport().set_input_as_handled()
 		return
@@ -231,11 +235,15 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 	var local_map := get_global_mouse_position() - map_offset
 	if not _is_on_board(local_map):
 		# Tap outside the board clears selection on touch devices.
-		if _touch_ui and build_system.selection_count() > 0:
+		if _touch_ui and (build_system.selection_count() > 0 or not _aim_ability_id.is_empty()):
 			_on_deselect()
 			get_viewport().set_input_as_handled()
 		return
 	get_viewport().set_input_as_handled()
+
+	if not _aim_ability_id.is_empty():
+		_resolve_command_aim(local_map)
+		return
 
 	var additive := event.ctrl_pressed or event.shift_pressed or _multi_select_mode
 	_paint_holding = true
@@ -350,11 +358,105 @@ func _on_sell_selected() -> void:
 
 
 func _on_deselect() -> void:
+	var had_aim := not _aim_ability_id.is_empty()
+	_clear_command_aim()
 	if build_system.selection_count() <= 0:
-		hud.set_status("Nothing selected.")
+		hud.set_status("Aim cancelled." if had_aim else "Nothing selected.")
 		return
 	build_system.clear_selection()
-	hud.set_status("Selection cleared.")
+	hud.set_status("Aim cancelled." if had_aim else "Selection cleared.")
+
+
+func _on_selected_towers_changed(count: int, sell_total: int) -> void:
+	hud.update_sell_button(count, sell_total)
+	var cmd: Tower = null
+	if count == 1 and build_system.selected_towers.size() == 1:
+		var t: Tower = build_system.selected_towers[0]
+		if is_instance_valid(t) and TowerData.is_command(t.tower_id):
+			cmd = t
+	hud.update_command_abilities(cmd)
+	if not _aim_ability_id.is_empty():
+		if cmd == null or cmd != _aim_command_tower:
+			_clear_command_aim()
+
+
+func _on_command_ability_pressed(ability_id: String) -> void:
+	if game_state.is_game_over:
+		return
+	if build_system.selection_count() != 1:
+		hud.set_status("Select a single Command tower first.")
+		return
+	var tower: Tower = build_system.selected_towers[0]
+	if tower == null or not is_instance_valid(tower) or not TowerData.is_command(tower.tower_id):
+		hud.set_status("Select a Command tower to use abilities.")
+		return
+	var def := CommandAbilities.get_def(ability_id)
+	if def.is_empty():
+		return
+	var cost := CommandAbilities.cost(ability_id)
+	if tower.ability_cooldown_left(ability_id) > 0.05:
+		hud.set_status("%s is cooling down." % CommandAbilities.display_name(ability_id))
+		return
+	if not game_state.can_afford(cost):
+		hud.set_status("Need %d gold for %s." % [cost, CommandAbilities.display_name(ability_id)])
+		return
+	_aim_ability_id = ability_id
+	_aim_command_tower = tower
+	var aim := CommandAbilities.aim_mode(ability_id)
+	if aim == "path":
+		hud.set_status(
+			"Aim %s (%dg) — click a path tile. Esc/right-click cancels." % [
+				CommandAbilities.display_name(ability_id),
+				cost,
+			]
+		)
+	else:
+		hud.set_status(
+			"Aim %s (%dg) — click a board tile near your towers. Esc/right-click cancels." % [
+				CommandAbilities.display_name(ability_id),
+				cost,
+			]
+		)
+
+
+func _resolve_command_aim(local_map: Vector2) -> void:
+	var ability_id := _aim_ability_id
+	var tower := _aim_command_tower
+	if ability_id.is_empty() or tower == null or not is_instance_valid(tower):
+		_clear_command_aim()
+		hud.set_status("Ability aim cancelled.")
+		return
+	var cost := CommandAbilities.cost(ability_id)
+	if tower.ability_cooldown_left(ability_id) > 0.05:
+		_clear_command_aim()
+		hud.set_status("%s is cooling down." % CommandAbilities.display_name(ability_id))
+		return
+	if not game_state.can_afford(cost):
+		_clear_command_aim()
+		hud.set_status("Need %d gold for %s." % [cost, CommandAbilities.display_name(ability_id)])
+		return
+	var cell := grid.world_to_cell(local_map)
+	var result := CommandCaster.cast(ability_id, cell, grid, pathfinder, enemies, projectiles)
+	if not bool(result.get("ok", false)):
+		hud.set_status(str(result.get("message", "Can't aim there.")))
+		return
+	if not game_state.spend_gold(cost):
+		_clear_command_aim()
+		hud.set_status("Not enough gold.")
+		return
+	tower.start_ability_cooldown(ability_id, CommandAbilities.cooldown(ability_id))
+	_clear_command_aim()
+	hud.update_command_abilities(tower)
+	hud.set_status("%s (-%d gold). %s" % [
+		CommandAbilities.display_name(ability_id),
+		cost,
+		str(result.get("message", "")),
+	])
+
+
+func _clear_command_aim() -> void:
+	_aim_ability_id = ""
+	_aim_command_tower = null
 
 
 func _on_upgrade_selected() -> void:

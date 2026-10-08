@@ -1,4 +1,16 @@
-﻿## Version 00.01.83
+﻿## Version 00.01.84
+Date: 10/07/2026
+Time: 11:30 PM
+
+### Changes
+- Added **Command** tower (100g): no auto-attack; click it to buy pay-per-use abilities
+- Abilities: Air Strike (path cross damage), Supply Drop (tower fire-rate buff), Barricade Spike (ground slow+DoT), Recon Flare (mark for bonus damage)
+- Each ability costs gold every cast; short cooldown after use; aim a path/board tile after selecting the ability
+
+### Reason
+Add a support “command post” playstyle where players spend gold on deliberate strikes and buffs instead of another auto-firing turret.
+
+## Version 00.01.83
 Date: 10/07/2026
 Time: 11:25 PM
 

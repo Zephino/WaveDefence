@@ -6,6 +6,7 @@ signal sell_pressed
 signal deselect_pressed
 signal upgrade_pressed
 signal final_element_pressed(element_id: String)
+signal command_ability_pressed(ability_id: String)
 signal tower_type_selected(tower_id: String)
 signal end_run_confirmed
 signal multi_select_changed(enabled: bool)
@@ -32,10 +33,13 @@ var multi_select_button: Button
 var end_run_button: Button
 var final_buttons: Dictionary = {}
 var tower_buttons: Dictionary = {}
+var ability_buttons: Dictionary = {}
+var command_box: VBoxContainer
 var board_tooltip: PanelContainer
 var board_tooltip_label: Label
 var _end_run_overlay: Control
 var _tooltip_hide_at_msec: int = 0
+var _command_tower: Tower = null
 
 
 func setup(p_state: GameState, version_text: String) -> void:
@@ -340,6 +344,27 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	upgrade_button.pressed.connect(func() -> void: upgrade_pressed.emit())
 	sidebar.add_child(upgrade_button)
 
+	command_box = VBoxContainer.new()
+	command_box.visible = false
+	command_box.add_theme_constant_override("separation", 4)
+	sidebar.add_child(command_box)
+	var cmd_title := Label.new()
+	cmd_title.text = "Command abilities"
+	cmd_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cmd_title.modulate = Color(0.85, 0.9, 0.55)
+	command_box.add_child(cmd_title)
+	var ability_h := GameLayout.button_height(26.0)
+	for ability_id in CommandAbilities.get_ids():
+		var adef := CommandAbilities.get_def(ability_id)
+		var abtn := _sidebar_button(
+			"%s (%d)" % [adef.get("display_name", ability_id), int(adef.get("cost", 0))],
+			ability_h
+		)
+		abtn.tooltip_text = str(adef.get("blurb", ""))
+		abtn.pressed.connect(func() -> void: command_ability_pressed.emit(ability_id))
+		command_box.add_child(abtn)
+		ability_buttons[ability_id] = abtn
+
 	var final_row := HBoxContainer.new()
 	final_row.add_theme_constant_override("separation", 3)
 	final_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -541,6 +566,42 @@ func update_upgrade_buttons(can_stat: bool, upgrade_cost: int, can_final: bool, 
 			btn.tooltip_text = "Final %s — needs +3 upgrades first" % label
 
 
+func update_command_abilities(tower: Tower) -> void:
+	_command_tower = tower if tower != null and is_instance_valid(tower) and TowerData.is_command(tower.tower_id) else null
+	if command_box == null:
+		return
+	command_box.visible = _command_tower != null
+	_refresh_command_ability_buttons()
+
+
+func _refresh_command_ability_buttons() -> void:
+	if command_box == null or not command_box.visible or _command_tower == null:
+		return
+	if not is_instance_valid(_command_tower):
+		command_box.visible = false
+		_command_tower = null
+		return
+	for ability_id in ability_buttons.keys():
+		var btn: Button = ability_buttons[ability_id]
+		var adef := CommandAbilities.get_def(ability_id)
+		var cost := int(adef.get("cost", 0))
+		var name := str(adef.get("display_name", ability_id))
+		var cd := _command_tower.ability_cooldown_left(ability_id)
+		if cd > 0.05:
+			btn.text = "%s (%.1fs)" % [name, cd]
+			btn.disabled = true
+			btn.tooltip_text = "%s — cooling down" % str(adef.get("blurb", ""))
+		else:
+			btn.text = "%s (%d)" % [name, cost]
+			btn.disabled = game_state == null or not game_state.can_afford(cost)
+			btn.tooltip_text = "%s (pay each use)" % str(adef.get("blurb", ""))
+
+
+func _process(_delta: float) -> void:
+	if command_box != null and command_box.visible:
+		_refresh_command_ability_buttons()
+
+
 func refresh_run_labels() -> void:
 	if game_state == null:
 		return
@@ -561,6 +622,7 @@ func refresh_run_labels() -> void:
 
 func _on_gold_changed(gold: int) -> void:
 	gold_label.text = "Gold: %d" % gold
+	_refresh_command_ability_buttons()
 
 
 func _on_lives_changed(lives: int) -> void:

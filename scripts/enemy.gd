@@ -33,6 +33,8 @@ var poison_time: float = 0.0
 var poison_dps: float = 0.0
 var slow_time: float = 0.0
 var slow_factor: float = 1.0
+var mark_time: float = 0.0
+var mark_damage_mult: float = 1.0
 
 var _radius: float = 10.0
 var _base_color: Color = Color(0.85, 0.35, 0.35)
@@ -132,6 +134,11 @@ func _tick_statuses(delta: float) -> void:
 		slow_time -= delta
 		if slow_time <= 0.0:
 			slow_factor = 1.0
+	if mark_time > 0.0:
+		mark_time -= delta
+		if mark_time <= 0.0:
+			mark_time = 0.0
+			mark_damage_mult = 1.0
 
 
 func _move_along_path(delta: float) -> void:
@@ -257,6 +264,8 @@ func set_path(new_path: PackedVector2Array) -> void:
 func take_damage(amount: float, _from_hit: bool = true) -> void:
 	if not alive or amount <= 0.0:
 		return
+	if mark_time > 0.0:
+		amount *= maxf(mark_damage_mult, 1.0)
 	hp -= amount
 	if hp <= 0.0:
 		_die()
@@ -275,6 +284,12 @@ func apply_poison(dps: float, duration: float) -> void:
 func apply_slow(factor: float, duration: float) -> void:
 	slow_factor = minf(slow_factor, factor)
 	slow_time = maxf(slow_time, duration)
+
+
+func apply_mark(mult: float, duration: float) -> void:
+	mark_damage_mult = maxf(mark_damage_mult, mult)
+	mark_time = maxf(mark_time, duration)
+	queue_redraw()
 
 
 func _die() -> void:
@@ -301,6 +316,8 @@ func _draw() -> void:
 		color = color.lerp(Color(0.3, 0.9, 0.3), 0.35)
 	if slow_time > 0.0:
 		color = color.lerp(Color(0.4, 0.8, 1.0), 0.4)
+	if mark_time > 0.0:
+		color = color.lerp(Color(1.0, 0.95, 0.35), 0.45)
 	if is_flying:
 		var wing := PackedVector2Array([
 			Vector2(-_radius - 6.0, 0.0),

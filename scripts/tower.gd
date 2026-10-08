@@ -11,6 +11,10 @@ var upgrade_level: int = 0
 var final_element: String = ""
 ## Gold spent on upgrades (not base purchase); used for sell refund.
 var gold_invested: int = 0
+## Command ability id → remaining cooldown seconds.
+var ability_cooldowns: Dictionary = {}
+var buff_fire_mult: float = 1.0
+var buff_time: float = 0.0
 const SELECT_COLOR := Color(0.35, 0.95, 0.45)
 const SELECT_COLOR_SOFT := Color(0.35, 0.95, 0.45, 0.35)
 
@@ -73,12 +77,50 @@ func apply_final_element(element_id: String) -> bool:
 func _process(delta: float) -> void:
 	if bool(def.get("is_wall", false)):
 		return
+	if bool(def.get("is_command", false)):
+		_tick_ability_cooldowns(delta)
+		queue_redraw()
+		return
+	if buff_time > 0.0:
+		buff_time -= delta
+		if buff_time <= 0.0:
+			buff_time = 0.0
+			buff_fire_mult = 1.0
 	fire_cooldown = maxf(fire_cooldown - delta, 0.0)
 	if fire_cooldown <= 0.0:
 		var target := _find_target()
 		if target:
 			_fire_at(target)
-			fire_cooldown = 1.0 / maxf(float(def.get("fire_rate", 1.0)), 0.05)
+			var rate := maxf(float(def.get("fire_rate", 1.0)) * maxf(buff_fire_mult, 0.05), 0.05)
+			fire_cooldown = 1.0 / rate
+	queue_redraw()
+
+
+func _tick_ability_cooldowns(delta: float) -> void:
+	if ability_cooldowns.is_empty():
+		return
+	var keys := ability_cooldowns.keys()
+	for key in keys:
+		var left := float(ability_cooldowns[key]) - delta
+		if left <= 0.0:
+			ability_cooldowns.erase(key)
+		else:
+			ability_cooldowns[key] = left
+
+
+func ability_cooldown_left(ability_id: String) -> float:
+	return maxf(float(ability_cooldowns.get(ability_id, 0.0)), 0.0)
+
+
+func start_ability_cooldown(ability_id: String, seconds: float) -> void:
+	ability_cooldowns[ability_id] = maxf(seconds, 0.0)
+
+
+func apply_fire_buff(mult: float, duration: float) -> void:
+	if bool(def.get("is_wall", false)) or bool(def.get("is_command", false)):
+		return
+	buff_fire_mult = maxf(buff_fire_mult, mult)
+	buff_time = maxf(buff_time, duration)
 	queue_redraw()
 
 
@@ -157,10 +199,17 @@ func _draw() -> void:
 		draw_line(Vector2(-2, -2), Vector2(12, -6), Color(0.98, 0.75, 0.35), 2.2)
 		draw_line(Vector2(-2, 0), Vector2(12, 0), Color(0.98, 0.75, 0.35), 2.2)
 		draw_line(Vector2(-2, 2), Vector2(12, 6), Color(0.98, 0.75, 0.35), 2.2)
-	# Upgrade pips along the bottom edge.
-	for i in TowerData.MAX_STAT_UPGRADES:
-		var pip_color := Color(0.95, 0.85, 0.35) if i < upgrade_level else Color(0.2, 0.2, 0.22)
-		draw_rect(Rect2(-12 + i * 9, 10, 7, 3), pip_color)
+	elif tower_id == "command":
+		draw_circle(Vector2.ZERO, 6.0, Color(0.9, 0.85, 0.35))
+		draw_line(Vector2(0, -11), Vector2(0, 11), Color(0.95, 0.9, 0.55), 2.0)
+		draw_line(Vector2(-11, 0), Vector2(11, 0), Color(0.95, 0.9, 0.55), 2.0)
+	# Upgrade pips along the bottom edge (Command / walls skip).
+	if not bool(def.get("is_command", false)):
+		for i in TowerData.MAX_STAT_UPGRADES:
+			var pip_color := Color(0.95, 0.85, 0.35) if i < upgrade_level else Color(0.2, 0.2, 0.22)
+			draw_rect(Rect2(-12 + i * 9, 10, 7, 3), pip_color)
+	if buff_time > 0.0:
+		draw_arc(Vector2.ZERO, 17.0, 0.0, TAU, 28, Color(0.55, 1.0, 0.55, 0.7), 2.0)
 	if final_element != "":
 		var accent := TowerData.final_element_color(final_element)
 		draw_circle(Vector2(11, -11), 3.5, accent)
