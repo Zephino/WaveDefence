@@ -225,6 +225,57 @@ static func flying_boss_bounty(wave: int) -> int:
 	return creep_bounty(wave) * 18
 
 
+## Chance a boss wave becomes a ground "snake" chain instead of the normal mix.
+const SNAKE_BOSS_CHANCE := 0.35
+## Spacing between snake segments along the path (world pixels).
+const SNAKE_SPACING := 28.0
+## How quickly segments pour out after the head (keeps the chain tight).
+const SNAKE_SPAWN_INTERVAL := 0.07
+const SNAKE_BODY_HP_MULT := 1.3
+const SNAKE_HEAD_HP_MULT := 0.85
+const SNAKE_SPEED_MULT := 0.9
+
+
+static func is_boss_wave(wave: int) -> bool:
+	return boss_count(wave) > 0 or flying_boss_count(wave) > 0
+
+
+static func roll_snake_boss(wave: int, rng: RandomNumberGenerator) -> bool:
+	if not is_boss_wave(wave) or rng == null:
+		return false
+	return rng.randf() < SNAKE_BOSS_CHANCE
+
+
+## Every mob that would have been on the wave, as one ground chain.
+static func snake_segment_count(wave: int) -> int:
+	return creep_count(wave) + boss_count(wave) + flying_boss_count(wave)
+
+
+static func snake_body_hp(wave: int) -> float:
+	return creep_hp(wave) * SNAKE_BODY_HP_MULT
+
+
+static func snake_head_hp(wave: int) -> float:
+	# Head is still a tank, but slightly under a full ground boss so the long body carries the threat.
+	return boss_hp(wave) * SNAKE_HEAD_HP_MULT
+
+
+static func snake_speed(wave: int) -> float:
+	return maxf(boss_speed(wave) * SNAKE_SPEED_MULT, 32.0)
+
+
+static func snake_body_bounty(wave: int) -> int:
+	return creep_bounty(wave) + 2
+
+
+static func snake_head_bounty(wave: int) -> int:
+	return boss_bounty(wave)
+
+
+static func snake_spawn_interval() -> float:
+	return SNAKE_SPAWN_INTERVAL
+
+
 static func spawn_interval(wave: int) -> float:
 	var interval := maxf(0.55 - wave * 0.005, 0.2)
 	if is_speed_wave(wave):
@@ -232,10 +283,13 @@ static func spawn_interval(wave: int) -> float:
 	return interval
 
 
-static func boss_banner(wave: int) -> String:
+static func boss_banner(wave: int, is_snake: bool = false) -> String:
 	var parts: PackedStringArray = PackedStringArray()
 	if is_speed_wave(wave):
 		parts.append("SPEED WAVE")
+	if is_snake:
+		parts.append("SNAKE")
+		return " + ".join(parts)
 	var bosses := boss_count(wave)
 	if bosses >= 2:
 		parts.append("DOUBLE BOSS")

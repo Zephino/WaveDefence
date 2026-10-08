@@ -1,4 +1,16 @@
-﻿## Version 00.01.82
+﻿## Version 00.01.83
+Date: 10/07/2026
+Time: 11:25 PM
+
+### Changes
+- Boss waves can randomly become a **SNAKE**: all wave mobs spawn as a tougher ground chain that follows the head
+- Snake head is a marked boss segment; body segments have ~30% more HP than normal creeps; banner shows **SNAKE**
+- No air units on snake waves; segments spawn quickly so the chain stays tight
+
+### Reason
+Add a random boss-wave variant that feels distinct from normal / flying bosses.
+
+## Version 00.01.82
 Date: 10/03/2026
 Time: 11:30 PM
 

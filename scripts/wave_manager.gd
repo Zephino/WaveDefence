@@ -41,6 +41,10 @@ var pending_map_rotate_wave: int = 0
 var _cached_ground_path: PackedVector2Array = PackedVector2Array()
 var _path_dirty: bool = true
 var _spawn_rng := RandomNumberGenerator.new()
+## Current wave is a ground snake chain (random boss-wave variant).
+var _wave_is_snake: bool = false
+## Last spawned snake segment (used to link the next body piece).
+var _snake_tail: Enemy = null
 
 
 func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_enemies: Node) -> void:
@@ -147,7 +151,10 @@ func send_next_wave() -> bool:
 		return false
 
 	var wave := game_state.advance_wave()
-	var banner := WaveScaler.boss_banner(wave)
+	_spawn_rng.randomize()
+	_snake_tail = null
+	_wave_is_snake = WaveScaler.roll_snake_boss(wave, _spawn_rng)
+	var banner := WaveScaler.boss_banner(wave, _wave_is_snake)
 	_build_spawn_queue(wave)
 	enemies_this_wave_total = spawn_queue.size()
 	phase = Phase.WAVE
@@ -193,7 +200,10 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	spawn_queue.clear()
 
 	var wave := game_state.advance_wave()
-	var banner := WaveScaler.boss_banner(wave)
+	_spawn_rng.randomize()
+	_snake_tail = null
+	_wave_is_snake = WaveScaler.roll_snake_boss(wave, _spawn_rng)
+	var banner := WaveScaler.boss_banner(wave, _wave_is_snake)
 	_build_spawn_queue(wave)
 	enemies_this_wave_total = spawn_queue.size()
 
@@ -231,7 +241,11 @@ func _emit_timer() -> void:
 
 func _build_spawn_queue(wave: int) -> void:
 	spawn_queue.clear()
+	# Fresh draws for monster types / resists (snake roll already happened in send_*).
 	_spawn_rng.randomize()
+	if _wave_is_snake:
+		_build_snake_spawn_queue(wave)
+		return
 	var ground_left := WaveScaler.ground_creep_count(wave)
 	var air_left := WaveScaler.flying_creep_count(wave)
 	# Interleave ground and air creeps so late waves feel mixed, not batched.
@@ -278,6 +292,23 @@ func _build_spawn_queue(wave: int) -> void:
 		))
 
 
+func _build_snake_spawn_queue(wave: int) -> void:
+	var count := WaveScaler.snake_segment_count(wave)
+	for i in count:
+		var is_head := i == 0
+		var spec := _make_spawn_spec(
+			wave,
+			WaveScaler.snake_head_hp(wave) if is_head else WaveScaler.snake_body_hp(wave),
+			WaveScaler.snake_speed(wave),
+			WaveScaler.snake_head_bounty(wave) if is_head else WaveScaler.snake_body_bounty(wave),
+			is_head,
+			false
+		)
+		spec["snake"] = true
+		spec["snake_index"] = i
+		spawn_queue.append(spec)
+
+
 func _make_spawn_spec(
 	wave: int,
 	hp: float,
@@ -296,6 +327,8 @@ func _make_spawn_spec(
 		"counts_kill": true,
 		"monster_type": "",
 		"element_resists": MonsterTypes.empty_resists(),
+		"snake": false,
+		"snake_index": -1,
 	}
 	if game_state != null and WaveScaler.is_randomize_monsters(game_state.monster_mode):
 		var type_id := MonsterTypes.pick_type(_spawn_rng, flying)
@@ -338,7 +371,10 @@ func _process_spawning(delta: float) -> void:
 		if bool(spec.get("counts_kill", true)):
 			enemies_this_wave_total = maxi(enemies_this_wave_total - 1, 0)
 		_emit_enemies_remaining()
-	spawn_timer = WaveScaler.spawn_interval(game_state.wave)
+	if _wave_is_snake:
+		spawn_timer = WaveScaler.snake_spawn_interval()
+	else:
+		spawn_timer = WaveScaler.spawn_interval(game_state.wave)
 
 
 func _spawn_enemy(spec: Dictionary) -> bool:
@@ -367,6 +403,12 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 		str(spec.get("monster_type", "")),
 		spec.get("element_resists", MonsterTypes.empty_resists()) as Dictionary
 	)
+	if bool(spec.get("snake", false)):
+		var prev: Enemy = _snake_tail
+		if prev != null and not is_instance_valid(prev):
+			prev = null
+		enemy.configure_snake(int(spec.get("snake_index", 0)), prev, WaveScaler.SNAKE_SPACING)
+		_snake_tail = enemy
 	enemy.died.connect(_on_enemy_died)
 	enemy.leaked.connect(_on_enemy_leaked)
 	enemies_alive += 1
@@ -443,6 +485,8 @@ func clear_enemies() -> void:
 	wave_active = false
 	kills_this_wave = 0
 	enemies_this_wave_total = 0
+	_wave_is_snake = false
+	_snake_tail = null
 	phase = Phase.PREP
 	intermission_left = 0.0
 	skip_unlocked = false

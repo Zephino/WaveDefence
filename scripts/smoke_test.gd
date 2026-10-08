@@ -236,6 +236,19 @@ func _run() -> void:
 		errors.append("wave 14 should have 0 flying bosses")
 	if WaveScaler.boss_banner(15).find("FLYING") < 0:
 		errors.append("wave 15 banner should mention flying")
+	if not WaveScaler.is_boss_wave(10):
+		errors.append("wave 10 should be a boss wave")
+	if not WaveScaler.is_boss_wave(15):
+		errors.append("wave 15 should be a boss wave")
+	if WaveScaler.is_boss_wave(11):
+		errors.append("wave 11 should not be a boss wave")
+	if WaveScaler.boss_banner(10, true).find("SNAKE") < 0:
+		errors.append("snake banner should mention SNAKE")
+	var expected_snake := WaveScaler.creep_count(10) + WaveScaler.boss_count(10) + WaveScaler.flying_boss_count(10)
+	if WaveScaler.snake_segment_count(10) != expected_snake:
+		errors.append("snake segment count should equal all wave mobs")
+	if WaveScaler.snake_body_hp(10) <= WaveScaler.creep_hp(10):
+		errors.append("snake body should be tougher than normal creeps")
 	if WaveScaler.flying_creep_count(7) != 0:
 		errors.append("wave 7 should not have flying scouts yet")
 	if WaveScaler.flying_creep_count(8) <= 0:
@@ -251,6 +264,7 @@ func _run() -> void:
 	if WaveScaler.flying_boss_hp(15) >= WaveScaler.creep_hp(15) * 9.0:
 		errors.append("flying bosses should be under 9x creep HP")
 	# Confirm wave-15 spawn queue actually contains a flyer.
+	waves._wave_is_snake = false
 	waves._build_spawn_queue(15)
 	var flying_in_15 := 0
 	for spec in waves.spawn_queue:
@@ -258,6 +272,27 @@ func _run() -> void:
 			flying_in_15 += 1
 	if flying_in_15 <= 0:
 		errors.append("wave 15 spawn queue should include flying enemies")
+
+	# Snake boss queue: all ground segments, head first, tougher body HP.
+	waves._wave_is_snake = true
+	waves._build_spawn_queue(10)
+	if waves.spawn_queue.size() != WaveScaler.snake_segment_count(10):
+		errors.append("snake queue length should match segment count")
+	elif waves.spawn_queue.is_empty():
+		errors.append("snake queue should not be empty")
+	else:
+		if not bool(waves.spawn_queue[0].get("boss", false)):
+			errors.append("snake head should be marked boss")
+		if not bool(waves.spawn_queue[0].get("snake", false)):
+			errors.append("snake head should be marked snake")
+		for spec in waves.spawn_queue:
+			if bool(spec.get("flying", false)):
+				errors.append("snake queue should be ground-only")
+				break
+			if not bool(spec.get("snake", false)):
+				errors.append("every snake queue entry should be snake")
+				break
+	waves._wave_is_snake = false
 
 	# Early-send must not keep stacking unspawned leftovers (Classic late-game freeze).
 	waves.clear_enemies()

@@ -97,6 +97,7 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 - After a wave ends, the break timer is always skippable (small gold bonus for time left).
 - Kill **25%** of a wave to unlock **Send Next Wave**: next-wave enemies start spawning immediately while enemies already on the map stay; unspawned leftovers from the current wave are dropped. Plus a slight early-send gold bonus. Early-send is blocked if the board is already very crowded.
 - Boss every **10** waves; **two bosses** every **50** waves.
+- Boss waves can randomly become a **SNAKE**: every mob in the wave forms a tougher ground chain (head + body segments). Banner shows **SNAKE**.
 - **Flying boss** every **15** waves — flies an **S-curve** over walls/towers (air creeps use the same style).
 - Light flying **scouts** start around **wave 8**; after **wave 20** every wave mixes air with ground (banner **AIR MIX**). Air creeps are glassier (~70% ground HP) and only slightly faster than ground.
 - Every **7** waves (**7, 14, 21…**) is a **SPEED WAVE** — much faster, glassier creeps and denser spawns.

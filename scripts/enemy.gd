@@ -20,6 +20,13 @@ var path: PackedVector2Array = PackedVector2Array()
 var path_index: int = 0
 var alive: bool = true
 
+## Snake-boss chain: followers stay a fixed path-distance behind the previous segment.
+var is_snake: bool = false
+var snake_index: int = 0
+var snake_prev: Enemy = null
+var snake_spacing: float = 28.0
+var path_dist: float = 0.0
+
 var burn_time: float = 0.0
 var burn_dps: float = 0.0
 var poison_time: float = 0.0
@@ -67,6 +74,26 @@ func setup(
 	if path.size() > 0:
 		position = path[0]
 		path_index = 1 if path.size() > 1 else 0
+		path_dist = 0.0
+	queue_redraw()
+
+
+## Wire this enemy into a snake chain (call after setup).
+func configure_snake(index: int, prev: Enemy, spacing: float = 28.0) -> void:
+	is_snake = true
+	snake_index = index
+	snake_prev = prev
+	snake_spacing = maxf(spacing, 12.0)
+	path_dist = 0.0
+	if index == 0:
+		_radius = 15.0
+		_base_color = Color(0.22, 0.78, 0.32)
+	else:
+		_radius = 11.0
+		var shade := clampf(float(index) * 0.04, 0.0, 0.45)
+		_base_color = Color(0.32, 0.68, 0.28).lerp(Color(0.16, 0.42, 0.2), shade)
+	if monster_type != "":
+		_base_color = _base_color.lerp(MonsterTypes.tint_color(monster_type), 0.4)
 	queue_redraw()
 
 
@@ -108,6 +135,9 @@ func _tick_statuses(delta: float) -> void:
 
 
 func _move_along_path(delta: float) -> void:
+	if is_snake:
+		_move_snake(delta)
+		return
 	if path.is_empty() or path_index >= path.size():
 		_leak()
 		return
@@ -125,6 +155,83 @@ func _move_along_path(delta: float) -> void:
 		position += to_target.normalized() * step
 
 
+func _move_snake(delta: float) -> void:
+	if path.is_empty():
+		_leak()
+		return
+	var total := _path_total_length()
+	if total <= 0.0:
+		_leak()
+		return
+	# Broken link → continue along the path as a free segment.
+	if snake_prev != null and (not is_instance_valid(snake_prev) or not snake_prev.alive):
+		snake_prev = null
+	var step := speed * slow_factor * delta
+	if snake_prev != null:
+		var want := snake_prev.path_dist - snake_spacing
+		if want <= 0.0:
+			path_dist = 0.0
+			position = path[0]
+			return
+		if path_dist < want:
+			path_dist = minf(path_dist + step, want)
+		else:
+			path_dist = want
+	else:
+		path_dist += step
+	if path_dist >= total:
+		position = path[path.size() - 1]
+		_leak()
+		return
+	position = _position_at_path_dist(path_dist)
+
+
+func _path_total_length() -> float:
+	var total := 0.0
+	for i in range(1, path.size()):
+		total += path[i].distance_to(path[i - 1])
+	return total
+
+
+func _position_at_path_dist(dist: float) -> Vector2:
+	if path.is_empty():
+		return position
+	if dist <= 0.0:
+		return path[0]
+	var remaining := dist
+	for i in range(1, path.size()):
+		var seg_len := path[i].distance_to(path[i - 1])
+		if remaining <= seg_len:
+			if seg_len <= 0.001:
+				return path[i]
+			return path[i - 1].lerp(path[i], remaining / seg_len)
+		remaining -= seg_len
+	return path[path.size() - 1]
+
+
+func _closest_path_dist(pos: Vector2) -> float:
+	if path.size() < 2:
+		return 0.0
+	var best_dist := 0.0
+	var best_d2 := INF
+	var walked := 0.0
+	for i in range(1, path.size()):
+		var a: Vector2 = path[i - 1]
+		var b: Vector2 = path[i]
+		var ab := b - a
+		var ab_len2 := ab.length_squared()
+		var t := 0.0
+		if ab_len2 > 0.0001:
+			t = clampf((pos - a).dot(ab) / ab_len2, 0.0, 1.0)
+		var proj := a.lerp(b, t)
+		var d2 := pos.distance_squared_to(proj)
+		if d2 < best_d2:
+			best_d2 = d2
+			best_dist = walked + sqrt(ab_len2) * t
+		walked += sqrt(ab_len2)
+	return best_dist
+
+
 func set_path(new_path: PackedVector2Array) -> void:
 	# Flyers keep their air S-lane; maze edits do not repath them.
 	if is_flying:
@@ -132,6 +239,10 @@ func set_path(new_path: PackedVector2Array) -> void:
 	if new_path.is_empty():
 		return
 	path = new_path
+	if is_snake:
+		path_dist = _closest_path_dist(position)
+		position = _position_at_path_dist(path_dist)
+		return
 	# Snap to nearest point index to avoid teleporting backward awkwardly.
 	var best_i := 0
 	var best_d := INF
@@ -200,6 +311,13 @@ func _draw() -> void:
 		draw_colored_polygon(wing, color)
 		draw_circle(Vector2.ZERO, _radius * 0.55, color.lightened(0.15))
 		draw_arc(Vector2.ZERO, _radius + 4.0, 0.0, TAU, 24, Color(0.7, 0.9, 1.0), 2.0)
+	elif is_snake:
+		draw_circle(Vector2.ZERO, _radius, color)
+		draw_circle(Vector2(-_radius * 0.35, 0.0), _radius * 0.72, color.darkened(0.12))
+		if is_boss or snake_index == 0:
+			draw_arc(Vector2.ZERO, _radius + 3.0, 0.0, TAU, 24, Color(0.85, 1.0, 0.35), 2.0)
+			draw_circle(Vector2(_radius * 0.35, -_radius * 0.25), 2.2, Color(0.05, 0.08, 0.05))
+			draw_circle(Vector2(_radius * 0.35, _radius * 0.25), 2.2, Color(0.05, 0.08, 0.05))
 	else:
 		draw_circle(Vector2.ZERO, _radius, color)
 		if is_boss:
