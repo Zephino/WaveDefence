@@ -28,6 +28,7 @@ var _multi_select_mode: bool = false
 ## Command tower pay-per-use aim mode.
 var _aim_ability_id: String = ""
 var _aim_command_tower: Tower = null
+var command_traps: CommandTraps
 
 
 func _ready() -> void:
@@ -78,6 +79,11 @@ func _setup_systems() -> void:
 	build_system.name = "BuildSystem"
 	add_child(build_system)
 	build_system.setup(grid, pathfinder, game_state, enemies, projectiles)
+
+	command_traps = CommandTraps.new()
+	command_traps.name = "CommandTraps"
+	add_child(command_traps)
+	command_traps.setup(grid)
 
 	wave_manager = WaveManager.new()
 	wave_manager.name = "WaveManager"
@@ -147,6 +153,15 @@ func _process(delta: float) -> void:
 	var mouse := get_global_mouse_position()
 	var local_map := mouse - map_offset
 
+	if command_traps:
+		command_traps.tick(delta, enemies)
+		grid.set_path_trap_overlay(command_traps.get_traps_for_draw())
+
+	if not _aim_ability_id.is_empty():
+		_update_command_aim_preview(local_map, mouse)
+	elif grid.show_aim_preview:
+		grid.clear_ability_aim_preview()
+
 	if _awaiting_tower_tap and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_press_hold_time += delta
 		if mouse.distance_to(_press_start_pos) > TAP_MOVE_PX:
@@ -162,11 +177,16 @@ func _process(delta: float) -> void:
 
 	# Desktop hover tooltips; on touch, info is tap/long-press driven.
 	if not _touch_ui:
-		var hovered_tower := build_system.update_hover(local_map)
-		if hovered_tower != null and _is_on_board(local_map) and not _paint_holding and not _awaiting_tower_tap:
-			hud.show_board_tower_tooltip_for(hovered_tower, mouse)
-		elif not hud.is_tooltip_pinned():
-			hud.hide_board_tower_tooltip()
+		if not _aim_ability_id.is_empty() and _is_on_board(local_map):
+			build_system.update_hover(local_map)
+			grid.set_hover(Vector2i(-1, -1), false, false)
+			hud.show_board_ability_tooltip(_aim_ability_id, mouse)
+		else:
+			var hovered_tower := build_system.update_hover(local_map)
+			if hovered_tower != null and _is_on_board(local_map) and not _paint_holding and not _awaiting_tower_tap:
+				hud.show_board_tower_tooltip_for(hovered_tower, mouse)
+			elif not hud.is_tooltip_pinned():
+				hud.hide_board_tower_tooltip()
 	else:
 		build_system.update_hover(local_map)
 
@@ -402,8 +422,16 @@ func _on_command_ability_pressed(ability_id: String) -> void:
 		return
 	_aim_ability_id = ability_id
 	_aim_command_tower = tower
+	build_system.placing_enabled = false
 	var aim := CommandAbilities.aim_mode(ability_id)
-	if aim == "path":
+	if CommandAbilities.places_trap(ability_id):
+		hud.set_status(
+			"Place %s trap (%dg) — click a path tile (green = valid). Esc/right-click cancels." % [
+				CommandAbilities.display_name(ability_id),
+				cost,
+			]
+		)
+	elif aim == "path":
 		hud.set_status(
 			"Aim %s (%dg) — click a path tile. Esc/right-click cancels." % [
 				CommandAbilities.display_name(ability_id),
@@ -412,7 +440,7 @@ func _on_command_ability_pressed(ability_id: String) -> void:
 		)
 	else:
 		hud.set_status(
-			"Aim %s (%dg) — click a board tile near your towers. Esc/right-click cancels." % [
+			"Aim %s (%dg) — click near your towers (green = will buff). Esc/right-click cancels." % [
 				CommandAbilities.display_name(ability_id),
 				cost,
 			]
@@ -436,7 +464,7 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 		hud.set_status("Need %d gold for %s." % [cost, CommandAbilities.display_name(ability_id)])
 		return
 	var cell := grid.world_to_cell(local_map)
-	var result := CommandCaster.cast(ability_id, cell, grid, pathfinder, enemies, projectiles)
+	var result := CommandCaster.cast(ability_id, cell, grid, pathfinder, enemies, projectiles, command_traps)
 	if not bool(result.get("ok", false)):
 		hud.set_status(str(result.get("message", "Can't aim there.")))
 		return
@@ -457,6 +485,30 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 func _clear_command_aim() -> void:
 	_aim_ability_id = ""
 	_aim_command_tower = null
+	build_system.placing_enabled = true
+	if grid:
+		grid.clear_ability_aim_preview()
+
+
+func _update_command_aim_preview(local_map: Vector2, mouse: Vector2) -> void:
+	if grid == null or _aim_ability_id.is_empty():
+		return
+	if not _is_on_board(local_map):
+		grid.clear_ability_aim_preview()
+		return
+	var cell := grid.world_to_cell(local_map)
+	var preview := CommandCaster.preview(
+		_aim_ability_id,
+		cell,
+		grid,
+		pathfinder,
+		command_traps,
+		enemies
+	)
+	var cells: Array = preview.get("cells", [])
+	grid.set_ability_aim_preview(cells, bool(preview.get("valid", false)), true)
+	if _touch_ui:
+		hud.show_board_ability_tooltip(_aim_ability_id, mouse)
 
 
 func _on_upgrade_selected() -> void:
@@ -559,6 +611,9 @@ func _on_map_rotate_requested(wave: int) -> void:
 		child.queue_free()
 	wave_manager.clear_enemies()
 	game_state.begin_next_map_sector(carry_gold)
+	_clear_command_aim()
+	if command_traps:
+		command_traps.clear_all()
 	_apply_run_map(true)
 	build_system.refresh_after_reset()
 	build_system.select_tower_type("gunner")
@@ -663,6 +718,9 @@ func _boot_leaderboard(wave_reached: int) -> void:
 func restart_run() -> void:
 	for child in projectiles.get_children():
 		child.queue_free()
+	_clear_command_aim()
+	if command_traps:
+		command_traps.clear_all()
 	game_state.reset_run(Session.difficulty, Session.game_mode, Session.monster_mode)
 	_apply_run_map(true)
 	build_system.refresh_after_reset()

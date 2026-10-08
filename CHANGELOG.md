@@ -1,4 +1,16 @@
-﻿## Version 00.01.85
+﻿## Version 00.01.86
+Date: 10/08/2026
+Time: 3:55 AM
+
+### Changes
+- Command abilities **Air Strike**, **Barricade Spike**, and **Recon Flare** are placed as **path traps** (green/red aim preview like tower placement); they trigger when enemies cross instead of charging gold on instant misses
+- **Supply Drop** only spends gold when at least one tower will be buffed
+- Added rich **ability tooltips** (`CommandAbilities.tooltip_for`) on sidebar buttons and while aiming, matching tower shop hover detail
+
+### Reason
+Players wanted trap-style ability placement and to stop wasting gold on empty strikes or supply drops with no effect.
+
+## Version 00.01.85
 Date: 10/07/2026
 Time: 11:35 PM
 

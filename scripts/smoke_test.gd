@@ -396,6 +396,10 @@ func _run() -> void:
 		errors.append("airstrike cross should be 5 cells")
 	if CommandAbilities.get_ids().size() < 4:
 		errors.append("command should offer 4 abilities")
+	if not CommandAbilities.places_trap("barricade"):
+		errors.append("barricade should be a path trap")
+	if CommandAbilities.tooltip_for("airstrike").find("gold") < 0:
+		errors.append("ability tooltip should mention cost")
 
 	# Gatling: wave-30 unlock, expensive ultra-fast special.
 	var gatling_def := TowerData.get_def("gatling")

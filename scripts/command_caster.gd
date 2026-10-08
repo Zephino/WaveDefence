@@ -22,32 +22,85 @@ static func enemies_on_cells(enemy_container: Node, grid: GameGrid, cells: Array
 	return hit
 
 
+static func affected_cells(ability_id: String, center: Vector2i) -> Array[Vector2i]:
+	if CommandAbilities.places_trap(ability_id):
+		if ability_id == "barricade":
+			return [center]
+		return CommandAbilities.cross_cells(center)
+	if ability_id == "supply":
+		return _supply_cells(center, int(CommandAbilities.get_def("supply").get("buff_radius_cells", 2)))
+	return [center]
+
+
+static func preview(
+	ability_id: String,
+	cell: Vector2i,
+	grid: GameGrid,
+	pathfinder: Pathfinder,
+	traps: CommandTraps,
+	enemy_container: Node
+) -> Dictionary:
+	var def := CommandAbilities.get_def(ability_id)
+	if def.is_empty():
+		return {"valid": false, "cells": [], "message": "Unknown ability."}
+	if grid == null or not grid.in_bounds(cell):
+		return {"valid": false, "cells": [], "message": "Pick a tile on the board."}
+	var cells := affected_cells(ability_id, cell)
+	var aim := CommandAbilities.aim_mode(ability_id)
+	if aim == "path" and not _is_path_cell(pathfinder, cell):
+		return {"valid": false, "cells": cells, "message": "Pick a tile on the enemy path."}
+	if traps != null and CommandAbilities.places_trap(ability_id) and traps.overlaps_existing(ability_id, cell):
+		return {"valid": false, "cells": cells, "message": "That path tile already has a trap."}
+	if ability_id == "supply":
+		var buffed := _count_supply_targets(cell, grid)
+		if buffed <= 0:
+			return {
+				"valid": false,
+				"cells": cells,
+				"message": "Place near your towers — none in range to buff.",
+			}
+		return {
+			"valid": true,
+			"cells": cells,
+			"message": "Supply Drop will buff %d tower%s." % [buffed, "" if buffed == 1 else "s"],
+		}
+	if CommandAbilities.places_trap(ability_id):
+		var trap_name := CommandAbilities.display_name(ability_id)
+		return {
+			"valid": true,
+			"cells": cells,
+			"message": "Place %s trap — triggers when enemies cross." % trap_name,
+		}
+	return {"valid": false, "cells": cells, "message": "Can't aim there."}
+
+
 static func cast(
 	ability_id: String,
 	cell: Vector2i,
 	grid: GameGrid,
 	pathfinder: Pathfinder,
 	enemy_container: Node,
-	_projectile_container: Node
+	_projectile_container: Node,
+	traps: CommandTraps = null
 ) -> Dictionary:
-	var def := CommandAbilities.get_def(ability_id)
-	if def.is_empty():
-		return {"ok": false, "message": "Unknown ability."}
-	if grid == null or not grid.in_bounds(cell):
-		return {"ok": false, "message": "Pick a tile on the board."}
-	var aim := CommandAbilities.aim_mode(ability_id)
-	if aim == "path" and not _is_path_cell(pathfinder, cell):
-		return {"ok": false, "message": "Pick a tile on the enemy path."}
+	var preview_result := preview(ability_id, cell, grid, pathfinder, traps, enemy_container)
+	if not bool(preview_result.get("valid", false)):
+		return {"ok": false, "message": str(preview_result.get("message", "Can't aim there."))}
+
+	if CommandAbilities.places_trap(ability_id):
+		if traps == null:
+			return {"ok": false, "message": "Traps unavailable."}
+		traps.place(ability_id, cell)
+		var name := CommandAbilities.display_name(ability_id)
+		var dur := float(CommandAbilities.get_def(ability_id).get("trap_duration", 14.0))
+		return {
+			"ok": true,
+			"message": "%s armed on path (%.0fs)." % [name, dur],
+		}
 
 	match ability_id:
-		"airstrike":
-			return _cast_airstrike(cell, grid, enemy_container, def)
 		"supply":
-			return _cast_supply(cell, grid, def)
-		"barricade":
-			return _cast_barricade(cell, grid, enemy_container, def)
-		"flare":
-			return _cast_flare(cell, grid, enemy_container, def)
+			return _cast_supply(cell, grid, CommandAbilities.get_def(ability_id))
 		_:
 			return {"ok": false, "message": "Unknown ability."}
 
@@ -61,19 +114,35 @@ static func _is_path_cell(pathfinder: Pathfinder, cell: Vector2i) -> bool:
 	return false
 
 
-static func _cast_airstrike(cell: Vector2i, grid: GameGrid, enemy_container: Node, def: Dictionary) -> Dictionary:
-	var cells := CommandAbilities.cross_cells(cell)
-	var targets := enemies_on_cells(enemy_container, grid, cells)
-	var dmg := float(def.get("damage", 140.0))
-	var hit := 0
-	for e in targets:
-		# Bosses feel the full strike; creeps still take a solid chunk.
-		var amount := dmg * (1.15 if e.is_boss else 1.0)
-		e.take_damage(amount)
-		hit += 1
-	if hit <= 0:
-		return {"ok": true, "message": "Air Strike missed — no enemies on that cross."}
-	return {"ok": true, "message": "Air Strike hit %d enem%s!" % [hit, "y" if hit == 1 else "ies"]}
+static func _supply_cells(center: Vector2i, radius: int) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for y in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			var c := Vector2i(x, y)
+			if absi(c.x - center.x) + absi(c.y - center.y) <= radius:
+				cells.append(c)
+	return cells
+
+
+static func _count_supply_targets(cell: Vector2i, grid: GameGrid) -> int:
+	var def := CommandAbilities.get_def("supply")
+	var radius := int(def.get("buff_radius_cells", 2))
+	var buffed := 0
+	for y in range(cell.y - radius, cell.y + radius + 1):
+		for x in range(cell.x - radius, cell.x + radius + 1):
+			var c := Vector2i(x, y)
+			if not grid.in_bounds(c):
+				continue
+			if absi(c.x - cell.x) + absi(c.y - cell.y) > radius:
+				continue
+			var t = grid.get_tower_at(c)
+			if t == null or not is_instance_valid(t):
+				continue
+			var tower := t as Tower
+			if TowerData.is_wall(tower.tower_id) or TowerData.is_command(tower.tower_id):
+				continue
+			buffed += 1
+	return buffed
 
 
 static func _cast_supply(cell: Vector2i, grid: GameGrid, def: Dictionary) -> Dictionary:
@@ -97,38 +166,5 @@ static func _cast_supply(cell: Vector2i, grid: GameGrid, def: Dictionary) -> Dic
 			tower.apply_fire_buff(mult, duration)
 			buffed += 1
 	if buffed <= 0:
-		return {"ok": true, "message": "Supply Drop landed — no towers in range to buff."}
+		return {"ok": false, "message": "Place near your towers — none in range to buff."}
 	return {"ok": true, "message": "Supply Drop buffed %d tower%s." % [buffed, "" if buffed == 1 else "s"]}
-
-
-static func _cast_barricade(cell: Vector2i, grid: GameGrid, enemy_container: Node, def: Dictionary) -> Dictionary:
-	var cells: Array[Vector2i] = [cell]
-	var targets := enemies_on_cells(enemy_container, grid, cells)
-	var slow_f := float(def.get("slow_factor", 0.4))
-	var slow_d := float(def.get("slow_duration", 3.0))
-	var dps := float(def.get("dot_dps", 18.0))
-	var dot_d := float(def.get("dot_duration", 3.0))
-	var hit := 0
-	for e in targets:
-		if e.is_flying:
-			continue
-		e.apply_slow(slow_f, slow_d)
-		e.apply_poison(dps, dot_d)
-		hit += 1
-	if hit <= 0:
-		return {"ok": true, "message": "Barricade Spike — no ground enemies on that tile."}
-	return {"ok": true, "message": "Barricade spiked %d ground enem%s." % [hit, "y" if hit == 1 else "ies"]}
-
-
-static func _cast_flare(cell: Vector2i, grid: GameGrid, enemy_container: Node, def: Dictionary) -> Dictionary:
-	var cells := CommandAbilities.cross_cells(cell)
-	var targets := enemies_on_cells(enemy_container, grid, cells)
-	var mult := float(def.get("mark_mult", 1.4))
-	var duration := float(def.get("mark_duration", 4.0))
-	var hit := 0
-	for e in targets:
-		e.apply_mark(mult, duration)
-		hit += 1
-	if hit <= 0:
-		return {"ok": true, "message": "Recon Flare — no enemies marked."}
-	return {"ok": true, "message": "Recon Flare marked %d enem%s." % [hit, "y" if hit == 1 else "ies"]}

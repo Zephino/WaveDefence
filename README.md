@@ -121,7 +121,7 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |
 | Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
-| Command | 100 | Does not shoot. Click it, then **pay gold each time** you use an ability (Air Strike / Supply Drop / Barricade Spike / Recon Flare). Aim path/board tiles when prompted. |
+| Command | 100 | Does not shoot. Select it, pick an ability, then **place path traps** (Air Strike / Barricade / Flare) or **drop supplies** near towers. Gold is spent only on valid placement (traps arm on the path; Supply must buff at least one tower). Hover ability buttons for full tooltips. |
 
 Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns are in `data/command_abilities.gd`.
 
