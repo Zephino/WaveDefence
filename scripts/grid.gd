@@ -20,6 +20,10 @@ var exit_cell: Vector2i = Vector2i(COLS - 1, ROWS / 2)
 var hover_cell: Vector2i = Vector2i(-1, -1)
 var hover_valid: bool = false
 var show_hover: bool = false
+var aim_preview_cells: Array[Vector2i] = []
+var aim_preview_valid: bool = false
+var show_aim_preview: bool = false
+var path_trap_overlay: Array = []
 var path_preview: PackedVector2Array = PackedVector2Array()
 var is_random_layout: bool = false
 
@@ -214,6 +218,27 @@ func set_hover(cell: Vector2i, valid: bool, visible: bool) -> void:
 	queue_redraw()
 
 
+func set_ability_aim_preview(cells: Array, valid: bool, visible: bool) -> void:
+	aim_preview_cells.clear()
+	for c in cells:
+		if c is Vector2i:
+			aim_preview_cells.append(c)
+	aim_preview_valid = valid
+	show_aim_preview = visible
+	queue_redraw()
+
+
+func clear_ability_aim_preview() -> void:
+	show_aim_preview = false
+	aim_preview_cells.clear()
+	queue_redraw()
+
+
+func set_path_trap_overlay(traps: Array) -> void:
+	path_trap_overlay = traps
+	queue_redraw()
+
+
 func set_path_preview(points: PackedVector2Array) -> void:
 	path_preview = points
 	queue_redraw()
@@ -241,10 +266,42 @@ func _draw() -> void:
 	if path_preview.size() >= 2:
 		draw_polyline(path_preview, Color(0.3, 0.85, 0.5, 0.55), 3.0, true)
 
-	if show_hover and in_bounds(hover_cell):
+	if show_hover and in_bounds(hover_cell) and not show_aim_preview:
 		var hrect := Rect2(hover_cell.x * TILE_SIZE, hover_cell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 		var hcolor := Color(0.3, 0.9, 0.4, 0.35) if hover_valid else Color(0.95, 0.25, 0.25, 0.4)
 		draw_rect(hrect, hcolor)
+
+	for trap in path_trap_overlay:
+		if typeof(trap) != TYPE_DICTIONARY:
+			continue
+		var ability_id := str(trap.get("ability_id", ""))
+		var cells: Array = trap.get("cells", [])
+		var tint := Color(0.85, 0.35, 0.25, 0.32)
+		match ability_id:
+			"barricade":
+				tint = Color(0.75, 0.45, 0.3, 0.38)
+			"flare":
+				tint = Color(0.95, 0.75, 0.25, 0.34)
+			"airstrike":
+				tint = Color(0.9, 0.3, 0.22, 0.34)
+		for c_raw in cells:
+			if c_raw is not Vector2i:
+				continue
+			var c: Vector2i = c_raw
+			if not in_bounds(c):
+				continue
+			var trect := Rect2(c.x * TILE_SIZE, c.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+			draw_rect(trect, tint)
+			draw_rect(trect, tint.lightened(0.35), false, 1.5)
+
+	if show_aim_preview:
+		var acolor := Color(0.35, 0.95, 0.55, 0.42) if aim_preview_valid else Color(0.95, 0.3, 0.25, 0.45)
+		for c in aim_preview_cells:
+			if not in_bounds(c):
+				continue
+			var arect := Rect2(c.x * TILE_SIZE, c.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+			draw_rect(arect, acolor)
+			draw_rect(arect, acolor.lightened(0.25), false, 2.0)
 
 	var map_w := COLS * TILE_SIZE
 	var map_h := ROWS * TILE_SIZE

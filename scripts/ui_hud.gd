@@ -227,6 +227,21 @@ func _on_end_run_confirmed() -> void:
 	end_run_confirmed.emit()
 
 
+func show_board_ability_tooltip(ability_id: String, screen_pos: Vector2) -> void:
+	if board_tooltip == null or ability_id.is_empty():
+		return
+	board_tooltip_label.text = CommandAbilities.tooltip_for(ability_id)
+	board_tooltip.reset_size()
+	var tip_size := board_tooltip.get_combined_minimum_size()
+	var pos := screen_pos + Vector2(18, 18)
+	var view := Vector2(GameLayout.VIEW_WIDTH, GameLayout.VIEW_HEIGHT)
+	pos.x = minf(pos.x, view.x - tip_size.x - 8.0)
+	pos.y = minf(pos.y, view.y - tip_size.y - 8.0)
+	board_tooltip.position = pos
+	board_tooltip.visible = true
+	_tooltip_hide_at_msec = 0
+
+
 func show_board_tower_tooltip_for(tower: Tower, screen_pos: Vector2) -> void:
 	if board_tooltip == null:
 		return
@@ -360,7 +375,7 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 			"%s (%d)" % [adef.get("display_name", ability_id), int(adef.get("cost", 0))],
 			ability_h
 		)
-		abtn.tooltip_text = str(adef.get("blurb", ""))
+		abtn.tooltip_text = CommandAbilities.tooltip_for(ability_id)
 		abtn.pressed.connect(func() -> void: command_ability_pressed.emit(ability_id))
 		command_box.add_child(abtn)
 		ability_buttons[ability_id] = abtn
@@ -590,11 +605,14 @@ func _refresh_command_ability_buttons() -> void:
 		if cd > 0.05:
 			btn.text = "%s (%.1fs)" % [name, cd]
 			btn.disabled = true
-			btn.tooltip_text = "%s — cooling down" % str(adef.get("blurb", ""))
+			btn.tooltip_text = "%s\nCooling down (%.1fs left)." % [
+				CommandAbilities.tooltip_for(ability_id),
+				cd,
+			]
 		else:
 			btn.text = "%s (%d)" % [name, cost]
 			btn.disabled = game_state == null or not game_state.can_afford(cost)
-			btn.tooltip_text = "%s (pay each use)" % str(adef.get("blurb", ""))
+			btn.tooltip_text = CommandAbilities.tooltip_for(ability_id)
 
 
 func _process(_delta: float) -> void:

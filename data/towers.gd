@@ -177,7 +177,7 @@ const TYPES := {
 	},
 	"command": {
 		"display_name": "Command",
-		"blurb": "Support hub. Does not shoot. Click it, then buy an ability each time you want to use it (Air Strike, Supply Drop, Barricade, Flare).",
+		"blurb": "Support hub. Does not shoot. Select it, pick an ability, then place traps on the path or drop supplies near towers.",
 		"cost": 100,
 		"damage": 0.0,
 		"range": 0.0,
@@ -401,7 +401,7 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 		lines.append("Unlocks at wave %d" % need_wave)
 	if bool(base.get("is_wall", false)) or bool(base.get("is_command", false)):
 		if bool(base.get("is_command", false)):
-			lines.append("No auto-fire. Select this tower, then buy an ability each use.")
+			lines.append("No auto-fire. Select this tower, pick an ability, then click the board to place.")
 		return "\n".join(lines)
 
 	lines.append("Upgrades: %d/%d stat + final elemental buff" % [upgrade_level, MAX_STAT_UPGRADES])
