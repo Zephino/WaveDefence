@@ -120,6 +120,9 @@ func _loop_paths() -> Dictionary:
 
 
 func _load_music_loops() -> void:
+	# Web plays the same beds through HTMLAudio (Godot's web mixer stays silent).
+	if OS.has_feature("web"):
+		return
 	var paths := _loop_paths()
 	for key in paths:
 		var stream: AudioStreamWAV = null
@@ -324,6 +327,37 @@ func _slider_db(percent: float) -> float:
 	return linear_to_db(percent / 100.0)
 
 
+func _web_music_volume() -> float:
+	var master := clampf(float(UserSettings.master_volume) / 100.0, 0.0, 1.0)
+	var music := clampf(float(UserSettings.music_volume) / 100.0, 0.0, 1.0)
+	var duck := 0.4 if _paused_duck else 1.0
+	return master * music * duck
+
+
+func _js_music(js: String) -> void:
+	if not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval(js, true)
+
+
+func _sync_web_music() -> void:
+	if not OS.has_feature("web"):
+		return
+	var ctx_name := "menu"
+	match _context:
+		MusicContext.GAME_STANDARD:
+			ctx_name = "standard"
+		MusicContext.GAME_SIEGE:
+			ctx_name = "siege"
+		_:
+			ctx_name = "menu"
+	_js_music("if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetVolume(%.4f);WaveDefenceMobile.musicSetContext('%s');}" % [_web_music_volume(), ctx_name])
+	if ctx_name == "standard" or ctx_name == "siege":
+		var floor_v := _boss_floor
+		var intense_mix := clampf(floor_v + _tension_smooth * (1.0 - floor_v), 0.0, 1.0)
+		_js_music("if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetMix(%.4f,%.4f);}" % [1.0 - intense_mix, intense_mix])
+
+
 func _apply_volumes() -> void:
 	var master_idx := AudioServer.get_bus_index("Master")
 	var music_idx := AudioServer.get_bus_index("Music")
@@ -335,6 +369,7 @@ func _apply_volumes() -> void:
 		AudioServer.set_bus_volume_db(music_idx, _slider_db(music_percent))
 	if sfx_idx >= 0:
 		AudioServer.set_bus_volume_db(sfx_idx, _slider_db(UserSettings.sfx_volume))
+	_sync_web_music()
 	_update_music_mix()
 
 
@@ -356,6 +391,10 @@ func _loop_ready(key: String) -> bool:
 
 func _try_play_context(force_restart: bool = false) -> void:
 	if OS.has_feature("web") and not _web_gesture:
+		return
+	if OS.has_feature("web"):
+		_sync_web_music()
+		_pending_play = false
 		return
 	match _context:
 		MusicContext.MENU:
@@ -420,6 +459,8 @@ func _play_loop_pair(
 func _stop_music() -> void:
 	for p in _music_players:
 		p.stop()
+	if OS.has_feature("web"):
+		_js_music("if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetVolume(0);}")
 
 
 func set_gameplay_music_source(enemies: Node2D, wave: int, boss_wave: bool) -> void:
@@ -472,11 +513,16 @@ func _update_music_mix() -> void:
 	if _paused_duck:
 		calm_vol *= 0.4
 		intense_vol *= 0.4
+	if OS.has_feature("web"):
+		_js_music("if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetMix(%.4f,%.4f);}" % [calm_vol, intense_vol])
+		return
 	_music_players[0].volume_db = linear_to_db(maxf(calm_vol, 0.001))
 	_music_players[1].volume_db = linear_to_db(maxf(intense_vol, 0.001))
 
 
 func play_ui() -> void:
+	if OS.has_feature("web"):
+		_js_music("if(window.WaveDefenceMobile&&WaveDefenceMobile.playUiBlip){WaveDefenceMobile.playUiBlip();}")
 	_play_sfx("ui")
 
 

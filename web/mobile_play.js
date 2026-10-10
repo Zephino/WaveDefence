@@ -9,64 +9,287 @@
 	var startGate = null;
 	var deferredPrompt = null;
 	var cssFullscreen = false;
-	var audioContexts = [];
 	var audioUnlocked = false;
+	var TRACKS = {
+		menu: "music/web_loop_01.wav",
+		calm: "music/web_loop_02.wav",
+		intense: "music/web_loop_03.wav",
+		siege_calm: "music/web_loop_04.wav",
+		siege_intense: "music/web_loop_05.wav",
+	};
+	var musicBuffers = {};
+	var musicLoading = {};
+	var musicNodes = {};
+	var musicMasterGain = null;
+	var musicAnalyser = null;
+	var musicVolume = 0.56;
+	var musicContext = "menu";
+	var mixCalm = 1;
+	var mixIntense = 0;
+	var fallbackOsc = null;
+	var lastMusicError = "";
 
-	// Patch early (before Godot boots) so we can resume the engine AudioContext after a tap.
-	(function patchAudioContext() {
-		var Orig = window.AudioContext || window.webkitAudioContext;
-		if (!Orig || Orig.__wdPatched) return;
-		function wrap(Base) {
-			function Patched(options) {
-				var ctx = new Base(options);
-				audioContexts.push(ctx);
-				return ctx;
-			}
-			Patched.prototype = Base.prototype;
-			Patched.__wdPatched = true;
-			try {
-				Object.keys(Base).forEach(function (k) {
-					try { Patched[k] = Base[k]; } catch (e) {}
-				});
-			} catch (e) {}
-			return Patched;
-		}
-		if (window.AudioContext) window.AudioContext = wrap(window.AudioContext);
-		if (window.webkitAudioContext) window.webkitAudioContext = wrap(window.webkitAudioContext);
-	})();
+	function scriptVersion() {
+		var el = document.querySelector('script[src*="mobile_play.js"]');
+		if (!el || !el.src) return "";
+		var m = el.src.match(/[?&]v=([^&]+)/);
+		return m ? m[1] : "";
+	}
+
+	function trackUrl(name) {
+		var path = TRACKS[name];
+		if (!path) return "";
+		var ver = scriptVersion();
+		return ver ? (path + "?v=" + encodeURIComponent(ver)) : path;
+	}
 
 	function resumeOne(ctx) {
 		if (!ctx || ctx.state !== "suspended") return;
 		try { ctx.resume(); } catch (e) {}
 	}
 
-	function resumeAudioContexts() {
-		for (var i = 0; i < audioContexts.length; i++) {
-			resumeOne(audioContexts[i]);
-		}
+	function ensureKickContext() {
 		try {
-			if (window.__wdAudioKick) resumeOne(window.__wdAudioKick);
+			var Ctx = window.AudioContext || window.webkitAudioContext;
+			if (!Ctx) return null;
+			if (!window.__wdAudioKick) {
+				window.__wdAudioKick = new Ctx();
+			}
+			resumeOne(window.__wdAudioKick);
+			return window.__wdAudioKick;
+		} catch (e) {
+			return null;
+		}
+	}
+
+	function ensureMusicGraph() {
+		var ctx = ensureKickContext();
+		if (!ctx) return null;
+		if (!musicMasterGain) {
+			musicMasterGain = ctx.createGain();
+			musicMasterGain.gain.value = musicVolume;
+			musicAnalyser = ctx.createAnalyser();
+			musicAnalyser.fftSize = 256;
+			musicMasterGain.connect(musicAnalyser);
+			musicAnalyser.connect(ctx.destination);
+		}
+		return ctx;
+	}
+
+	function resumeAudioContexts() {
+		resumeOne(window.__wdAudioKick);
+		try {
+			if (window.godotAudioContext) resumeOne(window.godotAudioContext);
 		} catch (e) {}
 	}
 
 	function unlockAudio() {
+		ensureKickContext();
 		resumeAudioContexts();
+	}
+
+	function playStartChirp() {
+		var ctx = ensureKickContext();
+		if (!ctx) return;
 		try {
-			var Ctx = window.AudioContext || window.webkitAudioContext;
-			if (Ctx && !window.__wdAudioKick) {
-				window.__wdAudioKick = new Ctx();
-				var buf = window.__wdAudioKick.createBuffer(1, 1, 22050);
-				var src = window.__wdAudioKick.createBufferSource();
-				src.buffer = buf;
-				src.connect(window.__wdAudioKick.destination);
-				src.start(0);
-			}
-			resumeOne(window.__wdAudioKick);
+			var o = ctx.createOscillator();
+			var g = ctx.createGain();
+			o.type = "triangle";
+			o.frequency.setValueAtTime(330, ctx.currentTime);
+			o.frequency.exponentialRampToValueAtTime(523.25, ctx.currentTime + 0.14);
+			g.gain.setValueAtTime(0.14, ctx.currentTime);
+			g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32);
+			o.connect(g);
+			g.connect(ctx.destination);
+			o.start();
+			o.stop(ctx.currentTime + 0.34);
 		} catch (e) {}
+	}
+
+	function playUiBlip() {
+		var ctx = ensureKickContext();
+		if (!ctx) return;
+		try {
+			var o = ctx.createOscillator();
+			var g = ctx.createGain();
+			o.type = "square";
+			o.frequency.value = 784;
+			g.gain.setValueAtTime(0.07 * musicVolume, ctx.currentTime);
+			g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+			o.connect(g);
+			g.connect(ctx.destination);
+			o.start();
+			o.stop(ctx.currentTime + 0.08);
+		} catch (e) {}
+	}
+
+	function startFallbackPad() {
+		if (fallbackOsc) return;
+		var ctx = ensureMusicGraph();
+		if (!ctx || !musicMasterGain) return;
+		try {
+			var o = ctx.createOscillator();
+			var g = ctx.createGain();
+			o.type = "triangle";
+			o.frequency.value = 196;
+			g.gain.value = 0.12;
+			o.connect(g);
+			g.connect(musicMasterGain);
+			o.start();
+			fallbackOsc = { osc: o, gain: g };
+		} catch (e) {}
+	}
+
+	function stopFallbackPad() {
+		if (!fallbackOsc) return;
+		try { fallbackOsc.osc.stop(); } catch (e) {}
+		try { fallbackOsc.osc.disconnect(); fallbackOsc.gain.disconnect(); } catch (e) {}
+		fallbackOsc = null;
+	}
+
+	function stopTrack(name) {
+		var node = musicNodes[name];
+		if (!node) return;
+		try { node.src.stop(); } catch (e) {}
+		try { node.src.disconnect(); node.gain.disconnect(); } catch (e) {}
+		delete musicNodes[name];
+	}
+
+	function startTrack(name, level) {
+		var ctx = ensureMusicGraph();
+		var buf = musicBuffers[name];
+		if (!ctx || !buf || !musicMasterGain) return false;
+		stopTrack(name);
+		try {
+			var src = ctx.createBufferSource();
+			var g = ctx.createGain();
+			src.buffer = buf;
+			src.loop = true;
+			g.gain.value = Math.max(0, Math.min(1, level));
+			src.connect(g);
+			g.connect(musicMasterGain);
+			src.start(0);
+			musicNodes[name] = { src: src, gain: g, startedAt: ctx.currentTime };
+			stopFallbackPad();
+			return true;
+		} catch (e) {
+			lastMusicError = String(e);
+			return false;
+		}
+	}
+
+	function loadTrack(name) {
+		if (musicBuffers[name] || musicLoading[name]) return musicLoading[name] || Promise.resolve(musicBuffers[name]);
+		var url = trackUrl(name);
+		if (!url) return Promise.resolve(null);
+		var ctx = ensureMusicGraph();
+		if (!ctx) return Promise.resolve(null);
+		musicLoading[name] = fetch(url)
+			.then(function (r) {
+				if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
+				return r.arrayBuffer();
+			})
+			.then(function (ab) {
+				return ctx.decodeAudioData(ab.slice(0));
+			})
+			.then(function (buf) {
+				musicBuffers[name] = buf;
+				delete musicLoading[name];
+				applyMusicMix();
+				return buf;
+			})
+			.catch(function (e) {
+				lastMusicError = String(e && e.message ? e.message : e);
+				delete musicLoading[name];
+				if (name === "menu" || name === "calm" || name === "siege_calm") {
+					startFallbackPad();
+				}
+				return null;
+			});
+		return musicLoading[name];
+	}
+
+	function contextPair(name) {
+		if (name === "standard") return ["calm", "intense"];
+		if (name === "siege") return ["siege_calm", "siege_intense"];
+		return ["menu", null];
+	}
+
+	function applyMusicMix() {
+		var ctx = ensureMusicGraph();
+		if (!ctx || !musicMasterGain) return;
+		musicMasterGain.gain.value = Math.max(0, Math.min(1, musicVolume));
+		var pair = contextPair(musicContext);
+		var wanted = {};
+		wanted[pair[0]] = pair[1] ? mixCalm : 1;
+		if (pair[1]) wanted[pair[1]] = mixIntense;
+		Object.keys(musicNodes).forEach(function (name) {
+			if (!wanted.hasOwnProperty(name)) stopTrack(name);
+		});
+		Object.keys(wanted).forEach(function (name) {
+			var level = wanted[name];
+			if (level <= 0.001) {
+				stopTrack(name);
+				return;
+			}
+			if (!musicBuffers[name]) {
+				loadTrack(name);
+				return;
+			}
+			if (!musicNodes[name]) {
+				startTrack(name, level);
+			} else {
+				musicNodes[name].gain.gain.value = Math.max(0, Math.min(1, level));
+			}
+		});
+	}
+
+	function musicSetContext(name) {
+		if (name === "menu" || name === "standard" || name === "siege") {
+			musicContext = name;
+		} else {
+			musicContext = "menu";
+		}
+		var pair = contextPair(musicContext);
+		loadTrack(pair[0]);
+		if (pair[1]) loadTrack(pair[1]);
+		applyMusicMix();
+	}
+
+	function musicSetMix(calm, intense) {
+		mixCalm = Math.max(0, Math.min(1, Number(calm) || 0));
+		mixIntense = Math.max(0, Math.min(1, Number(intense) || 0));
+		applyMusicMix();
+	}
+
+	function musicSetVolume(v) {
+		musicVolume = Math.max(0, Math.min(1, Number(v) || 0));
+		applyMusicMix();
+	}
+
+	function analyserLevel() {
+		if (!musicAnalyser) return 0;
+		var data = new Uint8Array(musicAnalyser.frequencyBinCount);
+		musicAnalyser.getByteTimeDomainData(data);
+		var sum = 0;
+		for (var i = 0; i < data.length; i++) {
+			var v = (data[i] - 128) / 128;
+			sum += v * v;
+		}
+		return Math.sqrt(sum / data.length);
+	}
+
+	function musicArmAndPlayMenu() {
+		Object.keys(TRACKS).forEach(function (name) {
+			loadTrack(name);
+		});
+		musicSetContext("menu");
 	}
 
 	function unlockAndStartGame() {
 		unlockAudio();
+		playStartChirp();
+		musicArmAndPlayMenu();
 		audioUnlocked = true;
 		window.__wdAudioUnlocked = true;
 		hideStartGate();
@@ -680,6 +903,33 @@
 		unlockAudio: unlockAudio,
 		unlockAndStartGame: unlockAndStartGame,
 		isAudioUnlocked: function () { return !!audioUnlocked; },
+		musicSetContext: musicSetContext,
+		musicSetMix: musicSetMix,
+		musicSetVolume: musicSetVolume,
+		musicStatus: function () {
+			var playing = {};
+			Object.keys(musicNodes).forEach(function (name) {
+				var n = musicNodes[name];
+				playing[name] = {
+					gain: n.gain.gain.value,
+					age: window.__wdAudioKick ? (window.__wdAudioKick.currentTime - n.startedAt) : 0,
+				};
+			});
+			return {
+				unlocked: !!audioUnlocked,
+				context: musicContext,
+				master: musicVolume,
+				mix: [mixCalm, mixIntense],
+				kick: window.__wdAudioKick ? window.__wdAudioKick.state : "none",
+				buffers: Object.keys(musicBuffers),
+				loading: Object.keys(musicLoading),
+				playing: playing,
+				fallback: !!fallbackOsc,
+				level: analyserLevel(),
+				error: lastMusicError,
+			};
+		},
+		playUiBlip: playUiBlip,
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,

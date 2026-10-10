@@ -14,4 +14,4 @@ Rebuild:
 .\export_builds.ps1 -WebOnly
 ```
 
-Click the game canvas once if input seems stuck (browser focus).
+Wait for the game to finish loading, then use **Tap to start** (not the in-game Start button) so the browser can play music. Click the game canvas once if input seems stuck (browser focus).

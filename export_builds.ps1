@@ -240,6 +240,11 @@ if ($doWeb) {
         if (Test-Path $icon192Src) {
             Copy-Item -Force $icon192Src $icon192Dst
         }
+        $musicDst = Join-Path $ProjectRoot "docs\music"
+        New-Item -ItemType Directory -Force -Path $musicDst | Out-Null
+        Get-ChildItem -Path (Join-Path $ProjectRoot "audio\music") -Filter "web_loop_*.wav" | ForEach-Object {
+            Copy-Item -Force $_.FullName (Join-Path $musicDst $_.Name)
+        }
 
         $html = Read-TextFileRetry $htmlPath
         $html = [regex]::Replace($html, '(?s)<script src="mobile_play\.js\?v=[^"]*"></script>\s*', "")
@@ -314,6 +319,9 @@ if ($doWeb) {
             return $false
         }
         if ((Test-Path $icon192Src) -and -not (Test-Path $icon192Dst)) { return $false }
+        foreach ($loopName in @("web_loop_01.wav", "web_loop_02.wav", "web_loop_03.wav", "web_loop_04.wav", "web_loop_05.wav")) {
+            if (-not (Test-Path (Join-Path $ProjectRoot "docs\music\$loopName"))) { return $false }
+        }
         return $true
     }
 

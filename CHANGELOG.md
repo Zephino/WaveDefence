@@ -1,4 +1,16 @@
-﻿## Version 00.02.30
+﻿## Version 00.02.31
+Date: 10/10/2026
+Time: 11:56 AM
+
+### Changes
+- Web **Tap to start** now decodes and plays music through the browser Web Audio API (plus a short start chirp), instead of Godot's silent HTML5 mixer
+- Volume, mute, and menu/game/siege beds still follow the in-game settings; UI clicks also beep through the browser
+- Web export serves `docs/music/web_loop_*.wav` as normal files and no longer packs those beds into the `.pck`
+
+### Reason
+Waiting for the page to load and clicking Start still produced no sound because Godot's web audio driver does not output after a canvas/WASM unlock.
+
+## Version 00.02.30
 Date: 10/10/2026
 Time: 11:49 AM
 
