@@ -22,6 +22,7 @@
 	var musicMasterGain = null;
 	var musicAnalyser = null;
 	var musicVolume = 0.56;
+	var sfxVolume = 0.64;
 	var musicContext = "menu";
 	var mixCalm = 1;
 	var mixIntense = 0;
@@ -89,13 +90,13 @@
 
 	function playUiBlip() {
 		var ctx = ensureKickContext();
-		if (!ctx) return;
+		if (!ctx || sfxVolume <= 0.001) return;
 		try {
 			var o = ctx.createOscillator();
 			var g = ctx.createGain();
 			o.type = "square";
 			o.frequency.value = 784;
-			g.gain.setValueAtTime(0.07 * musicVolume, ctx.currentTime);
+			g.gain.setValueAtTime(0.07 * sfxVolume, ctx.currentTime);
 			g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
 			o.connect(g);
 			g.connect(ctx.destination);
@@ -246,6 +247,10 @@
 	function musicSetVolume(v) {
 		musicVolume = Math.max(0, Math.min(1, Number(v) || 0));
 		applyMusicMix();
+	}
+
+	function sfxSetVolume(v) {
+		sfxVolume = Math.max(0, Math.min(1, Number(v) || 0));
 	}
 
 	function analyserLevel() {
@@ -833,6 +838,7 @@
 		musicSetContext: musicSetContext,
 		musicSetMix: musicSetMix,
 		musicSetVolume: musicSetVolume,
+		sfxSetVolume: sfxSetVolume,
 		musicStatus: function () {
 			var playing = {};
 			Object.keys(musicNodes).forEach(function (name) {
@@ -846,6 +852,7 @@
 				unlocked: !!audioUnlocked,
 				context: musicContext,
 				master: musicVolume,
+				sfx: sfxVolume,
 				mix: [mixCalm, mixIntense],
 				kick: window.__wdAudioKick ? window.__wdAudioKick.state : "none",
 				buffers: Object.keys(musicBuffers),

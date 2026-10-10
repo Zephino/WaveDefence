@@ -1,4 +1,14 @@
-﻿## Version 00.02.33
+﻿## Version 00.02.34
+Date: 10/10/2026
+Time: 12:14 PM
+
+### Changes
+- Web UI/SFX volume is tracked separately from music, so **Mute music** no longer silences button clicks and other sounds
+
+### Reason
+Browser click beeps were scaled by the music gain, so muting music set that gain to zero and killed SFX too.
+
+## Version 00.02.33
 Date: 10/10/2026
 Time: 12:10 PM
 

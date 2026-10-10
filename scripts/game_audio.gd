@@ -336,6 +336,14 @@ func _web_music_volume() -> float:
 	return master * music * duck
 
 
+func _web_sfx_volume() -> float:
+	if UserSettings.is_sfx_muted():
+		return 0.0
+	var master := clampf(float(UserSettings.master_volume) / 100.0, 0.0, 1.0)
+	var sfx := clampf(float(UserSettings.sfx_volume) / 100.0, 0.0, 1.0)
+	return master * sfx
+
+
 func _js_music(js: String) -> void:
 	if not OS.has_feature("web"):
 		return
@@ -353,7 +361,10 @@ func _sync_web_music() -> void:
 			ctx_name = "siege"
 		_:
 			ctx_name = "menu"
-	_js_music("if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetVolume(%.4f);WaveDefenceMobile.musicSetContext('%s');}" % [_web_music_volume(), ctx_name])
+	_js_music(
+		"if(window.WaveDefenceMobile){WaveDefenceMobile.musicSetVolume(%.4f);WaveDefenceMobile.sfxSetVolume(%.4f);WaveDefenceMobile.musicSetContext('%s');}"
+		% [_web_music_volume(), _web_sfx_volume(), ctx_name]
+	)
 	if ctx_name == "standard" or ctx_name == "siege":
 		var floor_v := _boss_floor
 		var intense_mix := clampf(floor_v + _tension_smooth * (1.0 - floor_v), 0.0, 1.0)
