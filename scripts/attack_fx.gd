@@ -6,6 +6,8 @@ extends RefCounted
 static func try_spawn(effect: String, from_global: Vector2, to_global: Vector2, range_px: float, parent: Node) -> void:
 	if parent == null or not UserSettings.is_effects_enabled():
 		return
+	if UserSettings.is_performance_mode():
+		return
 	var max_range := maxf(range_px, 8.0)
 	match effect:
 		"burn":

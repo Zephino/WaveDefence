@@ -1,6 +1,8 @@
 class_name BuildSystem
 extends Node
 
+const SoundHub := preload("res://scripts/sound_hub.gd")
+
 signal selection_changed(tower_id: String)
 signal selected_towers_changed(count: int, sell_total: int)
 ## upgrade_cost / final_cost are totals for all currently eligible selected towers.
@@ -97,16 +99,24 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
 	var cost: int = int(TowerData.get_def(selected_tower_id)["cost"])
 	if not game_state.spend_gold(cost):
 		return false
+	game_state.record_spend(cost)
 
 	if existing and _can_replace_wall(existing):
 		_replace_wall_with_tower(cell, existing)
+		game_state.record_tower_placed(selected_tower_id)
+		SoundHub.play_place()
 		return true
 
 	var tower := Tower.new()
 	tower.setup(selected_tower_id, enemy_container, projectile_container)
 	grid.place_tower(cell, tower)
+	if TowerData.is_wall(selected_tower_id):
+		game_state.record_wall_placed()
+	else:
+		game_state.record_tower_placed(selected_tower_id)
 	pathfinder.rebuild()
 	_refresh_path_preview()
+	SoundHub.play_place()
 	# Placing should not leave the new tower (or prior selection) selected.
 	_clear_placed_selection()
 	return true
@@ -156,8 +166,10 @@ func sell_selected() -> bool:
 		refund_total += TowerData.sell_value_for_tower(tower as Tower)
 		tower.queue_free()
 	game_state.add_gold(refund_total)
+	game_state.record_sell_refund(refund_total)
 	pathfinder.rebuild()
 	_refresh_path_preview()
+	SoundHub.play_sell()
 	_emit_selection()
 	return refund_total > 0 or cells.size() > 0
 
@@ -176,6 +188,7 @@ func upgrade_selected() -> Dictionary:
 			failed_afford += 1
 			continue
 		if game_state.spend_gold(cost) and tower.apply_stat_upgrade():
+			game_state.record_spend(cost)
 			upgraded += 1
 			spent += cost
 		else:
@@ -200,6 +213,8 @@ func apply_final_selected(element_id: String) -> Dictionary:
 			failed_afford += 1
 			continue
 		if game_state.spend_gold(cost) and tower.apply_final_element(element_id):
+			game_state.record_spend(cost)
+			game_state.record_final_element(element_id)
 			applied += 1
 			spent += cost
 		else:

@@ -1,6 +1,8 @@
 class_name UIHud
 extends CanvasLayer
 
+const _WavePreview := preload("res://data/wave_preview.gd")
+
 signal skip_timer_pressed
 signal sell_pressed
 signal deselect_pressed
@@ -10,6 +12,8 @@ signal command_ability_pressed(ability_id: String)
 signal tower_type_selected(tower_id: String)
 signal end_run_confirmed
 signal multi_select_changed(enabled: bool)
+signal pause_pressed
+signal copy_seed_pressed
 
 var game_state: GameState
 var multi_select_enabled: bool = false
@@ -40,6 +44,10 @@ var board_tooltip_label: Label
 var _end_run_overlay: Control
 var _tooltip_hide_at_msec: int = 0
 var _command_tower: Tower = null
+var _ability_was_on_cd: Dictionary = {}
+var boss_hp_label: Label
+var next_wave_brief_label: Label
+var copy_seed_button: Button
 
 
 func setup(p_state: GameState, version_text: String) -> void:
@@ -103,6 +111,22 @@ func _build_ui(version_text: String) -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
 	root.add_child(status_label)
+
+	next_wave_brief_label = Label.new()
+	next_wave_brief_label.position = Vector2(GameLayout.board_origin().x, 58)
+	next_wave_brief_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	next_wave_brief_label.modulate = Color(0.7, 0.78, 0.88)
+	next_wave_brief_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	next_wave_brief_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
+	root.add_child(next_wave_brief_label)
+
+	boss_hp_label = Label.new()
+	boss_hp_label.position = Vector2(640, 36)
+	boss_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boss_hp_label.modulate = Color(1.0, 0.75, 0.85)
+	boss_hp_label.visible = false
+	root.add_child(boss_hp_label)
 
 	var dual_sides := GameLayout.use_dual_sidebars()
 	# Left shop may scroll if the tower list grows; actions stay on the right.
@@ -401,6 +425,15 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	deselect_button.pressed.connect(func() -> void: deselect_pressed.emit())
 	sidebar.add_child(deselect_button)
 
+	var pause_btn := _sidebar_button("Pause", action_h)
+	pause_btn.pressed.connect(func() -> void: pause_pressed.emit())
+	sidebar.add_child(pause_btn)
+
+	copy_seed_button = _sidebar_button("Copy seed", GameLayout.button_height(26.0))
+	copy_seed_button.visible = false
+	copy_seed_button.pressed.connect(func() -> void: copy_seed_pressed.emit())
+	sidebar.add_child(copy_seed_button)
+
 	end_run_button = _sidebar_button("End Run", action_h)
 	end_run_button.tooltip_text = "End this run and check the leaderboard"
 	end_run_button.pressed.connect(show_end_run_confirm)
@@ -489,15 +522,35 @@ func set_status(text: String) -> void:
 	status_label.text = text
 
 
+func set_next_wave_brief(text: String) -> void:
+	if next_wave_brief_label:
+		next_wave_brief_label.text = text
+
+
+func update_boss_hp(name_text: String, ratio: float, visible: bool) -> void:
+	if boss_hp_label == null:
+		return
+	boss_hp_label.visible = visible
+	if not visible:
+		return
+	var pct := int(clampf(ratio, 0.0, 1.0) * 100.0)
+	boss_hp_label.text = "%s  HP %d%%" % [name_text, pct]
+
+
 func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 	match mode:
 		"prep":
 			timer_label.text = "Build freely"
+			if game_state:
+				set_next_wave_brief(_WavePreview.summary_line(1, game_state.game_mode, game_state.monster_mode))
 			skip_button.text = "Start Round"
 			skip_button.disabled = false
 			skip_button.tooltip_text = "Start the build timer, then waves begin"
 		"intermission":
 			timer_label.text = "Next wave: %.1fs" % seconds_left
+			if game_state:
+				var nw := game_state.wave + 1
+				set_next_wave_brief(_WavePreview.summary_line(nw, game_state.game_mode, game_state.monster_mode))
 			skip_button.text = "Skip Timer"
 			skip_button.disabled = not can_skip
 			if can_skip:
@@ -588,6 +641,11 @@ func _refresh_command_ability_buttons() -> void:
 		var name := str(adef.get("display_name", ability_id))
 		var cd := _command_tower.ability_cooldown_left(ability_id)
 		var tip := CommandAbilities.tooltip_for(ability_id)
+		var was_cd := float(_ability_was_on_cd.get(ability_id, 0.0))
+		if was_cd > 0.05 and cd <= 0.05 and not UserSettings.is_performance_mode():
+			btn.modulate = Color(1.3, 1.25, 0.85)
+			btn.create_tween().tween_property(btn, "modulate", Color.WHITE, 0.35)
+		_ability_was_on_cd[ability_id] = cd
 		if cd > 0.05:
 			btn.text = "%s (%.1fs)" % [name, cd]
 			btn.disabled = true
@@ -608,6 +666,8 @@ func refresh_run_labels() -> void:
 		return
 	if difficulty_label:
 		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
+	if copy_seed_button:
+		copy_seed_button.visible = game_state.current_map_seed >= 0
 	if mode_label:
 		if WaveScaler.is_random_mode(game_state.game_mode):
 			mode_label.text = "Map: Random M%d  Seed: %d" % [

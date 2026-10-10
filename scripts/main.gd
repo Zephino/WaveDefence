@@ -1,5 +1,15 @@
 extends Node2D
 
+const _RangeOverlay := preload("res://scripts/range_overlay.gd")
+const _PauseMenuOverlay := preload("res://scripts/pause_menu_overlay.gd")
+const _RunSummaryOverlay := preload("res://scripts/run_summary_overlay.gd")
+const _BoardScreenshot := preload("res://scripts/board_screenshot.gd")
+const _WavePreview := preload("res://data/wave_preview.gd")
+const _Achievements := preload("res://data/achievements.gd")
+const _AchievementStore := preload("res://scripts/achievement_store.gd")
+const _PlayerStats := preload("res://scripts/player_stats.gd")
+const SoundHub := preload("res://scripts/sound_hub.gd")
+
 var game_state: GameState
 var grid: GameGrid
 var pathfinder: Pathfinder
@@ -39,6 +49,11 @@ var _aim_command_tower: Tower = null
 var _panning: bool = false
 var _pan_last_screen: Vector2 = Vector2.ZERO
 var _pan_moved: bool = false
+var _range_overlay: Node2D
+var _pause_menu: Control
+var _game_paused: bool = false
+var _tutorial_step: int = 0
+var _pending_leaderboard_wave: int = -1
 
 
 func _ready() -> void:
@@ -80,6 +95,9 @@ func _setup_world() -> void:
 	_map_camera.name = "MapCamera"
 	_map_camera.enabled = false
 	add_child(_map_camera)
+	_range_overlay = _RangeOverlay.new()
+	_range_overlay.z_index = 5
+	add_child(_range_overlay)
 	_sync_world_positions()
 	_update_map_camera()
 
@@ -93,6 +111,9 @@ func _setup_systems() -> void:
 	game_state.map_layout_mode = Session.map_layout_mode
 	game_state.run_seed = Session.run_seed
 	game_state.current_map_seed = Session.current_map_seed
+	game_state.tutorial_run = Session.tutorial_active
+	if game_state.tutorial_run:
+		game_state.mark_debug_used()
 	add_child(game_state)
 	# Re-apply map now that GameState exists so sector/seed labels stay in sync.
 	_apply_run_map(false)
@@ -114,7 +135,10 @@ func _setup_systems() -> void:
 	wave_manager.spawn_rotate_requested.connect(_on_spawn_rotate_requested)
 
 	grid.tower_removed.connect(func(_c: Vector2i) -> void: wave_manager.repath_living_enemies())
-	grid.tower_placed.connect(func(_c: Vector2i, _t: Node) -> void: wave_manager.repath_living_enemies())
+	grid.tower_placed.connect(func(_c: Vector2i, t: Node) -> void:
+		wave_manager.repath_living_enemies()
+		_on_tower_placed_tutorial(t)
+	)
 
 
 func _setup_ui() -> void:
@@ -136,6 +160,8 @@ func _setup_ui() -> void:
 	build_system.selection_upgrade_changed.connect(hud.update_upgrade_buttons)
 	hud.end_run_confirmed.connect(_on_end_run_confirmed)
 	game_state.game_over.connect(_on_game_over_to_leaderboard)
+	hud.pause_pressed.connect(_toggle_pause)
+	hud.copy_seed_pressed.connect(_copy_map_seed)
 	wave_manager.timer_updated.connect(hud.update_timer)
 	wave_manager.enemies_remaining_changed.connect(hud.update_enemies_remaining)
 	wave_manager.skip_unlock_changed.connect(func(_u: bool) -> void: hud.set_skip_hint_ready())
@@ -155,6 +181,14 @@ func _setup_ui() -> void:
 	hud.refresh_run_labels()
 	_set_start_status()
 	hud.update_timer(0.0, true, "prep")
+	if WaveScaler.is_siege_mode(game_state.game_mode):
+		SoundHub.set_music_context(SoundHub.MUSIC_GAME_SIEGE)
+	else:
+		SoundHub.set_music_context(SoundHub.MUSIC_GAME_STANDARD)
+	SoundHub.unlock()
+	if game_state.tutorial_run:
+		_tutorial_step = 0
+		_refresh_tutorial_status()
 
 
 func _set_start_status() -> void:
@@ -178,6 +212,8 @@ func _set_start_status() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_range_ring()
+	_update_boss_hp_bar()
 	if game_state.is_game_over:
 		_paint_holding = false
 		_paint_enabled = false
@@ -272,7 +308,12 @@ func _handle_key(event: InputEventKey) -> void:
 		KEY_U:
 			_on_upgrade_selected()
 		KEY_ESCAPE:
-			_on_deselect()
+			if _game_paused:
+				_resume_from_pause()
+			elif not _aim_ability_id.is_empty() or build_system.selection_count() > 0:
+				_on_deselect()
+			else:
+				_toggle_pause()
 		KEY_R:
 			restart_run()
 
@@ -697,6 +738,11 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 		hud.set_status("Not enough gold.")
 		return
 	tower.start_ability_cooldown(ability_id, CommandAbilities.cooldown(ability_id))
+	game_state.record_spend(cost)
+	if ability_id == "supplydrop":
+		game_state.supply_drop_used = true
+	if ability_id == "airstrike":
+		game_state.airstrike_trap_hit = true
 	_clear_command_aim()
 	hud.update_command_abilities(tower)
 	hud.set_status("%s (-%d gold). %s" % [
@@ -750,6 +796,9 @@ func _on_final_element_selected(element_id: String) -> void:
 func _on_skip_timer() -> void:
 	if wave_manager.phase == WaveManager.Phase.PREP:
 		if wave_manager.start_round():
+			if game_state.tutorial_run and _tutorial_step == 2:
+				_tutorial_step = 3
+				_refresh_tutorial_status()
 			hud.set_status("Round started — build timer running, then waves begin.")
 		else:
 			hud.set_status("Keep a path open from spawn to exit, then Start Round.")
@@ -792,6 +841,9 @@ func _on_wave_started(wave: int, banner: String) -> void:
 
 
 func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
+	if game_state.tutorial_run and wave >= 1:
+		_finish_tutorial()
+		return
 	hud.set_banner("")
 	if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
 		# Full-clear rotate is handled by map_rotate_requested; early-send waits until the board empties.
@@ -963,12 +1015,190 @@ func _on_game_over_to_leaderboard(wave_reached: int) -> void:
 
 
 func _boot_leaderboard(wave_reached: int) -> void:
-	Session.go_leaderboard(
-		wave_reached,
-		game_state.debug_used,
-		game_state.difficulty,
-		game_state.seeds_for_leaderboard()
+	_pending_leaderboard_wave = wave_reached
+	_show_run_summary(wave_reached)
+
+
+func _show_run_summary(wave_reached: int) -> void:
+	SoundHub.play_game_over()
+	var new_best: bool = _PlayerStats.try_update_best(game_state.difficulty, wave_reached)
+	var stats := game_state.run_stats_dictionary()
+	for aid in _Achievements.check_run_end(game_state, stats):
+		if _AchievementStore.unlock(aid):
+			SoundHub.play_achievement()
+	var coaching := {
+		"new_best": new_best,
+		"coaching_text": _RunSummaryOverlay.build_coaching_text(game_state),
+		"screenshot_cb": _save_maze_screenshot,
+	}
+	var summary: Control = _RunSummaryOverlay.new()
+	add_child(summary)
+	summary.show_summary(game_state, coaching)
+	summary.continued.connect(func() -> void:
+		if game_state.tutorial_run:
+			UserSettings.set_tutorial_completed(true)
+			Session.tutorial_active = false
+			Session.go_menu()
+			return
+		Session.go_leaderboard(
+			wave_reached,
+			game_state.debug_used or game_state.tutorial_run,
+			game_state.difficulty,
+			game_state.seeds_for_leaderboard()
+		)
 	)
+
+
+func _toggle_pause() -> void:
+	if game_state.is_game_over:
+		return
+	if _game_paused:
+		_resume_from_pause()
+	else:
+		_open_pause_menu()
+
+
+func _open_pause_menu() -> void:
+	if _pause_menu != null and is_instance_valid(_pause_menu):
+		return
+	_game_paused = true
+	wave_manager.game_paused = true
+	get_tree().paused = true
+	SoundHub.set_paused_duck(true)
+	_pause_menu = _PauseMenuOverlay.new()
+	_pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
+	var next_w := game_state.wave + 1 if wave_manager.phase != WaveManager.Phase.WAVE else game_state.wave
+	_pause_menu.set_timeline(
+		_WavePreview.timeline_text(next_w, 8, game_state.game_mode)
+	)
+	add_child(_pause_menu)
+	_pause_menu.resume_requested.connect(_resume_from_pause)
+	_pause_menu.quit_to_menu_requested.connect(_quit_to_menu_from_pause)
+	_pause_menu.screenshot_requested.connect(_save_maze_screenshot)
+	_pause_menu.open_settings_requested.connect(_open_pause_settings_stub)
+
+
+func _resume_from_pause() -> void:
+	_game_paused = false
+	wave_manager.game_paused = false
+	get_tree().paused = false
+	SoundHub.set_paused_duck(false)
+	if _pause_menu != null and is_instance_valid(_pause_menu):
+		_pause_menu.queue_free()
+	_pause_menu = null
+
+
+func _quit_to_menu_from_pause() -> void:
+	_resume_from_pause()
+	Session.tutorial_active = false
+	Session.go_menu()
+
+
+func _open_pause_settings_stub() -> void:
+	hud.set_status("Adjust settings from the main menu; pause keeps your run on screen.")
+
+
+func _copy_map_seed() -> void:
+	var seed_val := game_state.current_map_seed
+	if seed_val < 0:
+		return
+	var text := str(seed_val)
+	DisplayServer.clipboard_set(text)
+	hud.set_status("Seed %s copied." % text)
+
+
+func _save_maze_screenshot() -> void:
+	var seed_part := game_state.current_map_seed if game_state.current_map_seed >= 0 else 0
+	var fname := "wave-defence-seed-%d-wave-%d.png" % [seed_part, game_state.wave]
+	var path: String = _BoardScreenshot.save_from_viewport(self, fname)
+	if path != "":
+		hud.set_status("Saved maze image to %s" % path)
+	else:
+		hud.set_status("Could not save image.")
+
+
+func _update_range_ring() -> void:
+	if _range_overlay == null or grid == null:
+		return
+	if not UserSettings.is_show_tower_range():
+		_range_overlay.show_ring = false
+		_range_overlay.queue_redraw()
+		return
+	var range_px := 0.0
+	var center := Vector2.ZERO
+	var sel := build_system.selected_tower_id if build_system else ""
+	if sel != "" and not TowerData.is_wall(sel):
+		var def := TowerData.get_def(sel)
+		range_px = float(def.get("range", 0)) * grid.tile_px()
+		center = grid.cell_to_world_center(grid.hover_cell) if grid.in_bounds(grid.hover_cell) else Vector2.ZERO
+	elif build_system.selection_count() == 1:
+		for t in build_system.selected_towers:
+			if is_instance_valid(t):
+				var tdef := TowerData.get_def(t.tower_id)
+				range_px = float(tdef.get("range", 0)) * grid.tile_px()
+				center = t.position
+				break
+	_range_overlay.show_ring = range_px > 0.0
+	_range_overlay.center = center
+	_range_overlay.radius = range_px
+	_range_overlay.queue_redraw()
+
+
+func _update_boss_hp_bar() -> void:
+	if hud == null or enemies == null:
+		return
+	var best: Enemy = null
+	var best_prog := -1.0
+	for c in enemies.get_children():
+		if c is Enemy:
+			var e := c as Enemy
+			if not e.alive:
+				continue
+			if not e.is_boss and not (e.is_snake and e.snake_index == 0):
+				continue
+			var prog := e.path_progress()
+			if best == null or prog > best_prog:
+				best = e
+				best_prog = prog
+	if best == null:
+		hud.update_boss_hp("", 0.0, false)
+		return
+	var name := "Snake" if best.is_snake else ("Flying boss" if best.is_flying else "Boss")
+	hud.update_boss_hp(name, best.hp / maxf(best.max_hp, 1.0), true)
+
+
+func _on_tower_placed_tutorial(t: Node) -> void:
+	if not game_state.tutorial_run:
+		return
+	if not t is Tower:
+		return
+	var tower := t as Tower
+	if _tutorial_step == 0 and TowerData.is_wall(tower.tower_id):
+		_tutorial_step = 1
+		_refresh_tutorial_status()
+	elif _tutorial_step == 1 and not TowerData.is_wall(tower.tower_id):
+		_tutorial_step = 2
+		_refresh_tutorial_status()
+
+
+func _refresh_tutorial_status() -> void:
+	match _tutorial_step:
+		0:
+			hud.set_status("Tutorial: place a Wall on the path.")
+		1:
+			hud.set_status("Tutorial: place any combat tower on that wall.")
+		2:
+			hud.set_status("Tutorial: press Start Round.")
+		_:
+			hud.set_status("Tutorial: clear wave 1. Skip tutorial in the status area anytime.")
+
+
+func _finish_tutorial() -> void:
+	UserSettings.set_tutorial_completed(true)
+	Session.tutorial_active = false
+	game_state.is_game_over = true
+	hud.set_status("Tutorial complete!")
+	call_deferred("_show_run_summary", 1)
 
 
 func _clear_command_traps() -> void:

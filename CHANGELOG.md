@@ -1,4 +1,60 @@
-﻿## Version 00.01.96
+﻿## Version 00.03.00
+Date: 10/10/2026
+Time: 2:15 AM
+
+### Changes
+- Onboarding: main-menu tooltips; first-run guided tutorial; Settings → Replay Tutorial
+- Procedural music (menu / Classic+Random / Siege) and SFX with Master/Music/SFX sliders; tension rises as enemies near the exit; boss waves use a hotter mix
+- Run summary (coaching stats) before leaderboard; device personal bests; persistent hard achievements (Settings → Achievements)
+- In-game: pause menu with upcoming-wave timeline; build-speed slider (prep/intermission); next-wave briefing; copy seed; tower range ring; boss HP bar; optional enemy HP bars and grid coordinates; performance mode; maze PNG export
+- High-contrast creep outlines; Command ability ready pulse
+
+### Reason
+Ship the onboarding + QoL + meta plan without mid-run saves (roguelike).
+
+## Version 00.02.00
+Date: 10/10/2026
+Time: 1:36 AM
+
+### Changes
+- Main menu uses three columns: Map, Monsters, and Difficulty side by side
+
+### Reason
+Keep difficulty with the other run choices instead of a full-width block below.
+
+## Version 00.01.99
+Date: 10/10/2026
+Time: 1:33 AM
+
+### Changes
+- Center the View Seeds map preview horizontally in the dialog
+
+### Reason
+The preview sat left-aligned while the rest of the controls were centered.
+
+## Version 00.01.98
+Date: 10/10/2026
+Time: 1:32 AM
+
+### Changes
+- View Seeds is a compact no-scroll dialog: shorter chrome, map preview sized to the remaining space
+- Removed the extra Preview button (Randomize / Enter / map-type change refresh the map)
+
+### Reason
+Players asked to drop scrolling in the seed browser by fitting everything on screen.
+
+## Version 00.01.97
+Date: 10/10/2026
+Time: 1:29 AM
+
+### Changes
+- Fix menu popups collapsing to an empty bordered box (ScrollContainer had 0 height)
+- Popups size to their content again; scroll wraps in only when taller than the screen
+
+### Reason
+Settings / View Seeds / Map setup appeared as a dim screen with a blank strip after the on-screen clamp change.
+
+## Version 00.01.96
 Date: 10/10/2026
 Time: 1:25 AM
 

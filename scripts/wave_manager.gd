@@ -1,6 +1,8 @@
 class_name WaveManager
 extends Node
 
+const SoundHub := preload("res://scripts/sound_hub.gd")
+
 signal wave_started(wave: int, banner: String)
 signal wave_cleared(wave: int, kills: int, bonus_gold: int)
 signal enemy_spawned(enemy: Enemy)
@@ -47,6 +49,9 @@ var _spawn_rng := RandomNumberGenerator.new()
 var _wave_is_snake: bool = false
 ## Last spawned snake segment (used to link the next body piece).
 var _snake_tail: Enemy = null
+var game_paused: bool = false
+var _leaks_this_wave: int = 0
+var _flying_boss_wave_active: bool = false
 
 
 func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_enemies: Node) -> void:
@@ -164,8 +169,12 @@ func send_next_wave() -> bool:
 	spawning = true
 	spawn_timer = 0.0
 	kills_this_wave = 0
+	_leaks_this_wave = 0
+	_flying_boss_wave_active = wave > 0 and wave % 15 == 0
 	skip_unlocked = false
 	intermission_left = 0.0
+	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave))
+	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave))
 	wave_started.emit(wave, banner)
 	_emit_timer()
 	_emit_enemies_remaining()
@@ -216,8 +225,12 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	spawning = true
 	spawn_timer = 0.0
 	kills_this_wave = 0
+	_leaks_this_wave = 0
+	_flying_boss_wave_active = wave > 0 and wave % 15 == 0
 	skip_unlocked = false
 	intermission_left = 0.0
+	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave))
+	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave))
 	wave_started.emit(wave, banner)
 	_emit_timer()
 	_emit_enemies_remaining()
@@ -341,11 +354,19 @@ func _make_spawn_spec(
 	return spec
 
 
+func _build_delta(delta: float) -> float:
+	if phase != Phase.INTERMISSION:
+		return delta
+	return delta * UserSettings.get_build_speed_mult()
+
+
 func _process(delta: float) -> void:
+	if game_paused:
+		return
 	if game_state != null and game_state.is_game_over:
 		return
 	if phase == Phase.INTERMISSION:
-		_process_intermission(delta)
+		_process_intermission(_build_delta(delta))
 	elif phase == Phase.WAVE and spawning:
 		_process_spawning(delta)
 
@@ -424,6 +445,7 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 func _on_enemy_died(enemy: Enemy, bounty: int) -> void:
 	game_state.add_gold(bounty)
 	game_state.register_kill()
+	SoundHub.play_kill()
 	if enemy.wave_index == game_state.wave:
 		kills_this_wave += 1
 		_update_skip_unlock()
@@ -432,7 +454,18 @@ func _on_enemy_died(enemy: Enemy, bounty: int) -> void:
 	_check_wave_clear()
 
 
+func _record_wave_milestones(wave: int) -> void:
+	if wave == 15 and game_state.gold >= 500:
+		game_state.peak_gold_wave15 = true
+	if _wave_is_snake and game_state.difficulty >= WaveScaler.Difficulty.MEDIUM and _leaks_this_wave == 0:
+		game_state.snake_cleared_medium_plus = true
+	if _flying_boss_wave_active:
+		game_state.flying_boss_wave_leaks = _leaks_this_wave
+
+
 func _on_enemy_leaked(_enemy: Enemy) -> void:
+	_leaks_this_wave += 1
+	SoundHub.play_leak()
 	game_state.lose_life(1)
 	enemies_alive = maxi(enemies_alive - 1, 0)
 	_emit_enemies_remaining()
@@ -460,6 +493,7 @@ func _check_wave_clear() -> void:
 		var bonus := WaveScaler.wave_clear_bonus(kills, wave)
 		if bonus > 0:
 			game_state.add_gold(bonus)
+		_record_wave_milestones(wave)
 		wave_cleared.emit(wave, kills, bonus)
 		_emit_enemies_remaining()
 		if game_state.is_game_over:

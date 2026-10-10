@@ -26,6 +26,8 @@ var run_seed: int = -1
 var current_map_seed: int = -1
 ## Last seed text typed on the map-setup screen (for Play Again convenience).
 var map_seed_text: String = ""
+## Guided tutorial practice run (leaderboard + achievements off).
+var tutorial_active: bool = false
 
 ## Pending worldwide push (set when the player submits a name after a match).
 var global_push_name: String = ""
@@ -63,6 +65,7 @@ func _notification(what: int) -> void:
 func go_menu() -> void:
 	pending_wave_score = -1
 	pending_debug_used = false
+	tutorial_active = false
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 

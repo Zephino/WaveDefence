@@ -357,6 +357,17 @@ func _draw() -> void:
 			if get_tile(cell) == Tile.BLOCKED:
 				draw_rect(rect.grow(-maxf(4.0, float(ts) * 0.2)), Color(0.28, 0.24, 0.2))
 			draw_rect(rect, Color(0.1, 0.12, 0.16), false, 1.0)
+			if UserSettings.is_show_grid_coordinates() and ts >= 14.0:
+				var label := "%d,%d" % [x, y]
+				draw_string(
+					ThemeDB.fallback_font,
+					Vector2(x * ts + 2.0, y * ts + ts * 0.45),
+					label,
+					HORIZONTAL_ALIGNMENT_LEFT,
+					-1,
+					maxi(8, int(ts * 0.22)),
+					Color(0.55, 0.6, 0.68, 0.85)
+				)
 
 	if path_preview.size() >= 2:
 		draw_polyline(path_preview, Color(0.3, 0.85, 0.5, 0.55), 3.0, true)

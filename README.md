@@ -63,7 +63,7 @@ No addons or extra packages required.
 
 ## Main menu
 
-Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left) and **Monsters** (right) in two columns; then difficulty, leaderboard, settings, and quit.
+Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Monsters**, and **Difficulty** in three columns; then leaderboard, settings, and quit.
 
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
@@ -74,19 +74,31 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
 - **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately (starting gold **350 / 200 / 100**)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
-- **Settings** — opens a small popup:
-  - **Large Controls** — shrinks the board tiles and enlarges buttons/sidebars for all map modes (persists in `user://settings.cfg`)
-  - **Effects** — tower attack visuals (Burn flame, Freeze ice, Poison cloud, Lightning flashes). Off keeps gameplay the same; persists in `user://settings.cfg`
-  - **Fullscreen** (web) — same action as the yellow floating Fullscreen button (top-right); that yellow control stays available in-game
-  - **View Seeds** — preview **Classic Custom / Random / Siege** layouts: type a seed, **Randomize**, see the map + path, then **Use seed** to fill Map setup
+- **Settings** — opens a popup:
+  - **Large Controls**, **Effects**, **Performance mode**, **Show tower range**, **High contrast**, **Show enemy HP bars**, **Show grid coordinates**, **Screenshot watermark**
+  - **Master / Music / SFX** volume sliders (persist in `user://settings.cfg`)
+  - **Build speed** slider **1.0×–2.5×** for prep and intermission timers only (not combat)
+  - **View Seeds** — compact preview of **Classic / Random / Siege** layouts
+  - **Achievements** — hard goals saved on this device (`user://achievements.cfg`)
+  - **Replay Tutorial** — guided Easy Classic practice run (not scored)
+  - **Fullscreen** (web)
+- Hover Map / Monsters / Difficulty buttons for short tooltips.
+- First launch offers **Start Tutorial** or **Skip** (saved in settings).
+- Footer may show your best **Medium** wave on this device.
 - **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
 
-When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
+### Audio
+
+All music and SFX are **procedurally generated in-engine** (no imported third-party recordings). Menu, Standard, and Siege use different beds; music intensifies on boss waves and when creeps get close to the exit. Click any menu button once to unlock audio on web.
+
+When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard**. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
 **Shared scores:** live boards live on the **`data`** branch as [`leaderboard.json`](https://github.com/Zephino/WaveDefence/blob/data/leaderboard.json) (kept off `main` so score updates don’t clutter game history). Clients **read** that file; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes the same path on `data` (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. Until that URL is set, scores **save on this device only** (fetch merges remote into local so empties do not wipe your runs). With upload configured, a qualifying score is pushed on submit and again when you leave the leaderboard if still pending.
 
 ## How to play
 
+- **Pause** — **Esc** or the **Pause** button: resume, upcoming-wave timeline, save maze image, quit to menu (no mid-run save).
+- **Copy seed** — sidebar when a map seed is shown.
 - Select a tower from the left shop, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
 - **Hold left-click and drag** to paint-place many walls/towers in a row.

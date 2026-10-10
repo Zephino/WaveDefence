@@ -31,6 +31,24 @@ var kills_this_map: int = 0
 var map_sector: int = 1
 ## True if the debug menu / debug hotkeys were used this run (blocks leaderboard).
 var debug_used: bool = false
+## Tutorial practice run — no leaderboard / achievements.
+var tutorial_run: bool = false
+
+var total_leaks: int = 0
+var leaks_per_wave: Dictionary = {}
+var walls_placed: int = 0
+var towers_placed: int = 0
+var gold_spent_total: int = 0
+var sell_refund_total: int = 0
+var sell_count: int = 0
+var run_gold_earned: int = 0
+var peak_gold_wave15: bool = false
+var gatling_placed: bool = false
+var distinct_final_elements: Dictionary = {}
+var snake_cleared_medium_plus: bool = false
+var flying_boss_wave_leaks: int = -1
+var supply_drop_used: bool = false
+var airstrike_trap_hit: bool = false
 
 
 func _ready() -> void:
@@ -55,6 +73,22 @@ func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -
 	is_game_over = false
 	god_mode = false
 	debug_used = false
+	tutorial_run = false
+	total_leaks = 0
+	leaks_per_wave.clear()
+	walls_placed = 0
+	towers_placed = 0
+	gold_spent_total = 0
+	sell_refund_total = 0
+	sell_count = 0
+	run_gold_earned = 0
+	peak_gold_wave15 = false
+	gatling_placed = false
+	distinct_final_elements.clear()
+	snake_cleared_medium_plus = false
+	flying_boss_wave_leaks = -1
+	supply_drop_used = false
+	airstrike_trap_hit = false
 	gold_changed.emit(gold)
 	lives_changed.emit(lives)
 	wave_changed.emit(wave)
@@ -105,6 +139,8 @@ func begin_next_map_sector(carry_gold: int) -> void:
 func add_gold(amount: int) -> void:
 	if amount == 0:
 		return
+	if amount > 0:
+		run_gold_earned += amount
 	gold += amount
 	gold_changed.emit(gold)
 
@@ -124,10 +160,68 @@ func can_afford(amount: int) -> bool:
 func lose_life(amount: int = 1) -> void:
 	if is_game_over or god_mode:
 		return
+	total_leaks += amount
+	var w := maxi(wave, 1)
+	leaks_per_wave[w] = int(leaks_per_wave.get(w, 0)) + amount
 	lives = maxi(lives - amount, 0)
 	lives_changed.emit(lives)
 	if lives <= 0:
 		trigger_game_over()
+
+
+func record_sell_refund(refund: int) -> void:
+	sell_refund_total += refund
+	sell_count += 1
+
+
+func record_spend(amount: int) -> void:
+	gold_spent_total += amount
+
+
+func record_wall_placed() -> void:
+	walls_placed += 1
+
+
+func record_tower_placed(tower_id: String) -> void:
+	towers_placed += 1
+	if tower_id == "gatling":
+		gatling_placed = true
+
+
+func record_final_element(element: String) -> void:
+	if element != "":
+		distinct_final_elements[element] = true
+
+
+func leaks_at_or_before(max_wave: int) -> int:
+	var n := 0
+	for k in leaks_per_wave.keys():
+		if int(k) <= max_wave:
+			n += int(leaks_per_wave[k])
+	return n
+
+
+func run_stats_dictionary() -> Dictionary:
+	return {
+		"tutorial": tutorial_run,
+		"highest_wave": highest_wave,
+		"total_leaks": total_leaks,
+		"leaks_per_wave": leaks_per_wave.duplicate(),
+		"leaks_at_or_before_wave": {"10": leaks_at_or_before(10), "20": leaks_at_or_before(20)},
+		"total_kills": total_kills,
+		"walls_placed": walls_placed,
+		"towers_placed": towers_placed,
+		"gold_spent": gold_spent_total,
+		"sell_refund": sell_refund_total,
+		"sell_count": sell_count,
+		"run_gold_earned": run_gold_earned,
+		"economy_king": peak_gold_wave15,
+		"gatling_placed": gatling_placed,
+		"distinct_final_elements": distinct_final_elements.size(),
+		"snake_cleared_medium_plus": snake_cleared_medium_plus,
+		"flying_boss_max_leaks_ok": flying_boss_wave_leaks >= 0 and flying_boss_wave_leaks <= 1,
+		"commando_done": supply_drop_used and airstrike_trap_hit,
+	}
 
 
 func set_wave(value: int) -> void:

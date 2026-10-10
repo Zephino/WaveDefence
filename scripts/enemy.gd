@@ -193,6 +193,13 @@ func _move_snake(delta: float) -> void:
 	position = _position_at_path_dist(path_dist)
 
 
+func path_progress() -> float:
+	var total := _path_total_length()
+	if total <= 0.0:
+		return 0.0
+	return clampf(path_dist / total, 0.0, 1.0)
+
+
 func _path_total_length() -> float:
 	var total := 0.0
 	for i in range(1, path.size()):
@@ -339,8 +346,11 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, _radius, color)
 		if is_boss:
 			draw_arc(Vector2.ZERO, _radius + 3.0, 0.0, TAU, 24, Color(1, 0.85, 0.2), 2.0)
-	# HP bar
-	var bar_w := _radius * 2.2
-	var ratio := clampf(hp / max_hp, 0.0, 1.0)
-	draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w, 3.0), Color(0.1, 0.1, 0.1))
-	draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w * ratio, 3.0), Color(0.2, 0.85, 0.3))
+	if UserSettings.is_show_enemy_hp_bars():
+		var bar_w := _radius * 2.2
+		var thick := 4.0 if is_boss else 3.0
+		var ratio := clampf(hp / max_hp, 0.0, 1.0)
+		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w, thick), Color(0.1, 0.1, 0.1))
+		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w * ratio, thick), Color(0.2, 0.85, 0.3))
+	if UserSettings.is_high_contrast() and monster_type != "":
+		draw_arc(Vector2.ZERO, _radius + 5.0, 0.0, TAU, 12, Color.WHITE, 2.0)
