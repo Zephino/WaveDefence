@@ -63,15 +63,20 @@ No addons or extra packages required.
 
 ## Main menu
 
-On launch you get:
+Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left) and **Monsters** (right) in two columns; then difficulty, leaderboard, settings, and quit.
 
-- **Map** — Classic (fixed layout) or **Random** (shifting maps every **25** waves; towers clear, lives reset, gold from kills on that map)
+- **Map**
+  - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
+  - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
+  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Drag (right/middle mouse, or from a blocked/occupied cell) to pan when the map is bigger than the view
 - **Monsters** — independent of map:
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
-- **Easy / Medium / Hard** — begin a run (starting gold **350 / 200 / 100**)
-- **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Web, PC, Android, and iOS **pull the same worldwide boards** when online (cached locally). Runs that opened/used the debug menu cannot be submitted.
-- **Fullscreen** (web) — request browser fullscreen
+- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately (starting gold **350 / 200 / 100**)
+- **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
+- **Settings**
+  - **Large Controls** — shrinks the board tiles and enlarges buttons/sidebars for all map modes (persists in `user://settings.cfg`; toggle only here)
+  - **Fullscreen** (web) — same action as the yellow floating Fullscreen button (top-right); that yellow control stays available in-game
 - **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
@@ -121,9 +126,9 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |
 | Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
-| Command | 100 | Does not shoot. Click it, then **pay gold each time** you use an ability (Air Strike / Supply Drop / Barricade Spike / Recon Flare). Aim path/board tiles when prompted. |
+| Command | 100 | Does not shoot. Select it, then place **pay-on-place** abilities. Combat ones (Air Strike / Barricade Spike / Recon Flare) arm as **path traps** and only spend gold when placed — they wait for enemies instead of missing. Supply Drop buffs nearby towers on place (no spend if none in range). Hover ability buttons for tower-style tooltips. |
 
-Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns are in `data/command_abilities.gd`.
+Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns/trap modes are in `data/command_abilities.gd`.
 
 Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**.
 

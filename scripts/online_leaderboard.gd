@@ -51,18 +51,26 @@ func flush_pending_if_online() -> bool:
 	return await push_score(
 		str(pending.get("name", "")),
 		int(pending.get("wave", 0)),
-		int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM))
+		int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM)),
+		LeaderboardStore.normalize_seeds(pending.get("seeds", []))
 	)
 
 
-func queue_pending_score(player_name: String, wave: int, difficulty: int) -> void:
+func queue_pending_score(
+	player_name: String,
+	wave: int,
+	difficulty: int,
+	seeds: Array = []
+) -> void:
 	var name := LeaderboardStore.sanitize_name(player_name)
 	if name.is_empty() or wave <= 0:
 		return
+	var cleaned_seeds := LeaderboardStore.normalize_seeds(seeds)
 	var data := {
 		"name": name,
 		"wave": wave,
 		"difficulty": difficulty,
+		"seeds": cleaned_seeds,
 		"needed": true,
 		"done": false,
 	}
@@ -70,6 +78,7 @@ func queue_pending_score(player_name: String, wave: int, difficulty: int) -> voi
 	Session.global_push_name = name
 	Session.global_push_wave = wave
 	Session.global_push_difficulty = difficulty
+	Session.global_push_seeds = cleaned_seeds.duplicate()
 	Session.global_push_needed = true
 	Session.global_push_done = false
 
@@ -79,6 +88,7 @@ func clear_pending() -> void:
 		DirAccess.remove_absolute(PENDING_PATH)
 	Session.global_push_name = ""
 	Session.global_push_wave = -1
+	Session.global_push_seeds.clear()
 	Session.global_push_needed = false
 	Session.global_push_done = false
 
@@ -95,7 +105,12 @@ func load_pending() -> Dictionary:
 	return data
 
 
-func push_score(player_name: String, wave: int, difficulty: int) -> bool:
+func push_score(
+	player_name: String,
+	wave: int,
+	difficulty: int,
+	seeds: Array = []
+) -> bool:
 	if not OnlineConfig.can_post():
 		push_finished.emit(false)
 		return false
@@ -103,11 +118,14 @@ func push_score(player_name: String, wave: int, difficulty: int) -> bool:
 	if name.is_empty() or wave <= 0 or wave > OnlineConfig.MAX_WAVE_SANITY:
 		push_finished.emit(false)
 		return false
+	var cleaned_seeds := LeaderboardStore.normalize_seeds(seeds)
 	var body := {
 		"name": name,
 		"wave": wave,
 		"difficulty": LeaderboardStore.difficulty_key(difficulty),
 	}
+	if not cleaned_seeds.is_empty():
+		body["seeds"] = cleaned_seeds
 	var ok := await _enqueue_and_wait({"kind": "post", "body": body, "difficulty": difficulty})
 	return ok
 
@@ -218,7 +236,11 @@ func _apply_remote_boards(text: String) -> bool:
 	var data = JSON.parse_string(text.strip_edges())
 	if typeof(data) != TYPE_DICTIONARY:
 		return false
-	# Without a POST API, remote replace would wipe local submits (empty GitHub file).
+	# Never wipe local boards with a completely empty remote (stale GitHub file, etc.).
+	if _remote_boards_empty(data):
+		return LeaderboardStore.merge_boards_from_remote(data)
+	# With upload configured, Worker/KV is source of truth → replace.
+	# Without upload, merge so local scores survive empty GitHub files.
 	var ok: bool
 	if OnlineConfig.can_post():
 		ok = LeaderboardStore.replace_boards_from_remote(data)
@@ -226,6 +248,14 @@ func _apply_remote_boards(text: String) -> bool:
 	else:
 		ok = LeaderboardStore.merge_boards_from_remote(data)
 	return ok
+
+
+func _remote_boards_empty(data: Dictionary) -> bool:
+	for key in LeaderboardStore.BOARD_KEYS:
+		var arr = data.get(key, [])
+		if typeof(arr) == TYPE_ARRAY and not (arr as Array).is_empty():
+			return false
+	return true
 
 
 ## Keep an unsynced pending score visible after a remote replace.
@@ -238,6 +268,7 @@ func _reapply_pending_local() -> void:
 	var name := LeaderboardStore.sanitize_name(str(pending.get("name", "")))
 	var wave := int(pending.get("wave", 0))
 	var difficulty := int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM))
+	var seeds := LeaderboardStore.normalize_seeds(pending.get("seeds", []))
 	if name.is_empty() or wave <= 0:
 		return
-	LeaderboardStore.add_score(name, wave, difficulty)
+	LeaderboardStore.add_score(name, wave, difficulty, seeds)

@@ -13,6 +13,13 @@ var wave: int = 0
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
 var game_mode: int = WaveScaler.GameMode.CLASSIC
 var monster_mode: int = WaveScaler.MonsterMode.CLASSIC
+var map_layout_mode: int = WaveScaler.MapLayoutMode.STANDARD
+## Base seed for Classic custom / Random run.
+var run_seed: int = -1
+## Layout seed for the active map (HUD + Classic replay).
+var current_map_seed: int = -1
+## All map seeds used this run (Random sectors / Classic custom), in order.
+var map_seeds_used: Array = []
 var god_mode: bool = false
 var is_game_over: bool = false
 var highest_wave: int = 0
@@ -44,6 +51,7 @@ func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -
 	total_kills = 0
 	kills_this_map = 0
 	map_sector = 1
+	map_seeds_used.clear()
 	is_game_over = false
 	god_mode = false
 	debug_used = false
@@ -51,6 +59,29 @@ func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -
 	lives_changed.emit(lives)
 	wave_changed.emit(wave)
 	restarted.emit()
+
+
+func set_map_seeds(p_run_seed: int, p_map_seed: int, p_layout_mode: int = -1) -> void:
+	run_seed = p_run_seed
+	current_map_seed = p_map_seed
+	if p_layout_mode >= 0:
+		map_layout_mode = p_layout_mode
+	record_map_seed(p_map_seed)
+
+
+func record_map_seed(seed_value: int) -> void:
+	if seed_value < 0:
+		return
+	if not map_seeds_used.is_empty() and int(map_seeds_used[map_seeds_used.size() - 1]) == seed_value:
+		return
+	map_seeds_used.append(seed_value)
+
+
+func seeds_for_leaderboard() -> Array:
+	var out: Array = []
+	for s in map_seeds_used:
+		out.append(int(s))
+	return out
 
 
 func mark_debug_used() -> void:

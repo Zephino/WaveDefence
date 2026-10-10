@@ -401,7 +401,8 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 		lines.append("Unlocks at wave %d" % need_wave)
 	if bool(base.get("is_wall", false)) or bool(base.get("is_command", false)):
 		if bool(base.get("is_command", false)):
-			lines.append("No auto-fire. Select this tower, then buy an ability each use.")
+			lines.append("No auto-fire. Select this tower, then place pay-per-use ability traps.")
+			lines.append("Hover each ability button for full stats (like other towers).")
 		return "\n".join(lines)
 
 	lines.append("Upgrades: %d/%d stat + final elemental buff" % [upgrade_level, MAX_STAT_UPGRADES])

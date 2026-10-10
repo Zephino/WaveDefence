@@ -5,9 +5,12 @@ func _init() -> void:
 
 
 func _run() -> void:
-	# Use the real save path but clear before/after so player data is not left polluted.
-	if FileAccess.file_exists(LeaderboardStore.SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(LeaderboardStore.SAVE_PATH))
+	# Isolate tests from the player's real leaderboard file.
+	var real_path := LeaderboardStore.SAVE_PATH
+	var test_path := "user://leaderboard_test_tmp.json"
+	LeaderboardStore.SAVE_PATH = test_path
+	if FileAccess.file_exists(test_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
 
 	var errors: Array[String] = []
 	if LeaderboardStore.qualifies(1, WaveScaler.Difficulty.MEDIUM) != true:
@@ -56,6 +59,23 @@ func _run() -> void:
 	if not LeaderboardStore.qualifies(int(easy[LeaderboardStore.MAX_ENTRIES - 1]["wave"]), WaveScaler.Difficulty.EASY):
 		errors.append("tie with last place should qualify")
 
+	# Seeds persist on entries; multi-seed summary helpers.
+	LeaderboardStore.add_score("Seedy", 33, WaveScaler.Difficulty.MEDIUM, [111, 222, 333])
+	var with_seeds := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM)
+	var found_seeds := false
+	for e in with_seeds:
+		if str(e.get("name", "")) == "Seedy":
+			var seeds: Array = LeaderboardStore.normalize_seeds(e.get("seeds", []))
+			if seeds.size() == 3 and int(seeds[0]) == 111 and int(seeds[2]) == 333:
+				found_seeds = true
+			if LeaderboardStore.format_seeds_summary(seeds) != "Seeds ×3":
+				errors.append("multi-seed summary wrong: %s" % LeaderboardStore.format_seeds_summary(seeds))
+			break
+	if not found_seeds:
+		errors.append("leaderboard entry should keep seeds array")
+	if LeaderboardStore.format_seeds_summary([9]) != "Seed 9":
+		errors.append("single seed summary wrong")
+
 	# Merge must keep local scores when remote is empty (upload not configured).
 	LeaderboardStore.add_score("KeepMe", 42, WaveScaler.Difficulty.MEDIUM)
 	if not LeaderboardStore.merge_boards_from_remote({"easy": [], "medium": [], "hard": []}):
@@ -69,9 +89,10 @@ func _run() -> void:
 	if not kept:
 		errors.append("merge with empty remote must keep local KeepMe score")
 
-	# Cleanup test save
-	if FileAccess.file_exists(LeaderboardStore.SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(LeaderboardStore.SAVE_PATH))
+	# Cleanup test save only (never the player's real boards).
+	if FileAccess.file_exists(test_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
+	LeaderboardStore.SAVE_PATH = real_path
 
 	if errors.is_empty():
 		print("LEADERBOARD_TEST_OK")

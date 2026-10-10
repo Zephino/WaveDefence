@@ -191,7 +191,7 @@ func _build_end_run_confirm(root: Control) -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_child(row)
 
-	var btn_h := 48.0 if GameLayout.use_touch_ui() else 40.0
+	var btn_h := GameLayout.button_height(40.0)
 	var cancel := Button.new()
 	cancel.text = "Cancel"
 	cancel.focus_mode = Control.FOCUS_NONE
@@ -360,7 +360,7 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 			"%s (%d)" % [adef.get("display_name", ability_id), int(adef.get("cost", 0))],
 			ability_h
 		)
-		abtn.tooltip_text = str(adef.get("blurb", ""))
+		abtn.tooltip_text = CommandAbilities.tooltip_for(ability_id)
 		abtn.pressed.connect(func() -> void: command_ability_pressed.emit(ability_id))
 		command_box.add_child(abtn)
 		ability_buttons[ability_id] = abtn
@@ -587,14 +587,15 @@ func _refresh_command_ability_buttons() -> void:
 		var cost := int(adef.get("cost", 0))
 		var name := str(adef.get("display_name", ability_id))
 		var cd := _command_tower.ability_cooldown_left(ability_id)
+		var tip := CommandAbilities.tooltip_for(ability_id)
 		if cd > 0.05:
 			btn.text = "%s (%.1fs)" % [name, cd]
 			btn.disabled = true
-			btn.tooltip_text = "%s — cooling down" % str(adef.get("blurb", ""))
+			btn.tooltip_text = "%s\n\nCooling down…" % tip
 		else:
 			btn.text = "%s (%d)" % [name, cost]
 			btn.disabled = game_state == null or not game_state.can_afford(cost)
-			btn.tooltip_text = "%s (pay each use)" % str(adef.get("blurb", ""))
+			btn.tooltip_text = tip
 
 
 func _process(_delta: float) -> void:
@@ -609,9 +610,20 @@ func refresh_run_labels() -> void:
 		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
 	if mode_label:
 		if WaveScaler.is_random_mode(game_state.game_mode):
-			mode_label.text = "Map: Random M%d" % game_state.map_sector
+			mode_label.text = "Map: Random M%d  Seed: %d" % [
+				game_state.map_sector,
+				game_state.current_map_seed,
+			]
+			mode_label.tooltip_text = "Paste this seed into Classic → Custom layout to replay this map."
+		elif WaveScaler.is_siege_mode(game_state.game_mode):
+			mode_label.text = "Map: Siege"
+			mode_label.tooltip_text = ""
+		elif WaveScaler.is_custom_layout(game_state.map_layout_mode):
+			mode_label.text = "Map: Classic  Seed: %d" % game_state.current_map_seed
+			mode_label.tooltip_text = "Custom layout — fixed for this run."
 		else:
 			mode_label.text = "Map: Classic"
+			mode_label.tooltip_text = ""
 	if monsters_label:
 		monsters_label.text = "Monsters: %s" % WaveScaler.monster_mode_label(game_state.monster_mode)
 		if WaveScaler.is_randomize_monsters(game_state.monster_mode):

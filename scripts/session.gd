@@ -14,10 +14,18 @@ var pending_debug_used: bool = false
 var pending_difficulty: int = WaveScaler.Difficulty.MEDIUM
 ## Selected run difficulty (WaveScaler.Difficulty). Kept across Play Again.
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
-## Classic (fixed map) or Random (shifting maps). Kept across Play Again.
+## Classic / Random / Siege map mode. Kept across Play Again.
 var game_mode: int = WaveScaler.GameMode.CLASSIC
 ## Classic (formula spawns) or Randomize (elemental monster types). Kept across Play Again.
 var monster_mode: int = WaveScaler.MonsterMode.CLASSIC
+## Classic: STANDARD corridor vs CUSTOM seeded layout. Random ignores (always generator).
+var map_layout_mode: int = WaveScaler.MapLayoutMode.STANDARD
+## Base seed for the run (Classic custom / Random). -1 until resolved at start.
+var run_seed: int = -1
+## Layout seed currently in play (shown in HUD; paste into Classic Custom to replay).
+var current_map_seed: int = -1
+## Last seed text typed on the map-setup screen (for Play Again convenience).
+var map_seed_text: String = ""
 
 ## Pending worldwide push (set when the player submits a name after a match).
 var global_push_name: String = ""
@@ -25,6 +33,10 @@ var global_push_wave: int = -1
 var global_push_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var global_push_needed: bool = false
 var global_push_done: bool = false
+## Map seeds from the finished run (for leaderboard submit).
+var pending_map_seeds: Array = []
+## Seeds attached to the pending global push payload.
+var global_push_seeds: Array = []
 
 ## True on mobile web (CSS landscape helper applies).
 var _web_mobile_play: bool = false
@@ -57,7 +69,10 @@ func go_menu() -> void:
 func go_game(
 	selected_difficulty: int = -1,
 	selected_mode: int = -1,
-	selected_monster_mode: int = -1
+	selected_monster_mode: int = -1,
+	selected_layout_mode: int = -1,
+	selected_run_seed: int = -2,
+	selected_seed_text: String = "\u0001"
 ) -> void:
 	if selected_difficulty >= 0:
 		difficulty = selected_difficulty
@@ -65,14 +80,28 @@ func go_game(
 		game_mode = selected_mode
 	if selected_monster_mode >= 0:
 		monster_mode = selected_monster_mode
+	if selected_layout_mode >= 0:
+		map_layout_mode = selected_layout_mode
+	# -2 means "leave unchanged" (Play Again); -1 means roll at game start.
+	if selected_run_seed >= -1:
+		run_seed = selected_run_seed
+		current_map_seed = -1
+	if selected_seed_text != "\u0001":
+		map_seed_text = selected_seed_text
 	pending_wave_score = -1
 	pending_debug_used = false
 	get_tree().change_scene_to_file(GAME_SCENE)
 
 
-func go_leaderboard(wave_score: int = -1, debug_used: bool = false, run_difficulty: int = -1) -> void:
+func go_leaderboard(
+	wave_score: int = -1,
+	debug_used: bool = false,
+	run_difficulty: int = -1,
+	map_seeds: Array = []
+) -> void:
 	pending_wave_score = wave_score
 	pending_debug_used = debug_used and wave_score > 0
+	pending_map_seeds = map_seeds.duplicate()
 	if run_difficulty >= 0:
 		pending_difficulty = run_difficulty
 	elif wave_score > 0:

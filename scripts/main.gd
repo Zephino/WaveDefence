@@ -10,7 +10,11 @@ var debug_panel: DebugPanel
 
 var enemies: Node2D
 var projectiles: Node2D
+var traps: Node2D
 var map_offset: Vector2 = GameLayout.board_origin()
+## Scroll into a larger map (Siege / oversized boards). World pos = map_offset - map_pan.
+var map_pan: Vector2 = Vector2.ZERO
+var _map_camera: Camera2D
 
 ## Hold left mouse / finger to paint-place towers/walls across cells.
 var _paint_holding: bool = false
@@ -28,9 +32,14 @@ var _multi_select_mode: bool = false
 ## Command tower pay-per-use aim mode.
 var _aim_ability_id: String = ""
 var _aim_command_tower: Tower = null
+## Board pan (Siege / large maps).
+var _panning: bool = false
+var _pan_last_screen: Vector2 = Vector2.ZERO
+var _pan_moved: bool = false
 
 
 func _ready() -> void:
+	UserSettings.ensure_loaded()
 	_touch_ui = GameLayout.use_touch_ui()
 	_setup_world()
 	_setup_systems()
@@ -49,19 +58,27 @@ func _setup_world() -> void:
 
 	grid = GameGrid.new()
 	grid.name = "GameGrid"
-	grid.position = map_offset
 	add_child(grid)
 	_apply_run_map(false)
 
 	enemies = Node2D.new()
 	enemies.name = "Enemies"
-	enemies.position = map_offset
 	add_child(enemies)
 
 	projectiles = Node2D.new()
 	projectiles.name = "Projectiles"
-	projectiles.position = map_offset
 	add_child(projectiles)
+
+	traps = Node2D.new()
+	traps.name = "CommandTraps"
+	add_child(traps)
+
+	_map_camera = Camera2D.new()
+	_map_camera.name = "MapCamera"
+	_map_camera.enabled = false
+	add_child(_map_camera)
+	_sync_world_positions()
+	_update_map_camera()
 
 
 func _setup_systems() -> void:
@@ -70,7 +87,12 @@ func _setup_systems() -> void:
 	game_state.difficulty = Session.difficulty
 	game_state.game_mode = Session.game_mode
 	game_state.monster_mode = Session.monster_mode
+	game_state.map_layout_mode = Session.map_layout_mode
+	game_state.run_seed = Session.run_seed
+	game_state.current_map_seed = Session.current_map_seed
 	add_child(game_state)
+	# Re-apply map now that GameState exists so sector/seed labels stay in sync.
+	_apply_run_map(false)
 
 	pathfinder = Pathfinder.new(grid)
 
@@ -86,6 +108,7 @@ func _setup_systems() -> void:
 	wave_manager.wave_started.connect(_on_wave_started)
 	wave_manager.wave_cleared.connect(_on_wave_cleared)
 	wave_manager.map_rotate_requested.connect(_on_map_rotate_requested)
+	wave_manager.spawn_rotate_requested.connect(_on_spawn_rotate_requested)
 
 	grid.tower_removed.connect(func(_c: Vector2i) -> void: wave_manager.repath_living_enemies())
 	grid.tower_placed.connect(func(_c: Vector2i, _t: Node) -> void: wave_manager.repath_living_enemies())
@@ -127,13 +150,28 @@ func _setup_ui() -> void:
 
 	wave_manager.begin_run()
 	hud.refresh_run_labels()
+	_set_start_status()
+	hud.update_timer(0.0, true, "prep")
+
+
+func _set_start_status() -> void:
 	if WaveScaler.is_random_mode(game_state.game_mode):
-		hud.set_status("Random map %d — build a path, then Start Round." % game_state.map_sector)
+		hud.set_status(
+			"Random map %d (seed %d) — build a path, then Start Round." % [
+				game_state.map_sector,
+				game_state.current_map_seed,
+			]
+		)
+	elif WaveScaler.is_siege_mode(game_state.game_mode):
+		hud.set_status("Siege — defend the center. Drag (RMB/middle/blocked cell) to pan. Start Round when ready.")
+	elif WaveScaler.is_custom_layout(game_state.map_layout_mode):
+		hud.set_status(
+			"Classic custom map (seed %d) — fixed all run. Build, then Start Round." % game_state.current_map_seed
+		)
 	elif _touch_ui:
 		hud.set_status("Touch: drag to place, long-press tower to multi-select, then Start Round.")
 	else:
 		hud.set_status("Build your maze, then press Start Round.")
-	hud.update_timer(0.0, true, "prep")
 
 
 func _process(delta: float) -> void:
@@ -141,11 +179,30 @@ func _process(delta: float) -> void:
 		_paint_holding = false
 		_paint_enabled = false
 		_awaiting_tower_tap = false
+		_panning = false
 		hud.hide_board_tower_tooltip()
 		return
 	hud.tick_tooltips()
 	var mouse := get_global_mouse_position()
-	var local_map := mouse - map_offset
+	var local_map := _screen_to_map(mouse)
+
+	if _panning:
+		if (
+			Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE)
+			or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+			or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		):
+			var delta_screen := mouse - _pan_last_screen
+			if delta_screen.length_squared() > 0.5:
+				_pan_moved = true
+				map_pan -= delta_screen
+				_clamp_map_pan()
+				_sync_world_positions()
+				_update_map_camera()
+				_pan_last_screen = mouse
+		else:
+			_panning = false
+		return
 
 	if _awaiting_tower_tap and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_press_hold_time += delta
@@ -163,7 +220,7 @@ func _process(delta: float) -> void:
 	# Desktop hover tooltips; on touch, info is tap/long-press driven.
 	if not _touch_ui:
 		var hovered_tower := build_system.update_hover(local_map)
-		if hovered_tower != null and _is_on_board(local_map) and not _paint_holding and not _awaiting_tower_tap:
+		if hovered_tower != null and _is_on_board_view(mouse) and not _paint_holding and not _awaiting_tower_tap:
 			hud.show_board_tower_tooltip_for(hovered_tower, mouse)
 		elif not hud.is_tooltip_pinned():
 			hud.hide_board_tower_tooltip()
@@ -218,22 +275,45 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 	if game_state.is_game_over:
 		return
 
-	if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-		var local_map := get_global_mouse_position() - map_offset
-		if not _aim_ability_id.is_empty() or _is_on_board(local_map) or build_system.selection_count() > 0:
-			_on_deselect()
+	var screen := get_global_mouse_position()
+
+	if event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed and _map_needs_pan() and _is_on_board_view(screen):
+			_begin_pan(screen)
 			get_viewport().set_input_as_handled()
+		elif not event.pressed:
+			_panning = false
+		return
+
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			if _map_needs_pan() and _is_on_board_view(screen):
+				_begin_pan(screen)
+				get_viewport().set_input_as_handled()
+				return
+			var local_map := _screen_to_map(screen)
+			if not _aim_ability_id.is_empty() or _is_on_map(local_map) or build_system.selection_count() > 0:
+				_on_deselect()
+				get_viewport().set_input_as_handled()
+		else:
+			if _panning:
+				var was_drag := _pan_moved
+				_panning = false
+				if not was_drag:
+					_on_deselect()
+				get_viewport().set_input_as_handled()
 		return
 
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 
 	if not event.pressed:
+		if _panning:
+			_panning = false
 		_finish_pointer_press()
 		return
 
-	var local_map := get_global_mouse_position() - map_offset
-	if not _is_on_board(local_map):
+	if not _is_on_board_view(screen):
 		# Tap outside the board clears selection on touch devices.
 		if _touch_ui and (build_system.selection_count() > 0 or not _aim_ability_id.is_empty()):
 			_on_deselect()
@@ -241,14 +321,20 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 		return
 	get_viewport().set_input_as_handled()
 
+	var local_map := _screen_to_map(screen)
 	if not _aim_ability_id.is_empty():
 		_resolve_command_aim(local_map)
+		return
+
+	# Pan from blocked / occupied cells when the map is larger than the view.
+	if _map_needs_pan() and _can_start_pan_at(local_map) and not _is_additive_select():
+		_begin_pan(screen)
 		return
 
 	var additive := event.ctrl_pressed or event.shift_pressed or _multi_select_mode
 	_paint_holding = true
 	_last_paint_cell = Vector2i(-999, -999)
-	_press_start_pos = get_global_mouse_position()
+	_press_start_pos = screen
 	_press_hold_time = 0.0
 	_long_press_triggered = false
 
@@ -291,8 +377,8 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 
 
 func _finish_pointer_press() -> void:
-	var local_map := get_global_mouse_position() - map_offset
-	if _awaiting_tower_tap and not _long_press_triggered and _is_on_board(local_map):
+	var local_map := _screen_to_map(get_global_mouse_position())
+	if _awaiting_tower_tap and not _long_press_triggered and _is_on_map(local_map):
 		build_system.try_place_at(local_map, false)
 		var cell := grid.world_to_cell(local_map)
 		var tower = grid.get_tower_at(cell)
@@ -308,11 +394,104 @@ func _finish_pointer_press() -> void:
 	_press_hold_time = 0.0
 
 
-func _is_on_board(local_map: Vector2) -> bool:
+func _screen_to_map(screen: Vector2) -> Vector2:
+	return screen - map_offset + map_pan
+
+
+func _is_on_board_view(screen: Vector2) -> bool:
+	var local_view := screen - map_offset
+	if local_view.x < 0.0 or local_view.y < 0.0:
+		return false
+	var view := GameLayout.board_view_size(grid.map_pixel_size())
+	return local_view.x <= view.x and local_view.y <= view.y
+
+
+func _is_on_map(local_map: Vector2) -> bool:
 	if local_map.x < 0.0 or local_map.y < 0.0:
 		return false
 	var size := grid.map_pixel_size()
 	return local_map.x <= size.x and local_map.y <= size.y
+
+
+func _is_on_board(local_map: Vector2) -> bool:
+	## Back-compat name: map-space bounds.
+	return _is_on_map(local_map)
+
+
+func _map_needs_pan() -> bool:
+	var map_size := grid.map_pixel_size()
+	var view := GameLayout.board_view_size(map_size)
+	return map_size.x > view.x + 1.0 or map_size.y > view.y + 1.0
+
+
+func _can_start_pan_at(local_map: Vector2) -> bool:
+	if not _is_on_map(local_map):
+		return true
+	var cell := grid.world_to_cell(local_map)
+	if not grid.in_bounds(cell):
+		return true
+	if cell == grid.spawn_cell or cell == grid.exit_cell:
+		return true
+	if grid.get_tile(cell) == GameGrid.Tile.BLOCKED:
+		return true
+	if grid.get_tower_at(cell) != null:
+		return true
+	return false
+
+
+func _begin_pan(screen: Vector2) -> void:
+	_panning = true
+	_pan_moved = false
+	_pan_last_screen = screen
+	_paint_holding = false
+	_paint_enabled = false
+	_awaiting_tower_tap = false
+
+
+func _clamp_map_pan() -> void:
+	var map_size := grid.map_pixel_size()
+	var view := GameLayout.board_view_size(map_size)
+	var max_pan := Vector2(maxf(0.0, map_size.x - view.x), maxf(0.0, map_size.y - view.y))
+	map_pan.x = clampf(map_pan.x, 0.0, max_pan.x)
+	map_pan.y = clampf(map_pan.y, 0.0, max_pan.y)
+
+
+func _sync_world_positions() -> void:
+	map_offset = GameLayout.board_origin()
+	var world_pos := map_offset - map_pan
+	if grid:
+		grid.position = world_pos
+	if enemies:
+		enemies.position = world_pos
+	if projectiles:
+		projectiles.position = world_pos
+	if traps:
+		traps.position = world_pos
+
+
+func _update_map_camera() -> void:
+	if _map_camera == null:
+		return
+	# Keep Camera2D disabled — HUD is CanvasLayer; world pan uses map_pan offsets.
+	# Camera node remains for future zoom hooks / Siege focus tweens.
+	_map_camera.enabled = false
+	var view := GameLayout.board_view_size(grid.map_pixel_size() if grid else Vector2.ZERO)
+	_map_camera.position = map_offset + view * 0.5 + map_pan
+
+
+func _focus_camera_on_spawn_exit() -> void:
+	if grid == null or not _map_needs_pan():
+		map_pan = Vector2.ZERO
+		_clamp_map_pan()
+		_sync_world_positions()
+		_update_map_camera()
+		return
+	var mid := (grid.cell_to_world_center(grid.spawn_cell) + grid.cell_to_world_center(grid.exit_cell)) * 0.5
+	var view := GameLayout.board_view_size(grid.map_pixel_size())
+	map_pan = mid - view * 0.5
+	_clamp_map_pan()
+	_sync_world_positions()
+	_update_map_camera()
 
 
 func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:
@@ -403,7 +582,15 @@ func _on_command_ability_pressed(ability_id: String) -> void:
 	_aim_ability_id = ability_id
 	_aim_command_tower = tower
 	var aim := CommandAbilities.aim_mode(ability_id)
-	if aim == "path":
+	if CommandAbilities.is_trap(ability_id):
+		hud.set_status(
+			"Place %s trap (%dg) — click a %s. Esc/right-click cancels." % [
+				CommandAbilities.display_name(ability_id),
+				cost,
+				"path tile" if aim == "path" else "board tile",
+			]
+		)
+	elif aim == "path":
 		hud.set_status(
 			"Aim %s (%dg) — click a path tile. Esc/right-click cancels." % [
 				CommandAbilities.display_name(ability_id),
@@ -412,7 +599,7 @@ func _on_command_ability_pressed(ability_id: String) -> void:
 		)
 	else:
 		hud.set_status(
-			"Aim %s (%dg) — click a board tile near your towers. Esc/right-click cancels." % [
+			"Place %s (%dg) — click near your towers. Esc/right-click cancels." % [
 				CommandAbilities.display_name(ability_id),
 				cost,
 			]
@@ -436,11 +623,15 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 		hud.set_status("Need %d gold for %s." % [cost, CommandAbilities.display_name(ability_id)])
 		return
 	var cell := grid.world_to_cell(local_map)
-	var result := CommandCaster.cast(ability_id, cell, grid, pathfinder, enemies, projectiles)
+	var result := CommandCaster.place(ability_id, cell, grid, pathfinder, enemies, traps)
 	if not bool(result.get("ok", false)):
-		hud.set_status(str(result.get("message", "Can't aim there.")))
+		hud.set_status(str(result.get("message", "Can't place there.")))
 		return
 	if not game_state.spend_gold(cost):
+		# Roll back a just-created trap if gold somehow failed.
+		var trap = result.get("trap", null)
+		if trap != null and is_instance_valid(trap):
+			trap.queue_free()
 		_clear_command_aim()
 		hud.set_status("Not enough gold.")
 		return
@@ -546,6 +737,9 @@ func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
 		if wave_manager.pending_map_rotate_wave > 0:
 			hud.set_status("Wave %d sector goal hit — clear the board for a new map." % wave)
 		return
+	if WaveScaler.should_rotate_spawn_after_wave(game_state.game_mode, wave):
+		# Status set in _on_spawn_rotate_requested; keep a short clear line if rotate failed silently.
+		return
 	if bonus_gold > 0:
 		hud.set_status("Wave %d cleared — %d kills, +%d bonus gold. Next wave on timer." % [wave, kills, bonus_gold])
 	else:
@@ -557,6 +751,7 @@ func _on_map_rotate_requested(wave: int) -> void:
 	var carry_gold := WaveScaler.map_rotate_gold(game_state.difficulty, kills_on_map)
 	for child in projectiles.get_children():
 		child.queue_free()
+	_clear_command_traps()
 	wave_manager.clear_enemies()
 	game_state.begin_next_map_sector(carry_gold)
 	_apply_run_map(true)
@@ -568,8 +763,9 @@ func _on_map_rotate_requested(wave: int) -> void:
 	wave_manager.begin_run()
 	hud.update_timer(0.0, true, "prep")
 	hud.set_status(
-		"Map %d — wave %d sector cleared (%d kills → %d gold). Rebuild, then Start Round." % [
+		"Map %d (seed %d) — wave %d sector cleared (%d kills → %d gold). Rebuild, then Start Round." % [
 			game_state.map_sector,
+			game_state.current_map_seed,
 			wave,
 			kills_on_map,
 			carry_gold,
@@ -577,14 +773,62 @@ func _on_map_rotate_requested(wave: int) -> void:
 	)
 
 
+func _on_spawn_rotate_requested(wave: int) -> void:
+	if grid == null or pathfinder == null:
+		return
+	var ok := grid.relocate_rim_spawn(pathfinder)
+	wave_manager.invalidate_ground_path()
+	wave_manager.repath_living_enemies()
+	build_system.refresh_after_reset()
+	_focus_camera_on_spawn_exit()
+	if ok:
+		hud.set_status("Wave %d cleared — entry moved to a new rim. Path must stay open to the center." % wave)
+	else:
+		hud.set_status("Wave %d cleared — could not move entry (path sealed). Sell towers to reopen." % wave)
+
+
 func _apply_run_map(new_random: bool) -> void:
 	if grid == null:
 		return
-	if WaveScaler.is_random_mode(Session.game_mode if game_state == null else game_state.game_mode):
-		if new_random or not grid.is_random_layout:
-			grid.reset(false)
+	var mode := Session.game_mode if game_state == null else game_state.game_mode
+	var layout_mode := Session.map_layout_mode if game_state == null else game_state.map_layout_mode
+	if WaveScaler.is_siege_mode(mode):
+		if new_random or not grid.is_siege_layout:
+			grid.reset_siege()
+		Session.current_map_seed = -1
+	elif WaveScaler.is_random_mode(mode):
+		if Session.run_seed < 0:
+			Session.run_seed = WaveScaler.resolve_run_seed(-1)
+		var sector := 1
+		if game_state != null:
+			sector = maxi(game_state.map_sector, 1)
+		var layout_seed := WaveScaler.sector_seed(Session.run_seed, sector)
+		if new_random or not grid.is_random_layout or grid.last_layout_seed != layout_seed:
+			grid.reset(false, layout_seed)
+		Session.current_map_seed = grid.last_layout_seed
+	elif WaveScaler.is_custom_layout(layout_mode):
+		if Session.run_seed < 0:
+			Session.run_seed = WaveScaler.resolve_run_seed(-1)
+		if new_random or not grid.is_random_layout or grid.last_layout_seed != Session.run_seed:
+			grid.reset(false, Session.run_seed)
+		Session.current_map_seed = grid.last_layout_seed
+		Session.run_seed = Session.current_map_seed
 	else:
 		grid.reset(true)
+		Session.current_map_seed = -1
+	if game_state != null:
+		game_state.set_map_seeds(Session.run_seed, Session.current_map_seed, layout_mode)
+	if pathfinder != null:
+		pathfinder.sync_region()
+		pathfinder.rebuild()
+	map_pan = Vector2.ZERO
+	_sync_world_positions()
+	if WaveScaler.is_siege_mode(mode):
+		_focus_camera_on_spawn_exit()
+	else:
+		_update_map_camera()
+	if hud != null:
+		hud.refresh_run_labels()
 
 
 func _mark_debug_used() -> void:
@@ -657,13 +901,29 @@ func _on_game_over_to_leaderboard(wave_reached: int) -> void:
 
 
 func _boot_leaderboard(wave_reached: int) -> void:
-	Session.go_leaderboard(wave_reached, game_state.debug_used, game_state.difficulty)
+	Session.go_leaderboard(
+		wave_reached,
+		game_state.debug_used,
+		game_state.difficulty,
+		game_state.seeds_for_leaderboard()
+	)
+
+
+func _clear_command_traps() -> void:
+	if traps == null:
+		return
+	for child in traps.get_children():
+		child.queue_free()
 
 
 func restart_run() -> void:
 	for child in projectiles.get_children():
 		child.queue_free()
+	_clear_command_traps()
 	game_state.reset_run(Session.difficulty, Session.game_mode, Session.monster_mode)
+	game_state.map_layout_mode = Session.map_layout_mode
+	game_state.run_seed = Session.run_seed
+	game_state.current_map_seed = Session.current_map_seed
 	_apply_run_map(true)
 	build_system.refresh_after_reset()
 	hud.set_banner("")
@@ -671,8 +931,5 @@ func restart_run() -> void:
 	build_system.select_tower_type("gunner")
 	hud.refresh_run_labels()
 	wave_manager.begin_run()
-	if WaveScaler.is_random_mode(game_state.game_mode):
-		hud.set_status("Random map %d — build a path, then Start Round." % game_state.map_sector)
-	else:
-		hud.set_status("Build your maze, then press Start Round.")
+	_set_start_status()
 	hud.update_timer(0.0, true, "prep")

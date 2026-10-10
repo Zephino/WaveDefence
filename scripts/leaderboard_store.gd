@@ -1,9 +1,11 @@
 class_name LeaderboardStore
 extends RefCounted
 
-const SAVE_PATH := "user://leaderboard.json"
+## Overridable in tests so player boards are never wiped.
+static var SAVE_PATH := "user://leaderboard.json"
 const MAX_ENTRIES := 10
 const MAX_NAME_LENGTH := 12
+const MAX_SEEDS := 40
 const BOARD_KEYS := ["easy", "medium", "hard"]
 
 
@@ -31,16 +33,34 @@ static func _empty_boards() -> Dictionary:
 	return {"easy": [], "medium": [], "hard": []}
 
 
+static func normalize_seeds(raw) -> Array:
+	var out: Array = []
+	if typeof(raw) != TYPE_ARRAY:
+		return out
+	for item in raw:
+		var n := int(item)
+		if n < 0:
+			continue
+		out.append(n)
+		if out.size() >= MAX_SEEDS:
+			break
+	return out
+
+
 static func _normalize_entry(item) -> Dictionary:
 	if typeof(item) != TYPE_DICTIONARY:
 		return {}
 	var entry: Dictionary = item
 	if not entry.has("name") or not entry.has("wave"):
 		return {}
-	return {
+	var normalized := {
 		"name": sanitize_name(str(entry["name"])),
 		"wave": maxi(int(entry["wave"]), 0),
 	}
+	var seeds := normalize_seeds(entry.get("seeds", []))
+	if not seeds.is_empty():
+		normalized["seeds"] = seeds
+	return normalized
 
 
 static func _sort_and_trim(entries: Array) -> Array:
@@ -137,17 +157,45 @@ static func sanitize_name(raw: String) -> String:
 	return cleaned
 
 
-static func add_score(player_name: String, wave: int, difficulty: int = WaveScaler.Difficulty.MEDIUM) -> Array:
+static func add_score(
+	player_name: String,
+	wave: int,
+	difficulty: int = WaveScaler.Difficulty.MEDIUM,
+	seeds: Array = []
+) -> Array:
 	var name := sanitize_name(player_name)
 	if name.is_empty() or wave <= 0:
 		return load_entries(difficulty)
 	if not qualifies(wave, difficulty):
 		return load_entries(difficulty)
 	var entries := load_entries(difficulty)
-	entries.append({"name": name, "wave": wave})
+	var row := {"name": name, "wave": wave}
+	var cleaned_seeds := normalize_seeds(seeds)
+	if not cleaned_seeds.is_empty():
+		row["seeds"] = cleaned_seeds
+	entries.append(row)
 	entries = _sort_and_trim(entries)
 	save_entries(entries, difficulty)
 	return entries
+
+
+static func format_seeds_summary(seeds: Array) -> String:
+	var cleaned := normalize_seeds(seeds)
+	if cleaned.is_empty():
+		return ""
+	if cleaned.size() == 1:
+		return "Seed %d" % int(cleaned[0])
+	return "Seeds ×%d" % cleaned.size()
+
+
+static func format_seeds_detail(seeds: Array) -> String:
+	var cleaned := normalize_seeds(seeds)
+	if cleaned.is_empty():
+		return "No seeds recorded."
+	var parts: PackedStringArray = PackedStringArray()
+	for i in cleaned.size():
+		parts.append("Map %d: %d" % [i + 1, int(cleaned[i])])
+	return "\n".join(parts)
 
 
 ## Replace local cache with remote worldwide boards payload.
@@ -189,7 +237,12 @@ static func _dedupe_sort_and_trim(entries: Array) -> Array:
 			continue
 		var sig := "%s|%d" % [str(entry["name"]), int(entry["wave"])]
 		if seen.has(sig):
+			var idx: int = seen[sig]
+			var existing: Dictionary = unique[idx]
+			if not existing.has("seeds") and entry.has("seeds"):
+				existing["seeds"] = entry["seeds"]
+				unique[idx] = existing
 			continue
-		seen[sig] = true
+		seen[sig] = unique.size()
 		unique.append(entry)
 	return _sort_and_trim(unique)

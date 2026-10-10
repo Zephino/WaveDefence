@@ -6,6 +6,8 @@ signal wave_cleared(wave: int, kills: int, bonus_gold: int)
 signal enemy_spawned(enemy: Enemy)
 ## Random mode: full clear of wave 25/50/… — main should rebuild the map (no auto-intermission).
 signal map_rotate_requested(wave: int)
+## Siege mode: relocate rim spawn after wave 5/10/… (towers stay).
+signal spawn_rotate_requested(wave: int)
 ## mode: "prep" | "intermission" | "wave"
 signal timer_updated(seconds_left: float, can_skip: bool, mode: String)
 signal skip_unlock_changed(unlocked: bool)
@@ -192,6 +194,8 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 		wave_cleared.emit(finished_wave, kills, clear_bonus + early_bonus)
 		if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, finished_wave):
 			pending_map_rotate_wave = finished_wave
+		elif WaveScaler.should_rotate_spawn_after_wave(game_state.game_mode, finished_wave):
+			spawn_rotate_requested.emit(finished_wave)
 	else:
 		last_early_send_bonus = 0
 
@@ -473,6 +477,8 @@ func _check_wave_clear() -> void:
 			_emit_timer()
 			map_rotate_requested.emit(rotate_wave)
 			return
+		if WaveScaler.should_rotate_spawn_after_wave(game_state.game_mode, wave):
+			spawn_rotate_requested.emit(wave)
 		_start_intermission(WaveScaler.INTERMISSION_TIME, true)
 
 

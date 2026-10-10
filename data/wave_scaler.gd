@@ -4,9 +4,11 @@ extends RefCounted
 ## Endless wave formulas. Tune freely, then re-run (F5).
 
 enum Difficulty { EASY, MEDIUM, HARD }
-enum GameMode { CLASSIC, RANDOM }
+enum GameMode { CLASSIC, RANDOM, SIEGE }
 ## Independent of map mode: Classic spawns (no resists) vs Randomize elemental types.
 enum MonsterMode { CLASSIC, RANDOMIZE }
+## Classic map setup: fixed corridor vs seeded random layout (fixed for the run).
+enum MapLayoutMode { STANDARD, CUSTOM }
 
 const STARTING_GOLD_EASY := 350
 const STARTING_GOLD_MEDIUM := 200
@@ -16,6 +18,8 @@ const STARTING_GOLD := STARTING_GOLD_MEDIUM
 const STARTING_LIVES := 20
 ## Random mode: new map after these wave clears (25, 50, 75…).
 const MAP_ROTATE_EVERY := 25
+## Siege mode: move outer-rim spawn after these wave clears (5, 10, 15…).
+const SPAWN_ROTATE_EVERY := 5
 ## Gold granted on map rotate from kills earned on the previous map.
 const MAP_ROTATE_GOLD_PER_KILL := 3
 
@@ -44,6 +48,8 @@ static func mode_label(mode: int) -> String:
 	match mode:
 		GameMode.RANDOM:
 			return "Random"
+		GameMode.SIEGE:
+			return "Siege"
 		_:
 			return "Classic"
 
@@ -60,12 +66,54 @@ static func is_random_mode(mode: int) -> bool:
 	return mode == GameMode.RANDOM
 
 
+static func is_siege_mode(mode: int) -> bool:
+	return mode == GameMode.SIEGE
+
+
 static func is_randomize_monsters(mode: int) -> bool:
 	return mode == MonsterMode.RANDOMIZE
 
 
 static func should_rotate_map_after_wave(mode: int, wave: int) -> bool:
 	return is_random_mode(mode) and wave > 0 and wave % MAP_ROTATE_EVERY == 0
+
+
+static func should_rotate_spawn_after_wave(mode: int, wave: int) -> bool:
+	return is_siege_mode(mode) and wave > 0 and wave % SPAWN_ROTATE_EVERY == 0
+
+
+static func is_custom_layout(layout_mode: int) -> bool:
+	return layout_mode == MapLayoutMode.CUSTOM
+
+
+## Parse a seed field. Empty → -1 (caller should roll). Digits → int. Other text → stable hash.
+static func parse_seed_text(text: String) -> int:
+	var t := text.strip_edges()
+	if t.is_empty():
+		return -1
+	if t.is_valid_int():
+		return maxi(absi(t.to_int()), 0)
+	return absi(int(t.hash()))
+
+
+static func roll_seed() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return int(rng.randi() % 1_000_000_000)
+
+
+## Resolve a user/empty seed into a concrete non-negative run seed.
+static func resolve_run_seed(seed_or_neg: int) -> int:
+	if seed_or_neg < 0:
+		return roll_seed()
+	return seed_or_neg
+
+
+## Deterministic layout seed for Random map sector (1-based).
+static func sector_seed(run_seed: int, map_sector: int) -> int:
+	var sector := maxi(map_sector, 1)
+	var mixed := run_seed * 10007 + sector * 9176 + 13
+	return absi(int(mixed)) % 1_000_000_000
 
 
 static func map_rotate_gold(difficulty: int, kills_on_map: int) -> int:

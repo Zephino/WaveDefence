@@ -51,12 +51,29 @@ function sanitizeName(raw) {
   return cleaned;
 }
 
+const MAX_SEEDS = 40;
+
+function normalizeSeeds(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    const n = parseInt(item, 10);
+    if (!Number.isFinite(n) || n < 0) continue;
+    out.push(n);
+    if (out.length >= MAX_SEEDS) break;
+  }
+  return out;
+}
+
 function normalizeEntry(item) {
   if (!item || typeof item !== "object") return null;
   const name = sanitizeName(item.name);
   const wave = Math.max(0, parseInt(item.wave, 10) || 0);
   if (!name || wave <= 0) return null;
-  return { name, wave };
+  const seeds = normalizeSeeds(item.seeds);
+  const entry = { name, wave };
+  if (seeds.length) entry.seeds = seeds;
+  return entry;
 }
 
 function sortAndTrim(entries) {
@@ -208,6 +225,7 @@ export default {
         const name = sanitizeName(body.name);
         const wave = parseInt(body.wave, 10) || 0;
         const key = difficultyKey(body.difficulty);
+        const seeds = normalizeSeeds(body.seeds);
         if (!name) return jsonResponse({ error: "invalid name" }, 400);
         if (wave <= 0 || wave > MAX_WAVE) return jsonResponse({ error: "invalid wave" }, 400);
 
@@ -218,7 +236,9 @@ export default {
         if (!qualifies) {
           return jsonResponse(boards);
         }
-        entries.push({ name, wave });
+        const row = { name, wave };
+        if (seeds.length) row.seeds = seeds;
+        entries.push(row);
         boards[key] = sortAndTrim(entries);
         const saved = await saveBoards(env, boards);
         return jsonResponse(saved);

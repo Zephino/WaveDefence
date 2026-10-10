@@ -87,9 +87,98 @@ func _run() -> void:
 		errors.append("classic should not rotate maps")
 	if WaveScaler.mode_label(WaveScaler.GameMode.RANDOM) != "Random":
 		errors.append("random mode label should be Random")
+	if WaveScaler.mode_label(WaveScaler.GameMode.SIEGE) != "Siege":
+		errors.append("siege mode label should be Siege")
+	if not WaveScaler.is_siege_mode(WaveScaler.GameMode.SIEGE):
+		errors.append("is_siege_mode should be true for SIEGE")
+	if not WaveScaler.should_rotate_spawn_after_wave(WaveScaler.GameMode.SIEGE, 5):
+		errors.append("siege should rotate spawn after wave 5")
+	if WaveScaler.should_rotate_spawn_after_wave(WaveScaler.GameMode.CLASSIC, 5):
+		errors.append("classic should not rotate siege spawn")
+	if WaveScaler.should_rotate_map_after_wave(WaveScaler.GameMode.SIEGE, 25):
+		errors.append("siege should not use random map wipe")
 	var rotate_gold := WaveScaler.map_rotate_gold(WaveScaler.Difficulty.MEDIUM, 80)
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
+
+	# Seed helpers + deterministic random layouts.
+	if WaveScaler.parse_seed_text("") != -1:
+		errors.append("empty seed text should parse to -1")
+	if WaveScaler.parse_seed_text("42") != 42:
+		errors.append("numeric seed text should parse to int")
+	if WaveScaler.parse_seed_text("abc") < 0:
+		errors.append("alphanumeric seed should hash to non-negative")
+	var s1 := WaveScaler.sector_seed(100, 1)
+	var s2 := WaveScaler.sector_seed(100, 2)
+	if s1 == s2:
+		errors.append("different sectors should yield different layout seeds")
+	if WaveScaler.sector_seed(100, 1) != s1:
+		errors.append("sector_seed should be stable")
+	grid.generate_random_layout(777001)
+	var spawn_a := grid.spawn_cell
+	var exit_a := grid.exit_cell
+	var blocked_a: Array[Vector2i] = []
+	for y in grid.rows:
+		for x in grid.cols:
+			var c := Vector2i(x, y)
+			if grid.is_terrain_blocked(c):
+				blocked_a.append(c)
+	grid.generate_random_layout(777001)
+	if grid.spawn_cell != spawn_a or grid.exit_cell != exit_a:
+		errors.append("same seed should recreate spawn/exit")
+	if grid.last_layout_seed != 777001:
+		errors.append("last_layout_seed should match requested seed")
+	var blocked_b: Array[Vector2i] = []
+	for y in grid.rows:
+		for x in grid.cols:
+			var c2 := Vector2i(x, y)
+			if grid.is_terrain_blocked(c2):
+				blocked_b.append(c2)
+	if blocked_a != blocked_b:
+		errors.append("same seed should recreate blocked cells")
+	grid.generate_random_layout(777002)
+	if grid.spawn_cell == spawn_a and grid.exit_cell == exit_a and blocked_a == blocked_b:
+		# Different seed may rarely collide; only flag if layout seed didn't change.
+		if grid.last_layout_seed == 777001:
+			errors.append("different seed should change last_layout_seed")
+
+	# Siege: center exit, rim spawn, path exists; relocate keeps towers.
+	if not grid.generate_siege_layout(4242):
+		errors.append("siege layout generator failed")
+	build.pathfinder.sync_region()
+	build.pathfinder.rebuild()
+	if grid.cols != GameGrid.SIEGE_COLS or grid.rows != GameGrid.SIEGE_ROWS:
+		errors.append("siege should be %dx%d" % [GameGrid.SIEGE_COLS, GameGrid.SIEGE_ROWS])
+	if grid.exit_cell != Vector2i(grid.cols / 2, grid.rows / 2):
+		errors.append("siege exit should be map center")
+	if build.pathfinder.get_world_path().size() < 2:
+		errors.append("siege layout must keep a path")
+	var old_spawn := grid.spawn_cell
+	if not grid.relocate_rim_spawn(build.pathfinder, old_spawn):
+		errors.append("siege rim spawn relocate failed")
+	elif grid.spawn_cell == old_spawn:
+		errors.append("siege rim spawn should move to a new cell")
+	if build.pathfinder.get_world_path().size() < 2:
+		errors.append("siege path must remain after spawn relocate")
+
+	# Large Controls settings persist round-trip.
+	var prev_lc := UserSettings.is_large_controls()
+	UserSettings.set_large_controls(true)
+	UserSettings._loaded = false
+	if not UserSettings.is_large_controls():
+		errors.append("large_controls should persist true")
+	UserSettings.set_large_controls(false)
+	UserSettings._loaded = false
+	if UserSettings.is_large_controls():
+		errors.append("large_controls should persist false")
+	UserSettings.set_large_controls(prev_lc)
+	UserSettings._loaded = false
+	UserSettings.ensure_loaded()
+
+	# Restore classic map for remaining tests.
+	grid.reset(true)
+	build.pathfinder.sync_region()
+	build.pathfinder.rebuild()
 
 	# Monster modes: Classic has no resists; Randomize tags types and grows resists.
 	if MonsterTypes.resist_slot_count(1) != 1:
@@ -396,6 +485,15 @@ func _run() -> void:
 		errors.append("airstrike cross should be 5 cells")
 	if CommandAbilities.get_ids().size() < 4:
 		errors.append("command should offer 4 abilities")
+	if not CommandAbilities.is_trap("airstrike") or not CommandAbilities.is_trap("barricade") or not CommandAbilities.is_trap("flare"):
+		errors.append("combat abilities should be traps")
+	if CommandAbilities.is_trap("supply"):
+		errors.append("supply drop should stay instant")
+	var ability_tip := CommandAbilities.tooltip_for("airstrike")
+	if ability_tip.find("Air Strike") < 0 or ability_tip.find("gold") < 0:
+		errors.append("ability tooltip should include name and gold")
+	if ability_tip.find("Trap") < 0:
+		errors.append("trap ability tooltip should mention Trap")
 
 	# Gatling: wave-30 unlock, expensive ultra-fast special.
 	var gatling_def := TowerData.get_def("gatling")

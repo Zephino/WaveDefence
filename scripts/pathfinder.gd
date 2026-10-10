@@ -8,18 +8,25 @@ var astar: AStarGrid2D
 func _init(game_grid: GameGrid) -> void:
 	grid = game_grid
 	astar = AStarGrid2D.new()
-	astar.region = Rect2i(0, 0, GameGrid.COLS, GameGrid.ROWS)
-	astar.cell_size = Vector2(GameGrid.TILE_SIZE, GameGrid.TILE_SIZE)
 	astar.default_compute_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
 	astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_MANHATTAN
 	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
-	astar.update()
+	sync_region()
 	rebuild()
 
 
+func sync_region() -> void:
+	var ts := grid.tile_px()
+	astar.region = Rect2i(0, 0, grid.cols, grid.rows)
+	astar.cell_size = Vector2(ts, ts)
+	astar.update()
+
+
 func rebuild() -> void:
-	for y in GameGrid.ROWS:
-		for x in GameGrid.COLS:
+	if astar.region.size.x != grid.cols or astar.region.size.y != grid.rows:
+		sync_region()
+	for y in grid.rows:
+		for x in grid.cols:
 			var cell := Vector2i(x, y)
 			astar.set_point_solid(cell, grid.is_blocked_for_path(cell))
 	# Spawn and exit must remain walkable even if somehow marked.

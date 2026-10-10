@@ -1,4 +1,64 @@
-﻿## Version 00.01.85
+﻿## Version 00.01.90
+Date: 10/10/2026
+Time: 12:57 AM
+
+### Changes
+- Command combat abilities (Air Strike, Barricade Spike, Recon Flare) place as **path traps**; gold spends on successful place and the effect waits for enemies
+- Supply Drop still applies instantly but only spends gold when at least one tower is buffed
+- Ability buttons use tower-style tooltips (cost, aim, cooldown, stats); Command tower blurb updated
+
+### Reason
+Players were wasting gold on missed ability casts and had no hover stats for abilities like other towers.
+
+## Version 00.01.89
+Date: 10/10/2026
+Time: 12:55 AM
+
+### Changes
+- Leaderboard fetch reads the **Cloudflare Worker** (live KV) when configured, instead of only the often-stale GitHub `data` file
+- Never replace local boards with a completely empty remote payload
+- Leaderboard unit test writes to a temp file so it cannot wipe player scores
+
+### Reason
+Global Easy scores existed on the Worker, but the game loaded an empty GitHub JSON and wiped the board.
+
+## Version 00.01.88
+Date: 10/10/2026
+Time: 12:53 AM
+
+### Changes
+- Leaderboard entries store and show map **seed(s)** from the run
+- Single seed displays inline; multiple seeds show **Seeds ×N** — click opens a dialog listing every map seed
+- Cloudflare Worker `normalizeEntry` / POST keep the `seeds` array (redeploy Worker for global boards)
+
+### Reason
+Players asked to see which seeds high scores used, including every Random sector seed.
+
+## Version 00.01.87
+Date: 10/10/2026
+Time: 12:51 AM
+
+### Changes
+- Classic/Random difficulty opens a **Map setup** step: Classic Standard vs Custom layout; optional seed (blank rolls one)
+- Classic Custom uses a seeded random layout fixed for the whole run; Random uses a run seed with per-sector seeds
+- HUD shows the current map **Seed** on Random and Classic Custom so maps can be replayed later
+
+### Reason
+Let players share and replay specific maze layouts via seeds while keeping Classic’s no-rotate runs.
+
+## Version 00.01.86
+Date: 10/10/2026
+Time: 12:44 AM
+
+### Changes
+- Added **Siege** map mode: 32×32 board, center exit, outer-rim spawn that moves every 5 waves (towers stay); drag to pan when the map is larger than the view
+- Remade the main menu: title + `ver:` on one line; Map | Monsters columns; difficulty / leaderboard / Settings / Quit below
+- Settings: persistent **Large Controls** (smaller tiles, bigger buttons/sidebars) and web **Fullscreen** (yellow top-right Fullscreen button kept)
+
+### Reason
+Add a center-defense map mode with scrolling, and phone-friendly controls toggled only from the menu.
+
+## Version 00.01.85
 Date: 10/07/2026
 Time: 11:35 PM
 

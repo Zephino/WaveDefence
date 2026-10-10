@@ -1,6 +1,7 @@
 extends Control
 
-var list_label: Label
+var list_host: VBoxContainer
+var seed_detail_label: Label
 var status_label: Label
 var title_label: Label
 var source_label: Label
@@ -13,6 +14,7 @@ var view_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var score_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var can_enter: bool = false
 var _leaving: bool = false
+var _seed_popup: AcceptDialog
 
 
 func _ready() -> void:
@@ -101,9 +103,28 @@ func _build_ui() -> void:
 	panel.custom_minimum_size = Vector2(600, 300)
 	root.add_child(panel)
 
-	list_label = Label.new()
-	list_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	panel.add_child(list_label)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(580, 280)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	list_host = VBoxContainer.new()
+	list_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_host.add_theme_constant_override("separation", 4)
+	scroll.add_child(list_host)
+
+	seed_detail_label = Label.new()
+	seed_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	seed_detail_label.modulate = Color(0.65, 0.72, 0.78)
+	seed_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	seed_detail_label.visible = false
+	root.add_child(seed_detail_label)
+
+	_seed_popup = AcceptDialog.new()
+	_seed_popup.title = "Map seeds"
+	_seed_popup.dialog_text = ""
+	_seed_popup.ok_button_text = "Close"
+	add_child(_seed_popup)
 
 	entry_box = VBoxContainer.new()
 	entry_box.add_theme_constant_override("separation", 8)
@@ -204,16 +225,79 @@ func _refresh_entry_visibility() -> void:
 func _refresh_list() -> void:
 	var diff_name := WaveScaler.difficulty_label(view_difficulty)
 	title_label.text = "%s LEADERBOARD" % diff_name.to_upper()
+	if seed_detail_label:
+		seed_detail_label.visible = false
+		seed_detail_label.text = ""
+	while list_host.get_child_count() > 0:
+		var child := list_host.get_child(0)
+		list_host.remove_child(child)
+		child.free()
+
 	var entries := LeaderboardStore.load_entries(view_difficulty)
 	if entries.is_empty():
-		list_label.text = "\n  No %s scores yet. Survive waves to earn a spot." % diff_name
+		var empty := Label.new()
+		empty.text = "No %s scores yet. Survive waves to earn a spot." % diff_name
+		empty.modulate = Color(0.7, 0.75, 0.8)
+		list_host.add_child(empty)
 		return
-	var lines: PackedStringArray = PackedStringArray()
-	lines.append("")
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	list_host.add_child(header)
+	header.add_child(_list_cell("#", 36))
+	header.add_child(_list_cell("Name", 140))
+	header.add_child(_list_cell("Wave", 70))
+	header.add_child(_list_cell("Seed", 180))
+
 	for i in entries.size():
 		var e: Dictionary = entries[i]
-		lines.append("  %2d. %-12s   Wave %d" % [i + 1, str(e["name"]), int(e["wave"])])
-	list_label.text = "\n".join(lines)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		list_host.add_child(row)
+		row.add_child(_list_cell("%d." % (i + 1), 36))
+		row.add_child(_list_cell(str(e["name"]), 140))
+		row.add_child(_list_cell(str(int(e["wave"])), 70))
+		row.add_child(_make_seed_cell(LeaderboardStore.normalize_seeds(e.get("seeds", []))))
+
+
+func _list_cell(text: String, width: float) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(width, 0)
+	return label
+
+
+func _make_seed_cell(seeds: Array) -> Control:
+	var summary := LeaderboardStore.format_seeds_summary(seeds)
+	if summary.is_empty():
+		var none := Label.new()
+		none.text = "—"
+		none.modulate = Color(0.5, 0.55, 0.6)
+		none.custom_minimum_size = Vector2(180, 0)
+		return none
+	if seeds.size() == 1:
+		var one := Label.new()
+		one.text = summary
+		one.custom_minimum_size = Vector2(180, 0)
+		one.tooltip_text = "Map seed: %d" % int(seeds[0])
+		return one
+	var btn := Button.new()
+	btn.text = summary
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(180, GameLayout.button_height(28.0))
+	btn.tooltip_text = LeaderboardStore.format_seeds_detail(seeds) + "\n(Click to view)"
+	btn.pressed.connect(_on_seeds_clicked.bind(seeds.duplicate()))
+	return btn
+
+
+func _on_seeds_clicked(seeds: Array) -> void:
+	var detail := LeaderboardStore.format_seeds_detail(seeds)
+	if seed_detail_label:
+		seed_detail_label.text = detail.replace("\n", "  ·  ")
+		seed_detail_label.visible = true
+	if _seed_popup:
+		_seed_popup.dialog_text = detail
+		_seed_popup.popup_centered()
 
 
 func _on_submit() -> void:
@@ -226,20 +310,22 @@ func _on_submit() -> void:
 	if cleaned.is_empty():
 		status_label.text = "Enter a valid name (letters, numbers, spaces)."
 		return
-	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty)
+	var seeds: Array = Session.pending_map_seeds.duplicate()
+	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty, seeds)
 	can_enter = false
 	entry_box.visible = false
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
+	Session.pending_map_seeds.clear()
 	_refresh_list()
 	if OnlineConfig.can_post():
-		OnlineLeaderboard.queue_pending_score(cleaned, wave_score, score_difficulty)
+		OnlineLeaderboard.queue_pending_score(cleaned, wave_score, score_difficulty, seeds)
 		status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
 			cleaned,
 			wave_score,
 			WaveScaler.difficulty_label(score_difficulty),
 		]
-		var ok := await OnlineLeaderboard.push_score(cleaned, wave_score, score_difficulty)
+		var ok := await OnlineLeaderboard.push_score(cleaned, wave_score, score_difficulty, seeds)
 		if not is_inside_tree():
 			return
 		if ok:
@@ -265,6 +351,7 @@ func _on_skip_entry() -> void:
 	entry_box.visible = false
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
+	Session.pending_map_seeds.clear()
 	OnlineLeaderboard.clear_pending()
 	status_label.text = "Score discarded. Showing %s board." % WaveScaler.difficulty_label(view_difficulty)
 	_refresh_list()

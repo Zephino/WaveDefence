@@ -14,15 +14,19 @@ const API_BASE_URL := "https://wave-defence-leaderboard.thebotcoder.workers.dev"
 const MAX_WAVE_SANITY := 100000
 
 
-static func read_url() -> String:
-	return LEADERBOARD_READ_URL.strip_edges()
-
-
 static func post_url() -> String:
 	var base := API_BASE_URL.strip_edges().trim_suffix("/")
 	if base.is_empty():
 		return ""
 	return base + "/leaderboard"
+
+
+## Prefer the Worker (KV source of truth) when deployed; fall back to GitHub raw.
+static func read_url() -> String:
+	var worker := post_url()
+	if not worker.is_empty():
+		return worker
+	return LEADERBOARD_READ_URL.strip_edges()
 
 
 static func can_read() -> bool:
