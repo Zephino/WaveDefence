@@ -1,4 +1,14 @@
-﻿## Version 00.02.20
+﻿## Version 00.02.21
+Date: 10/10/2026
+Time: 10:31 AM
+
+### Changes
+- Web Settings now includes **Install app** (Chrome install prompt or Safari Add to Home Screen help); removed the floating install chip so install lives only in Settings
+
+### Reason
+Players should install from Settings on phone browsers, not from a separate overlay button.
+
+## Version 00.02.20
 Date: 10/10/2026
 Time: 10:21 AM
 

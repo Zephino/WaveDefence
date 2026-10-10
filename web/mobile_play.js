@@ -4,9 +4,8 @@
 	var enterInFlight = false;
 	var released = false;
 	var fsBtn = null;
-	var installBtn = null;
 	var fsModal = null;
-	var iosHint = null;
+	var installModal = null;
 	var deferredPrompt = null;
 	var cssFullscreen = false;
 
@@ -149,25 +148,6 @@
 		return fsBtn;
 	}
 
-	function ensureInstallButton() {
-		if (installBtn) return installBtn;
-		installBtn = document.createElement("button");
-		installBtn.type = "button";
-		installBtn.id = "wd-install-btn";
-		installBtn.textContent = "Install app";
-		styleChipButton(installBtn, "#3d9a68");
-		installBtn.style.color = "#f4fff8";
-		installBtn.style.top = "10px";
-		installBtn.style.left = "10px";
-		installBtn.addEventListener("click", function (ev) {
-			ev.preventDefault();
-			ev.stopPropagation();
-			runInstall();
-		});
-		document.body.appendChild(installBtn);
-		return installBtn;
-	}
-
 	function ensureFsModal() {
 		if (fsModal) return fsModal;
 		fsModal = document.createElement("div");
@@ -255,93 +235,154 @@
 		if (fsModal) fsModal.style.display = "none";
 	}
 
-	function ensureIosHint() {
-		if (iosHint) return iosHint;
-		iosHint = document.createElement("div");
-		iosHint.id = "wd-ios-install";
-		iosHint.style.cssText = [
+	function hideInstallModal() {
+		if (installModal) installModal.style.display = "none";
+	}
+
+	function ensureInstallModal() {
+		if (installModal) return installModal;
+		installModal = document.createElement("div");
+		installModal.id = "wd-install-modal";
+		installModal.style.cssText = [
 			"position:fixed",
-			"left:10px",
-			"right:10px",
-			"bottom:10px",
-			"z-index:2147483645",
+			"inset:0",
+			"z-index:2147483646",
 			"display:none",
+			"align-items:center",
+			"justify-content:center",
+			"background:rgba(8,10,14,0.72)",
+			"padding:24px",
+			"box-sizing:border-box",
+		].join(";");
+		document.body.appendChild(installModal);
+		return installModal;
+	}
+
+	function showInstallCard(title, bodyHtml, primaryLabel, primaryFn) {
+		var m = ensureInstallModal();
+		m.innerHTML = "";
+		var card = document.createElement("div");
+		card.style.cssText = [
+			"max-width:360px",
+			"width:100%",
 			"background:#1a222c",
 			"color:#e8eef2",
-			"border-radius:10px",
-			"padding:12px 14px",
-			"font:14px/1.35 system-ui,sans-serif",
-			"box-shadow:0 8px 28px rgba(0,0,0,0.45)",
+			"border-radius:12px",
+			"padding:22px 18px",
+			"text-align:center",
+			"font:16px/1.35 system-ui,sans-serif",
+			"box-shadow:0 12px 40px rgba(0,0,0,0.45)",
 		].join(";");
-		iosHint.innerHTML =
-			"<b>Install Wave Defence</b><br>" +
-			"Safari: tap <b>Share</b> → <b>Add to Home Screen</b>. " +
-			"Then open the icon for fullscreen play.";
-		var dismiss = document.createElement("button");
-		dismiss.type = "button";
-		dismiss.textContent = "Got it";
-		dismiss.style.cssText = [
+		var h = document.createElement("b");
+		h.style.cssText = "font-size:20px;display:block;margin-bottom:10px;";
+		h.textContent = title;
+		card.appendChild(h);
+		var body = document.createElement("div");
+		body.style.cssText = "opacity:0.9;margin-bottom:16px;text-align:left;";
+		body.innerHTML = bodyHtml;
+		card.appendChild(body);
+		if (primaryLabel && primaryFn) {
+			var go = document.createElement("button");
+			go.type = "button";
+			go.textContent = primaryLabel;
+			go.style.cssText = [
+				"display:block",
+				"width:100%",
+				"padding:14px 16px",
+				"border:0",
+				"border-radius:8px",
+				"background:#3d9a68",
+				"color:#f4fff8",
+				"font:700 17px/1.1 system-ui,sans-serif",
+				"touch-action:manipulation",
+			].join(";");
+			go.addEventListener("click", function (ev) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				primaryFn();
+			});
+			card.appendChild(go);
+		}
+		var cancel = document.createElement("button");
+		cancel.type = "button";
+		cancel.textContent = "Close";
+		cancel.style.cssText = [
+			"display:block",
+			"width:100%",
 			"margin-top:10px",
-			"padding:8px 12px",
+			"padding:12px 16px",
 			"border:0",
-			"border-radius:6px",
-			"background:#3d9a68",
-			"color:#f4fff8",
-			"font:600 13px/1 system-ui,sans-serif",
+			"border-radius:8px",
+			"background:#2a3440",
+			"color:#d7dee5",
+			"font:600 15px/1.1 system-ui,sans-serif",
 			"touch-action:manipulation",
 		].join(";");
-		dismiss.addEventListener("click", function (ev) {
+		cancel.addEventListener("click", function (ev) {
 			ev.preventDefault();
-			try { localStorage.setItem("wd_ios_install_hint", "1"); } catch (e) {}
-			iosHint.style.display = "none";
+			ev.stopPropagation();
+			hideInstallModal();
 		});
-		iosHint.appendChild(dismiss);
-		document.body.appendChild(iosHint);
-		return iosHint;
+		card.appendChild(cancel);
+		m.appendChild(card);
+		m.style.display = "flex";
 	}
 
 	function refreshChromeButtons() {
 		if (released) {
 			if (fsBtn) fsBtn.style.display = "none";
-			if (installBtn) installBtn.style.display = "none";
-			if (iosHint) iosHint.style.display = "none";
 			hideFsModal();
+			hideInstallModal();
 			return;
 		}
 		var btn = ensureFsButton();
 		btn.style.display = fullscreenOk() ? "none" : "block";
-
-		var inst = ensureInstallButton();
-		var canInstall = !!deferredPrompt && !isStandalone();
-		inst.style.display = canInstall ? "block" : "none";
-
-		if (isIos() && !isStandalone() && isTouchish()) {
-			var seen = false;
-			try { seen = localStorage.getItem("wd_ios_install_hint") === "1"; } catch (e) {}
-			ensureIosHint().style.display = seen ? "none" : "block";
-		} else if (iosHint) {
-			iosHint.style.display = "none";
-		}
 	}
 
-	function runInstall() {
-		if (deferredPrompt) {
-			var prompt = deferredPrompt;
+	function runInstallFromGesture() {
+		if (!deferredPrompt) return false;
+		var prompt = deferredPrompt;
+		deferredPrompt = null;
+		hideInstallModal();
+		prompt.prompt();
+		Promise.resolve(prompt.userChoice).then(function () {
 			deferredPrompt = null;
-			refreshChromeButtons();
-			prompt.prompt();
-			Promise.resolve(prompt.userChoice).then(function () {
-				deferredPrompt = null;
-				refreshChromeButtons();
-			}).catch(function () {
-				refreshChromeButtons();
-			});
-			return;
+		}).catch(function () {});
+		return true;
+	}
+
+	/** Called from Settings → Install app (web only). */
+	function promptInstall() {
+		if (released) return false;
+		if (isStandalone()) {
+			showInstallCard(
+				"Already installed",
+				"Wave Defence is already running from your home screen."
+			);
+			return true;
+		}
+		if (deferredPrompt) {
+			showInstallCard(
+				"Install Wave Defence",
+				"Tap below to add the game to your phone. Browsers require a real tap to show the install prompt.",
+				"Tap to Install",
+				runInstallFromGesture
+			);
+			return true;
 		}
 		if (isIos()) {
-			try { localStorage.removeItem("wd_ios_install_hint"); } catch (e) {}
-			ensureIosHint().style.display = "block";
+			showInstallCard(
+				"Add to Home Screen",
+				"In Safari: tap <b>Share</b> → <b>Add to Home Screen</b>, then open the new icon for app-style play."
+			);
+			return true;
 		}
+		showInstallCard(
+			"Install from browser",
+			"Use your browser menu → <b>Install app</b> or <b>Add to Home screen</b>. " +
+			"If that option is missing, open this page in Chrome and try again."
+		);
+		return false;
 	}
 
 	/** Quit: undo fullscreen / CSS and try to leave the page. */
@@ -496,6 +537,7 @@
 	window.WaveDefenceMobile = {
 		enterFullscreen: enterFullscreen,
 		promptFullscreen: promptFullscreen,
+		promptInstall: promptInstall,
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,

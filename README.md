@@ -14,7 +14,7 @@ After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from 
 
 Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
 
-On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap **Fullscreen** in the menu — a real on-page tap target appears (browsers block fullscreen from the game canvas alone). Use the floating **Fullscreen** control if the screen timed out. On Android Chrome, **Install app** appears when the site is installable; on iPhone Safari use **Share → Add to Home Screen** (a tip shows until dismissed).
+On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap **Fullscreen** in Settings — a real on-page tap target appears (browsers block fullscreen from the game canvas alone). Use the floating **Fullscreen** control if the screen timed out. On web only, Settings also has **Install app** (Chrome install prompt, or Safari Share → Add to Home Screen).
 
 Rebuild the site files:
 
@@ -81,7 +81,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
   - **View Seeds** — compact preview of **Classic / Random / Siege** layouts
   - **Achievements** — hard goals saved on this device (`user://achievements.cfg`)
   - **Replay Tutorial** — guided Easy Classic practice run (not scored)
-  - **Fullscreen** (web)
+  - **Fullscreen** / **Install app** (web only)
 - Hover Map / Monsters / Difficulty buttons for short tooltips.
 - First launch offers **Start Tutorial** or **Skip** (saved in settings).
 - Footer may show your best **Medium** wave on this device.

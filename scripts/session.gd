@@ -158,6 +158,23 @@ func request_web_fullscreen() -> void:
 	)
 
 
+func request_web_install() -> void:
+	if not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval(
+		"""
+		(function () {
+			try {
+				if (window.WaveDefenceMobile && WaveDefenceMobile.promptInstall) {
+					WaveDefenceMobile.promptInstall();
+				}
+			} catch (e) {}
+		})()
+		""",
+		true
+	)
+
+
 func _release_mobile_presentation() -> void:
 	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
