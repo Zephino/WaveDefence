@@ -5,7 +5,7 @@ config_version=5
 
 config/name="Wave Defence"
 config/description="Endless maze-builder tower defence"
-config/version="00.02.26"
+config/version="00.02.27"
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.3", "4.7", "Forward Plus")
 config/icon="res://icon.svg"

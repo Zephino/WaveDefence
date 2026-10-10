@@ -66,12 +66,19 @@
 			(navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
 	}
 
+	/** True only when launched as an installed PWA / home-screen icon — not browser fullscreen. */
 	function isStandalone() {
 		try {
 			if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
-			if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) return true;
+			if (window.matchMedia && window.matchMedia("(display-mode: minimal-ui)").matches) return true;
 		} catch (e) {}
-		return !!(navigator.standalone);
+		// iOS Safari: only set when opened from Add to Home Screen.
+		if (typeof navigator.standalone === "boolean") return !!navigator.standalone;
+		// Android Trusted Web Activity / related-app launch.
+		try {
+			if (document.referrer && document.referrer.indexOf("android-app://") === 0) return true;
+		} catch (e) {}
+		return false;
 	}
 
 	function isPortrait() {
@@ -399,33 +406,39 @@
 	/** Called from Settings → Install app (web only). */
 	function promptInstall() {
 		if (released) return false;
-		if (isStandalone()) {
-			showInstallCard(
-				"Already installed",
-				"Wave Defence is already running from your home screen."
-			);
-			return true;
-		}
+		// Prefer a real Chromium install prompt whenever the browser offered one.
+		// Do this BEFORE the standalone check so fullscreen mode never blocks install.
 		if (deferredPrompt) {
 			showInstallCard(
 				"Install Wave Defence",
-				"Tap below to add the game to your phone. Browsers require a real tap to show the install prompt.",
+				"Tap below to add the game to your home screen. Browsers require a real tap to show the install prompt.",
 				"Tap to Install",
 				runInstallFromGesture
+			);
+			return true;
+		}
+		if (isStandalone()) {
+			showInstallCard(
+				"Already on home screen",
+				"This copy is already running from your home-screen app icon. " +
+				"If you still only see a browser tab, close this and open the Wave Defence icon instead — " +
+				"or use your browser menu → <b>Install app</b> / <b>Add to Home screen</b>."
 			);
 			return true;
 		}
 		if (isIos()) {
 			showInstallCard(
 				"Add to Home Screen",
-				"In Safari: tap <b>Share</b> → <b>Add to Home Screen</b>, then open the new icon for app-style play."
+				"Safari cannot auto-install. Tap <b>Share</b> (square with arrow) → <b>Add to Home Screen</b>, " +
+				"then open the new Wave Defence icon for app-style play."
 			);
 			return true;
 		}
 		showInstallCard(
 			"Install from browser",
-			"Use your browser menu → <b>Install app</b> or <b>Add to Home screen</b>. " +
-			"If that option is missing, open this page in Chrome and try again."
+			"Chrome has not offered an install prompt yet. Try: open the ⋮ menu → <b>Install app</b> or " +
+			"<b>Add to Home screen</b>. Stay on this page a few seconds, then try Install app again. " +
+			"Use Chrome (or Edge) on Android for the easiest install."
 		);
 		return false;
 	}

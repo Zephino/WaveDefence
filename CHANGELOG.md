@@ -1,4 +1,14 @@
-﻿## Version 00.02.26
+﻿## Version 00.02.27
+Date: 10/10/2026
+Time: 11:36 AM
+
+### Changes
+- Install app no longer treats browser fullscreen as “already on home screen”; Chromium install prompt is offered first when available
+
+### Reason
+Settings → Install app falsely said the game was already installed when the page was only fullscreen in the browser.
+
+## Version 00.02.26
 Date: 10/10/2026
 Time: 11:27 AM
 
