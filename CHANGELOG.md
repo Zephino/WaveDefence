@@ -1,4 +1,15 @@
-﻿## Version 00.02.22
+﻿## Version 00.02.23
+Date: 10/10/2026
+Time: 10:59 AM
+
+### Changes
+- Burn / Freeze / Poison attack VFX now fly from the tower and home toward the moving enemy (with a short trail and impact pop)
+- Web audio: resume AudioContext on first tap, use lighter mono `web_loop_*.wav` beds in the web pack, and keep heavy stereo originals for desktop only
+
+### Reason
+Elemental effects were static aim-bursts that did not track movers, and browser autoplay plus huge stereo WAVs left web builds silent while the PC build worked.
+
+## Version 00.02.22
 Date: 10/10/2026
 Time: 10:33 AM
 

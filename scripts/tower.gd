@@ -181,7 +181,8 @@ func _fire_at(target: Enemy) -> void:
 			global_position,
 			to_pos,
 			float(def.get("range", 100.0)),
-			projectile_container
+			projectile_container,
+			target
 		)
 
 

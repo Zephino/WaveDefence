@@ -89,7 +89,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 
 ### Audio
 
-Music is original 8-bit style loops in `audio/music/` (32 bars, seamless WAV) and starts on the main menu. Loops stay band-limited and soft-limited so they stay clear rather than crushed. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. On web, tap any menu control once if music is silent — browsers block autoplay until a gesture, then music restarts with that unlock.
+Music is original 8-bit style loops in `audio/music/` (32 bars, seamless WAV) and starts on the main menu. Desktop uses full stereo beds; the web build uses lighter mono `web_loop_*.wav` copies and resumes the browser AudioContext on first tap. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. On web, tap once if audio is silent — browsers block autoplay until a gesture.
 
 When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard**. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
@@ -133,9 +133,9 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 | Gunner | 40 | Basic single-target; slight air bonus (`air_damage_mult` 1.25) |
 | Rapid | 55 | Fast / low damage; strong vs air (1.6×) |
 | Cannon | 75 | Boss hunter (2.4× bosses, prioritizes them); splash; weak vs air |
-| Burn | 50 | Ignite DoT; weak vs air (0.7×). Flame jet VFX toward the target (≤ range) when Effects is on |
-| Freeze | 60 | Slow; good vs air (1.4×). Ice shard burst VFX (≤ range) when Effects is on |
-| Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×). Green cloud VFX (≤ range) when Effects is on |
+| Burn | 50 | Ignite DoT; weak vs air (0.7×). Homing flame shot from tower → enemy when Effects is on |
+| Freeze | 60 | Slow; good vs air (1.4×). Homing ice shard from tower → enemy when Effects is on |
+| Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×). Homing poison blob from tower → enemy when Effects is on |
 | Lightning | 80 | Chain damage; strong vs air (2.0×). Bolt flashes when Effects is on |
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |

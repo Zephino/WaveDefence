@@ -1,4 +1,4 @@
-/* Mobile/web helpers: CSS landscape, fullscreen (real DOM gesture), PWA install. */
+/* Mobile/web helpers: CSS landscape, fullscreen (real DOM gesture), PWA install, audio unlock. */
 (function () {
 	var mode = ""; // "" | "portrait-css" | "landscape-fill"
 	var enterInFlight = false;
@@ -8,6 +8,51 @@
 	var installModal = null;
 	var deferredPrompt = null;
 	var cssFullscreen = false;
+	var audioContexts = [];
+
+	// Patch early (before Godot boots) so we can resume the engine AudioContext after a tap.
+	(function patchAudioContext() {
+		var Orig = window.AudioContext || window.webkitAudioContext;
+		if (!Orig || Orig.__wdPatched) return;
+		function wrap(Base) {
+			function Patched(options) {
+				var ctx = new Base(options);
+				audioContexts.push(ctx);
+				return ctx;
+			}
+			Patched.prototype = Base.prototype;
+			Patched.__wdPatched = true;
+			try {
+				Object.keys(Base).forEach(function (k) {
+					try { Patched[k] = Base[k]; } catch (e) {}
+				});
+			} catch (e) {}
+			return Patched;
+		}
+		if (window.AudioContext) window.AudioContext = wrap(window.AudioContext);
+		if (window.webkitAudioContext) window.webkitAudioContext = wrap(window.webkitAudioContext);
+	})();
+
+	function unlockAudio() {
+		for (var i = 0; i < audioContexts.length; i++) {
+			var ctx = audioContexts[i];
+			if (ctx && ctx.state === "suspended") {
+				try { ctx.resume(); } catch (e) {}
+			}
+		}
+		try {
+			var Ctx = window.AudioContext || window.webkitAudioContext;
+			if (!Ctx) return;
+			if (!window.__wdAudioKick) window.__wdAudioKick = new Ctx();
+			if (window.__wdAudioKick.state === "suspended") window.__wdAudioKick.resume();
+			// Tiny silent buffer forces some mobile browsers to fully unlock output.
+			var buf = window.__wdAudioKick.createBuffer(1, 1, 22050);
+			var src = window.__wdAudioKick.createBufferSource();
+			src.buffer = buf;
+			src.connect(window.__wdAudioKick.destination);
+			src.start(0);
+		} catch (e) {}
+	}
 
 	function isTouchish() {
 		try {
@@ -538,6 +583,7 @@
 		enterFullscreen: enterFullscreen,
 		promptFullscreen: promptFullscreen,
 		promptInstall: promptInstall,
+		unlockAudio: unlockAudio,
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,
@@ -548,6 +594,11 @@
 	function boot() {
 		applyCssLandscape();
 		refreshChromeButtons();
+
+		document.addEventListener("pointerdown", function onFirstPointer() {
+			unlockAudio();
+			document.removeEventListener("pointerdown", onFirstPointer, true);
+		}, true);
 
 		window.addEventListener("beforeinstallprompt", function (e) {
 			e.preventDefault();

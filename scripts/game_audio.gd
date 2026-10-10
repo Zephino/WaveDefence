@@ -7,12 +7,21 @@ const _PA := preload("res://scripts/procedural_audio.gd")
 
 enum MusicContext { NONE, MENU, GAME_STANDARD, GAME_SIEGE }
 
-const LOOP_PATHS := {
+const LOOP_PATHS_DESKTOP := {
 	"menu": "res://audio/music/original_loop_01.wav",
 	"calm": "res://audio/music/original_loop_02.wav",
 	"intense": "res://audio/music/original_loop_03.wav",
 	"siege_calm": "res://audio/music/original_loop_04.wav",
 	"siege_intense": "res://audio/music/original_loop_05.wav",
+}
+
+## Lighter mono 22.05 kHz beds for browsers (autoplay + download size).
+const LOOP_PATHS_WEB := {
+	"menu": "res://audio/music/web_loop_01.wav",
+	"calm": "res://audio/music/web_loop_02.wav",
+	"intense": "res://audio/music/web_loop_03.wav",
+	"siege_calm": "res://audio/music/web_loop_04.wav",
+	"siege_intense": "res://audio/music/web_loop_05.wav",
 }
 
 var _unlocked: bool = false
@@ -81,13 +90,21 @@ func _build_sfx_only() -> void:
 	_sfx["unlock"] = _PA.make_unlock_fanfare()
 
 
+func _loop_paths() -> Dictionary:
+	return LOOP_PATHS_WEB if OS.has_feature("web") else LOOP_PATHS_DESKTOP
+
+
 func _load_music_loops() -> void:
-	for key in LOOP_PATHS:
-		var stream := _open_loop_bytes(String(LOOP_PATHS[key]))
+	var paths := _loop_paths()
+	for key in paths:
+		var path := String(paths[key])
+		var stream := _open_loop_bytes(path)
+		if stream == null and OS.has_feature("web") and LOOP_PATHS_DESKTOP.has(key):
+			stream = _open_loop_bytes(String(LOOP_PATHS_DESKTOP[key]))
 		if stream != null:
 			_loops[key] = stream
 		else:
-			push_error("Failed to load music loop: %s" % String(LOOP_PATHS[key]))
+			push_error("Failed to load music loop: %s" % path)
 
 
 func _arm_loop(stream: AudioStreamWAV) -> void:
@@ -103,19 +120,27 @@ func _arm_loop(stream: AudioStreamWAV) -> void:
 
 
 func _open_loop_bytes(path: String) -> AudioStreamWAV:
-	# Prefer raw PCM bytes when present (editor / include_filter exports).
+	# On web, prefer the imported sample (reliable in .pck). Desktop can use raw RIFF bytes.
+	if OS.has_feature("web"):
+		var web_stream := _open_loop_from_resource(path)
+		if web_stream != null:
+			return web_stream
+		return _open_loop_from_file(path)
 	var from_file := _open_loop_from_file(path)
 	if from_file != null:
 		return from_file
-	# Exported packs usually ship the imported AudioStreamWAV only.
-	if ResourceLoader.exists(path):
-		var loaded: Variant = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
-		if loaded is AudioStreamWAV:
-			var imported := (loaded as AudioStreamWAV).duplicate(true) as AudioStreamWAV
-			if imported != null and imported.data.size() > 0:
-				_arm_loop(imported)
-				return imported
-	push_error("Music loop missing: %s" % path)
+	return _open_loop_from_resource(path)
+
+
+func _open_loop_from_resource(path: String) -> AudioStreamWAV:
+	if not ResourceLoader.exists(path):
+		return null
+	var loaded: Variant = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
+	if loaded is AudioStreamWAV:
+		var imported := (loaded as AudioStreamWAV).duplicate(true) as AudioStreamWAV
+		if imported != null and imported.data.size() > 0:
+			_arm_loop(imported)
+			return imported
 	return null
 
 
@@ -144,9 +169,35 @@ func _open_loop_from_file(path: String) -> AudioStreamWAV:
 
 func unlock() -> void:
 	_unlocked = true
+	if OS.has_feature("web"):
+		_resume_web_audio_context()
 	# Browsers block autoplay until a gesture; every unlock must restart music.
 	_pending_play = true
 	_try_play_context(true)
+
+
+func _resume_web_audio_context() -> void:
+	JavaScriptBridge.eval(
+		"""
+		(function () {
+			try {
+				if (window.WaveDefenceMobile && WaveDefenceMobile.unlockAudio) {
+					WaveDefenceMobile.unlockAudio();
+					return;
+				}
+				var Ctx = window.AudioContext || window.webkitAudioContext;
+				if (!Ctx) return;
+				if (!window.__wdAudioKick) {
+					window.__wdAudioKick = new Ctx();
+				}
+				if (window.__wdAudioKick.state === 'suspended') {
+					window.__wdAudioKick.resume();
+				}
+			} catch (e) {}
+		})()
+		""",
+		true
+	)
 
 
 func _slider_db(percent: float) -> float:
