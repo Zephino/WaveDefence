@@ -1,4 +1,27 @@
-﻿## Version 00.01.92
+﻿## Version 00.01.94
+Date: 10/10/2026
+Time: 1:21 AM
+
+### Changes
+- Mouse-wheel zoom on Siege / oversized maps: scroll out shrinks the board (down to fit), scroll in restores native size
+- Zoom is cursor-anchored; pan/placement use the zoomed coordinate space
+
+### Reason
+Siege boards are larger than the view; players asked to zoom out to see more of the map.
+
+## Version 00.01.93
+Date: 10/10/2026
+Time: 1:19 AM
+
+### Changes
+- Settings is a menu **popup** (Large Controls, Effects, Fullscreen, Close) instead of inline controls
+- **View Seeds** inside Settings previews Classic Custom / Random / Siege maps from a typed or randomized seed; **Use seed** fills Map setup
+- Siege layout generation records `last_layout_seed` like random maps
+
+### Reason
+Players asked for Settings as its own small window and a way to browse map seeds before starting a run.
+
+## Version 00.01.92
 Date: 10/10/2026
 Time: 1:14 AM
 

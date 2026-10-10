@@ -12,8 +12,11 @@ var enemies: Node2D
 var projectiles: Node2D
 var traps: Node2D
 var map_offset: Vector2 = GameLayout.board_origin()
-## Scroll into a larger map (Siege / oversized boards). World pos = map_offset - map_pan.
+## Scroll into a larger map (Siege / oversized boards). World pos = map_offset - map_pan * map_zoom.
 var map_pan: Vector2 = Vector2.ZERO
+## 1.0 = native tile size; lower values shrink the board (wheel zoom on oversized maps).
+var map_zoom: float = 1.0
+const MAP_ZOOM_STEP := 0.1
 var _map_camera: Camera2D
 
 ## Hold left mouse / finger to paint-place towers/walls across cells.
@@ -195,7 +198,7 @@ func _process(delta: float) -> void:
 			var delta_screen := mouse - _pan_last_screen
 			if delta_screen.length_squared() > 0.5:
 				_pan_moved = true
-				map_pan -= delta_screen
+				map_pan -= delta_screen / maxf(map_zoom, 0.05)
 				_clamp_map_pan()
 				_sync_world_positions()
 				_update_map_camera()
@@ -279,6 +282,13 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 		return
 
 	var screen := get_global_mouse_position()
+
+	if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		if event.pressed and _is_on_board_view(screen) and _map_allows_zoom():
+			var next_z := map_zoom + MAP_ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else map_zoom - MAP_ZOOM_STEP
+			_set_map_zoom(next_z, screen)
+			get_viewport().set_input_as_handled()
+		return
 
 	if event.button_index == MOUSE_BUTTON_MIDDLE:
 		if event.pressed and _map_needs_pan() and _is_on_board_view(screen):
@@ -398,7 +408,7 @@ func _finish_pointer_press() -> void:
 
 
 func _screen_to_map(screen: Vector2) -> Vector2:
-	return screen - map_offset + map_pan
+	return (screen - map_offset) / maxf(map_zoom, 0.05) + map_pan
 
 
 func _is_on_board_view(screen: Vector2) -> bool:
@@ -421,10 +431,54 @@ func _is_on_board(local_map: Vector2) -> bool:
 	return _is_on_map(local_map)
 
 
-func _map_needs_pan() -> bool:
+func _map_oversized_at_native() -> bool:
+	if grid == null:
+		return false
 	var map_size := grid.map_pixel_size()
 	var view := GameLayout.board_view_size(map_size)
 	return map_size.x > view.x + 1.0 or map_size.y > view.y + 1.0
+
+
+func _map_allows_zoom() -> bool:
+	return map_zoom < 0.999 or _map_oversized_at_native()
+
+
+func _min_map_zoom() -> float:
+	if grid == null:
+		return 1.0
+	var map_size := grid.map_pixel_size()
+	var view := GameLayout.board_view_size(map_size)
+	if map_size.x <= 1.0 or map_size.y <= 1.0:
+		return 1.0
+	return minf(1.0, minf(view.x / map_size.x, view.y / map_size.y))
+
+
+func _visible_map_extent() -> Vector2:
+	var map_size := grid.map_pixel_size() if grid else Vector2.ZERO
+	var view := GameLayout.board_view_size(map_size)
+	return view / maxf(map_zoom, 0.05)
+
+
+func _set_map_zoom(z: float, anchor_screen: Vector2) -> void:
+	var old_z := maxf(map_zoom, 0.05)
+	var new_z := clampf(z, _min_map_zoom(), 1.0)
+	if is_equal_approx(old_z, new_z):
+		return
+	var local_view := anchor_screen - map_offset
+	var map_pos := local_view / old_z + map_pan
+	map_zoom = new_z
+	map_pan = map_pos - local_view / maxf(new_z, 0.05)
+	_clamp_map_pan()
+	_sync_world_positions()
+	_update_map_camera()
+
+
+func _map_needs_pan() -> bool:
+	if grid == null:
+		return false
+	var map_size := grid.map_pixel_size()
+	var visible := _visible_map_extent()
+	return map_size.x > visible.x + 1.0 or map_size.y > visible.y + 1.0
 
 
 func _can_start_pan_at(local_map: Vector2) -> bool:
@@ -453,33 +507,37 @@ func _begin_pan(screen: Vector2) -> void:
 
 func _clamp_map_pan() -> void:
 	var map_size := grid.map_pixel_size()
-	var view := GameLayout.board_view_size(map_size)
-	var max_pan := Vector2(maxf(0.0, map_size.x - view.x), maxf(0.0, map_size.y - view.y))
+	var visible := _visible_map_extent()
+	var max_pan := Vector2(maxf(0.0, map_size.x - visible.x), maxf(0.0, map_size.y - visible.y))
 	map_pan.x = clampf(map_pan.x, 0.0, max_pan.x)
 	map_pan.y = clampf(map_pan.y, 0.0, max_pan.y)
 
 
 func _sync_world_positions() -> void:
 	map_offset = GameLayout.board_origin()
-	var world_pos := map_offset - map_pan
+	var world_pos := map_offset - map_pan * map_zoom
+	var sc := Vector2(map_zoom, map_zoom)
 	if grid:
 		grid.position = world_pos
+		grid.scale = sc
 	if enemies:
 		enemies.position = world_pos
+		enemies.scale = sc
 	if projectiles:
 		projectiles.position = world_pos
+		projectiles.scale = sc
 	if traps:
 		traps.position = world_pos
+		traps.scale = sc
 
 
 func _update_map_camera() -> void:
 	if _map_camera == null:
 		return
-	# Keep Camera2D disabled — HUD is CanvasLayer; world pan uses map_pan offsets.
-	# Camera node remains for future zoom hooks / Siege focus tweens.
+	# Keep Camera2D disabled — HUD is CanvasLayer; world pan/zoom uses offsets + scale.
 	_map_camera.enabled = false
 	var view := GameLayout.board_view_size(grid.map_pixel_size() if grid else Vector2.ZERO)
-	_map_camera.position = map_offset + view * 0.5 + map_pan
+	_map_camera.position = map_offset + view * 0.5 + map_pan * map_zoom
 
 
 func _focus_camera_on_spawn_exit() -> void:
@@ -490,8 +548,8 @@ func _focus_camera_on_spawn_exit() -> void:
 		_update_map_camera()
 		return
 	var mid := (grid.cell_to_world_center(grid.spawn_cell) + grid.cell_to_world_center(grid.exit_cell)) * 0.5
-	var view := GameLayout.board_view_size(grid.map_pixel_size())
-	map_pan = mid - view * 0.5
+	var visible := _visible_map_extent()
+	map_pan = mid - visible * 0.5
 	_clamp_map_pan()
 	_sync_world_positions()
 	_update_map_camera()
@@ -825,6 +883,7 @@ func _apply_run_map(new_random: bool) -> void:
 		pathfinder.sync_region()
 		pathfinder.rebuild()
 	map_pan = Vector2.ZERO
+	map_zoom = 1.0
 	_sync_world_positions()
 	if WaveScaler.is_siege_mode(mode):
 		_focus_camera_on_spawn_exit()

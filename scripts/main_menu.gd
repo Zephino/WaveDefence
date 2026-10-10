@@ -15,12 +15,25 @@ var _effects_check: CheckButton
 var _center: VBoxContainer
 var _touch_layout: bool = false
 var _map_setup_overlay: Control
+var _settings_overlay: Control
+var _seed_overlay: Control
+var _reopen_settings_after_rebuild: bool = false
 var _setup_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var _setup_layout_mode: int = WaveScaler.MapLayoutMode.STANDARD
 var _setup_seed_edit: LineEdit
 var _setup_standard_btn: Button
 var _setup_custom_btn: Button
 var _setup_hint: Label
+## View Seeds preview: 0 Classic Custom, 1 Random, 2 Siege.
+var _seed_preview_kind: int = 0
+var _seed_preview_buttons: Dictionary = {}
+var _seed_view_edit: LineEdit
+var _seed_resolved_label: Label
+var _seed_status_label: Label
+var _seed_viewport: SubViewport
+var _seed_viewport_container: SubViewportContainer
+var _seed_preview_grid: GameGrid
+var _seed_preview_path: Pathfinder
 
 
 func _ready() -> void:
@@ -80,8 +93,11 @@ func _build_ui() -> void:
 	_center.add_child(_spacer(8))
 	_build_difficulty(_center)
 	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
-	_build_settings(_center)
+	_center.add_child(_menu_button("Settings", _show_settings_popup))
 	_center.add_child(_menu_button("Quit", _on_quit))
+	if _reopen_settings_after_rebuild:
+		_reopen_settings_after_rebuild = false
+		call_deferred("_show_settings_popup")
 
 	_center.add_child(_spacer(8))
 	var boards_label := Label.new()
@@ -167,33 +183,6 @@ func _build_difficulty(parent: VBoxContainer) -> void:
 		"Hard  (%d gold)" % WaveScaler.STARTING_GOLD_HARD,
 		func() -> void: _start_difficulty(WaveScaler.Difficulty.HARD)
 	))
-
-
-func _build_settings(parent: VBoxContainer) -> void:
-	var settings_label := Label.new()
-	settings_label.text = "Settings"
-	settings_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	settings_label.modulate = Color(0.75, 0.8, 0.85)
-	parent.add_child(settings_label)
-
-	_large_controls_check = CheckButton.new()
-	_large_controls_check.text = "Large Controls"
-	_large_controls_check.button_pressed = UserSettings.is_large_controls()
-	_large_controls_check.focus_mode = Control.FOCUS_NONE
-	_large_controls_check.custom_minimum_size = _menu_button_size()
-	_large_controls_check.toggled.connect(_on_large_controls_toggled)
-	parent.add_child(_large_controls_check)
-
-	_effects_check = CheckButton.new()
-	_effects_check.text = "Effects"
-	_effects_check.button_pressed = UserSettings.is_effects_enabled()
-	_effects_check.focus_mode = Control.FOCUS_NONE
-	_effects_check.custom_minimum_size = _menu_button_size()
-	_effects_check.toggled.connect(_on_effects_toggled)
-	parent.add_child(_effects_check)
-
-	if OS.has_feature("web"):
-		parent.add_child(_menu_button("Fullscreen", _on_fullscreen))
 
 
 func _boards_status_text() -> String:
@@ -307,10 +296,15 @@ func _apply_choice_style(btn: Button, selected: bool) -> void:
 func _on_large_controls_toggled(on: bool) -> void:
 	UserSettings.set_large_controls(on)
 	# Rebuild so button sizes / scroll layout match immediately.
+	_reopen_settings_after_rebuild = (
+		_settings_overlay != null and is_instance_valid(_settings_overlay)
+	)
+	var had_setup := _map_setup_overlay != null and is_instance_valid(_map_setup_overlay)
+	_hide_seed_browser()
+	_hide_settings_popup()
+	_map_setup_overlay = null
 	mode_buttons.clear()
 	monster_mode_buttons.clear()
-	var had_setup := _map_setup_overlay != null and is_instance_valid(_map_setup_overlay)
-	_map_setup_overlay = null
 	_build_ui()
 	if had_setup:
 		_show_map_setup(_setup_difficulty)
@@ -318,6 +312,281 @@ func _on_large_controls_toggled(on: bool) -> void:
 
 func _on_effects_toggled(on: bool) -> void:
 	UserSettings.set_effects_enabled(on)
+
+
+func _panel_style() -> StyleBoxFlat:
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.11, 0.13, 0.16)
+	panel_style.set_border_width_all(2)
+	panel_style.border_color = Color(0.28, 0.34, 0.4)
+	panel_style.set_corner_radius_all(10)
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 16
+	panel_style.content_margin_bottom = 16
+	return panel_style
+
+
+func _make_modal_overlay(z: int) -> Dictionary:
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = z
+	add_child(overlay)
+	var dim := ColorRect.new()
+	dim.color = Color(0.04, 0.05, 0.07, 0.82)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style())
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	panel.add_child(box)
+	return {"overlay": overlay, "box": box}
+
+
+func _show_settings_popup() -> void:
+	_hide_seed_browser()
+	if _settings_overlay != null and is_instance_valid(_settings_overlay):
+		_settings_overlay.queue_free()
+	var modal := _make_modal_overlay(25)
+	_settings_overlay = modal["overlay"]
+	var box: VBoxContainer = modal["box"]
+
+	var title := Label.new()
+	title.text = "Settings"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+
+	_large_controls_check = CheckButton.new()
+	_large_controls_check.text = "Large Controls"
+	_large_controls_check.button_pressed = UserSettings.is_large_controls()
+	_large_controls_check.focus_mode = Control.FOCUS_NONE
+	_large_controls_check.custom_minimum_size = Vector2(320, GameLayout.button_height(40.0))
+	_large_controls_check.toggled.connect(_on_large_controls_toggled)
+	box.add_child(_large_controls_check)
+
+	_effects_check = CheckButton.new()
+	_effects_check.text = "Effects"
+	_effects_check.tooltip_text = "Tower attack visuals (flame, ice, poison cloud, lightning)."
+	_effects_check.button_pressed = UserSettings.is_effects_enabled()
+	_effects_check.focus_mode = Control.FOCUS_NONE
+	_effects_check.custom_minimum_size = Vector2(320, GameLayout.button_height(40.0))
+	_effects_check.toggled.connect(_on_effects_toggled)
+	box.add_child(_effects_check)
+
+	if OS.has_feature("web"):
+		box.add_child(_menu_button("Fullscreen", _on_fullscreen, true))
+
+	box.add_child(_menu_button("View Seeds", _show_seed_browser, true))
+	box.add_child(_menu_button("Close", _hide_settings_popup, true))
+
+
+func _hide_settings_popup() -> void:
+	if _settings_overlay != null and is_instance_valid(_settings_overlay):
+		_settings_overlay.queue_free()
+	_settings_overlay = null
+	_large_controls_check = null
+	_effects_check = null
+
+
+func _default_seed_preview_kind() -> int:
+	if WaveScaler.is_siege_mode(selected_mode):
+		return 2
+	if WaveScaler.is_random_mode(selected_mode):
+		return 1
+	return 0
+
+
+func _show_seed_browser() -> void:
+	_hide_seed_browser()
+	_seed_preview_kind = _default_seed_preview_kind()
+	var modal := _make_modal_overlay(30)
+	_seed_overlay = modal["overlay"]
+	var box: VBoxContainer = modal["box"]
+
+	var title := Label.new()
+	title.text = "View Seeds"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+
+	var hint := Label.new()
+	hint.text = "Preview Classic Custom / Random / Siege layouts. Type a seed or Randomize."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(420, 0)
+	hint.modulate = Color(0.7, 0.75, 0.8)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(hint)
+
+	var type_label := Label.new()
+	type_label.text = "Map type"
+	type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	type_label.modulate = Color(0.75, 0.8, 0.85)
+	box.add_child(type_label)
+
+	var type_row := HBoxContainer.new()
+	type_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	type_row.add_theme_constant_override("separation", 8)
+	box.add_child(type_row)
+	_seed_preview_buttons.clear()
+	for item in [
+		{"kind": 0, "label": "Classic Custom"},
+		{"kind": 1, "label": "Random"},
+		{"kind": 2, "label": "Siege"},
+	]:
+		var kind: int = int(item["kind"])
+		var btn := _menu_button(str(item["label"]), func() -> void:
+			_seed_preview_kind = kind
+			_refresh_seed_preview_buttons()
+			_refresh_seed_preview()
+		, true)
+		btn.custom_minimum_size = Vector2(130, GameLayout.button_height(36.0))
+		type_row.add_child(btn)
+		_seed_preview_buttons[kind] = btn
+	_refresh_seed_preview_buttons()
+
+	var seed_label := Label.new()
+	seed_label.text = "Seed"
+	seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	seed_label.modulate = Color(0.75, 0.8, 0.85)
+	box.add_child(seed_label)
+
+	_seed_view_edit = LineEdit.new()
+	_seed_view_edit.placeholder_text = "Type a seed or Randomize"
+	_seed_view_edit.text = Session.map_seed_text
+	_seed_view_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_seed_view_edit.custom_minimum_size = Vector2(420, GameLayout.button_height(40.0))
+	_seed_view_edit.focus_mode = Control.FOCUS_CLICK
+	_seed_view_edit.text_submitted.connect(func(_t: String) -> void: _refresh_seed_preview())
+	box.add_child(_seed_view_edit)
+
+	_seed_resolved_label = Label.new()
+	_seed_resolved_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_seed_resolved_label.modulate = Color(0.55, 0.65, 0.7)
+	box.add_child(_seed_resolved_label)
+
+	var seed_actions := HBoxContainer.new()
+	seed_actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	seed_actions.add_theme_constant_override("separation", 10)
+	box.add_child(seed_actions)
+	seed_actions.add_child(_menu_button("Randomize", _randomize_seed_preview, true))
+	seed_actions.add_child(_menu_button("Preview", _refresh_seed_preview, true))
+
+	_seed_viewport_container = SubViewportContainer.new()
+	_seed_viewport_container.stretch = true
+	_seed_viewport_container.custom_minimum_size = Vector2(420, 300)
+	box.add_child(_seed_viewport_container)
+
+	_seed_viewport = SubViewport.new()
+	_seed_viewport.transparent_bg = true
+	_seed_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_seed_viewport_container.add_child(_seed_viewport)
+
+	_seed_preview_grid = GameGrid.new()
+	_seed_preview_grid.name = "SeedPreviewGrid"
+	_seed_viewport.add_child(_seed_preview_grid)
+	_seed_preview_path = Pathfinder.new(_seed_preview_grid)
+
+	_seed_status_label = Label.new()
+	_seed_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_seed_status_label.modulate = Color(0.75, 0.85, 0.55)
+	box.add_child(_seed_status_label)
+
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 12)
+	box.add_child(bottom)
+	bottom.add_child(_menu_button("Use seed", _use_seed_from_preview, true))
+	bottom.add_child(_menu_button("Close", _hide_seed_browser, true))
+
+	if _seed_view_edit.text.strip_edges() == "":
+		_randomize_seed_preview()
+	else:
+		_refresh_seed_preview()
+
+
+func _refresh_seed_preview_buttons() -> void:
+	for kind in _seed_preview_buttons.keys():
+		var btn: Button = _seed_preview_buttons[kind]
+		_apply_choice_style(btn, int(kind) == _seed_preview_kind)
+
+
+func _resolved_preview_seed() -> int:
+	var text := ""
+	if _seed_view_edit:
+		text = _seed_view_edit.text.strip_edges()
+	var parsed := WaveScaler.parse_seed_text(text)
+	if parsed < 0:
+		return WaveScaler.roll_seed()
+	return parsed
+
+
+func _randomize_seed_preview() -> void:
+	var rolled := WaveScaler.roll_seed()
+	if _seed_view_edit:
+		_seed_view_edit.text = str(rolled)
+	_refresh_seed_preview()
+
+
+func _refresh_seed_preview() -> void:
+	if _seed_preview_grid == null or _seed_viewport == null:
+		return
+	var seed_val := _resolved_preview_seed()
+	if _seed_view_edit and _seed_view_edit.text.strip_edges() == "":
+		_seed_view_edit.text = str(seed_val)
+	if _seed_preview_kind == 2:
+		_seed_preview_grid.generate_siege_layout(seed_val)
+	else:
+		_seed_preview_grid.generate_random_layout(seed_val)
+	_seed_preview_path = Pathfinder.new(_seed_preview_grid)
+	_seed_preview_path.rebuild()
+	_seed_preview_grid.set_path_preview(_seed_preview_path.get_world_path())
+	_seed_preview_grid.queue_redraw()
+
+	var map_size := _seed_preview_grid.map_pixel_size()
+	_seed_viewport.size = Vector2i(maxi(int(map_size.x), 1), maxi(int(map_size.y), 1))
+	var max_w := 420.0
+	var max_h := 320.0
+	var scale_f := minf(max_w / maxf(map_size.x, 1.0), max_h / maxf(map_size.y, 1.0))
+	_seed_viewport_container.custom_minimum_size = Vector2(
+		maxi(int(map_size.x * scale_f), 120),
+		maxi(int(map_size.y * scale_f), 90)
+	)
+	var shown := _seed_preview_grid.last_layout_seed if _seed_preview_grid.last_layout_seed >= 0 else seed_val
+	if _seed_resolved_label:
+		_seed_resolved_label.text = "Resolved seed: %d" % shown
+	if _seed_status_label:
+		_seed_status_label.text = ""
+
+
+func _use_seed_from_preview() -> void:
+	var seed_val := _resolved_preview_seed()
+	if _seed_preview_grid and _seed_preview_grid.last_layout_seed >= 0:
+		seed_val = _seed_preview_grid.last_layout_seed
+	Session.map_seed_text = str(seed_val)
+	if _seed_view_edit:
+		_seed_view_edit.text = Session.map_seed_text
+	if _seed_status_label:
+		_seed_status_label.text = "Seed saved for Map setup: %s" % Session.map_seed_text
+
+
+func _hide_seed_browser() -> void:
+	if _seed_overlay != null and is_instance_valid(_seed_overlay):
+		_seed_overlay.queue_free()
+	_seed_overlay = null
+	_seed_view_edit = null
+	_seed_resolved_label = null
+	_seed_status_label = null
+	_seed_viewport = null
+	_seed_viewport_container = null
+	_seed_preview_grid = null
+	_seed_preview_path = null
+	_seed_preview_buttons.clear()
 
 
 func _start_difficulty(difficulty: int) -> void:

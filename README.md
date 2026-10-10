@@ -68,16 +68,17 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
-  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Pan with right/middle mouse, drag from rocks/spawn/exit, or drag after pressing a wall/tower (left-click still places towers on walls and selects)
+  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). **Scroll wheel** over the board zooms out/in (down to fit the whole map). Pan with right/middle mouse, drag from rocks/spawn/exit, or drag after pressing a wall/tower (left-click still places towers on walls and selects)
 - **Monsters** — independent of map:
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
 - **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately (starting gold **350 / 200 / 100**)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
-- **Settings**
-  - **Large Controls** — shrinks the board tiles and enlarges buttons/sidebars for all map modes (persists in `user://settings.cfg`; toggle only here)
+- **Settings** — opens a small popup:
+  - **Large Controls** — shrinks the board tiles and enlarges buttons/sidebars for all map modes (persists in `user://settings.cfg`)
   - **Effects** — tower attack visuals (Burn flame, Freeze ice, Poison cloud, Lightning flashes). Off keeps gameplay the same; persists in `user://settings.cfg`
   - **Fullscreen** (web) — same action as the yellow floating Fullscreen button (top-right); that yellow control stays available in-game
+  - **View Seeds** — preview **Classic Custom / Random / Siege** layouts: type a seed, **Randomize**, see the map + path, then **Use seed** to fill Map setup
 - **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
 
 When you lose all lives, you are sent to the **leaderboard** for that run’s difficulty. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.

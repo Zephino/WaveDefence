@@ -123,11 +123,10 @@ func generate_siege_layout(seed_value: int = -1) -> bool:
 	cols = SIEGE_COLS
 	rows = SIEGE_ROWS
 	is_random_layout = false
+	var used_seed := seed_value if seed_value >= 0 else WaveScaler.roll_seed()
+	last_layout_seed = used_seed
 	var rng := RandomNumberGenerator.new()
-	if seed_value >= 0:
-		rng.seed = seed_value
-	else:
-		rng.randomize()
+	rng.seed = used_seed
 
 	for _attempt in SIEGE_GEN_ATTEMPTS:
 		_blank_buildable_grid()
@@ -146,6 +145,7 @@ func generate_siege_layout(seed_value: int = -1) -> bool:
 	tiles[spawn_cell.y][spawn_cell.x] = Tile.SPAWN
 	tiles[exit_cell.y][exit_cell.x] = Tile.EXIT
 	is_siege_layout = true
+	last_layout_seed = used_seed
 	queue_redraw()
 	return false
 

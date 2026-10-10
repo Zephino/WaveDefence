@@ -156,12 +156,22 @@ func _run() -> void:
 	# Siege: center exit, rim spawn, path exists; relocate keeps towers.
 	if not grid.generate_siege_layout(4242):
 		errors.append("siege layout generator failed")
+	if grid.last_layout_seed != 4242:
+		errors.append("siege last_layout_seed should match requested seed")
 	build.pathfinder.sync_region()
 	build.pathfinder.rebuild()
 	if grid.cols != GameGrid.SIEGE_COLS or grid.rows != GameGrid.SIEGE_ROWS:
 		errors.append("siege should be %dx%d" % [GameGrid.SIEGE_COLS, GameGrid.SIEGE_ROWS])
 	if grid.exit_cell != Vector2i(grid.cols / 2, grid.rows / 2):
 		errors.append("siege exit should be map center")
+	# Siege board should be larger than the play window so wheel zoom-out is useful.
+	var siege_map := grid.map_pixel_size()
+	var siege_view := GameLayout.board_view_size(siege_map)
+	var siege_fit := minf(siege_view.x / maxf(siege_map.x, 1.0), siege_view.y / maxf(siege_map.y, 1.0))
+	if siege_fit >= 1.0:
+		errors.append("siege map should exceed board view (min zoom < 1)")
+	if main.map_zoom < 0.999:
+		errors.append("map_zoom should start at 1.0")
 	if build.pathfinder.get_world_path().size() < 2:
 		errors.append("siege layout must keep a path")
 	var old_spawn := grid.spawn_cell
