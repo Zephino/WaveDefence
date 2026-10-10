@@ -257,6 +257,43 @@ if ($doWeb) {
             if ($swNew -notmatch [regex]::Escape($swTagged)) {
                 throw "Failed to stamp CACHE_VERSION=$Version into service worker"
             }
+            $swNew = $swNew -replace "event.waitUntil\(caches.open\(CACHE_NAME\).then\(\(cache\) => cache.addAll\(CACHED_FILES\)\)\);", "event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHED_FILES)).then(() => self.skipWaiting()));"
+            $navOld = @'
+				if (isNavigate) {
+					// Check if we have full cache during HTML page request.
+					/** @type {Response[]} */
+					const fullCache = await Promise.all(FULL_CACHE.map((name) => cache.match(name)));
+					const missing = fullCache.some((v) => v === undefined);
+					if (missing) {
+						try {
+							// Try network if some cached file is missing (so we can display offline page in case).
+							const response = await fetchAndCache(event, cache, isCacheable);
+							return response;
+						} catch (e) {
+							// And return the hopefully always cached offline page in case of network failure.
+							console.error('Network error: ', e); // eslint-disable-line no-console
+							return caches.match(OFFLINE_URL);
+						}
+					}
+				}
+'@
+            $navNew = @'
+				if (isNavigate) {
+					// NETWORK_FIRST_HTML: always try the network so updates reach installed PWAs.
+					try {
+						const response = await fetchAndCache(event, cache, true);
+						return response;
+					} catch (e) {
+						console.error('Network error: ', e); // eslint-disable-line no-console
+						const cachedNav = await cache.match(event.request);
+						if (cachedNav) { return cachedNav; }
+						return caches.match(OFFLINE_URL);
+					}
+				}
+'@
+            if ($swNew.Contains("if (isNavigate)")) {
+                $swNew = $swNew.Replace($navOld, $navNew)
+            }
             Write-TextFileRetry $swPath $swNew
         }
     }
@@ -268,6 +305,7 @@ if ($doWeb) {
         if (Test-Path $swPath) {
             $swOnDisk = Read-TextFileRetry $swPath
             if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $Version + "';")) { return $false }
+            if ($swOnDisk -notmatch "NETWORK_FIRST_HTML") { return $false }
         }
         if (Test-Path $manifestPath) {
             $man = Read-TextFileRetry $manifestPath

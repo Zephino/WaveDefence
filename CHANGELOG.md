@@ -1,4 +1,15 @@
-﻿## Version 00.02.29
+﻿## Version 00.02.30
+Date: 10/10/2026
+Time: 11:49 AM
+
+### Changes
+- Web now shows a real **Tap to start** button that unlocks the browser AudioContext, then starts music in that same tap
+- Service worker fetches `index.html` from the network first so installed home-screen copies can pick up new builds
+
+### Reason
+Godot canvas clicks are not a trusted browser audio gesture, so the game stayed silent online even after the PCM pack was live.
+
+## Version 00.02.29
 Date: 10/10/2026
 Time: 11:44 AM
 

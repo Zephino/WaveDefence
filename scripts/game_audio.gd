@@ -46,6 +46,7 @@ var _unlocked: bool = false
 ## Web only: true after a real click/tap/key. Menu _ready must not count as a gesture.
 var _web_gesture: bool = false
 var _web_retry_token: int = 0
+var _web_unlock_cb: JavaScriptObject
 var _context: MusicContext = MusicContext.NONE
 var _music_players: Array[AudioStreamPlayer] = []
 var _sfx_player: AudioStreamPlayer
@@ -84,6 +85,8 @@ func _ready() -> void:
 	_apply_volumes()
 	_load_music_loops()
 	set_process_input(OS.has_feature("web"))
+	if OS.has_feature("web"):
+		_bind_web_unlock_callback()
 
 
 func _setup_buses() -> void:
@@ -222,6 +225,25 @@ func _wav_from_riff(raw: PackedByteArray) -> AudioStreamWAV:
 	stream.data = data
 	_arm_loop(stream)
 	return stream
+
+
+func _bind_web_unlock_callback() -> void:
+	_web_unlock_cb = JavaScriptBridge.create_callback(_on_js_audio_unlock)
+	var window := JavaScriptBridge.get_interface("window")
+	if window != null:
+		window.__wdGodotUnlock = _web_unlock_cb
+
+
+func _on_js_audio_unlock(_args: Array) -> void:
+	unlock()
+
+
+func _process_web_unlock_flag() -> void:
+	if _web_gesture or not OS.has_feature("web"):
+		return
+	var ready: bool = bool(JavaScriptBridge.eval("!!window.__wdAudioUnlocked", true))
+	if ready:
+		unlock()
 
 
 func _input(event: InputEvent) -> void:
@@ -413,6 +435,8 @@ func set_paused_duck(duck: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if OS.has_feature("web") and not _web_gesture:
+		_process_web_unlock_flag()
 	if _context != MusicContext.GAME_STANDARD and _context != MusicContext.GAME_SIEGE:
 		return
 	if _paused_duck:

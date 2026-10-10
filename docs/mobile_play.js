@@ -6,9 +6,11 @@
 	var fsBtn = null;
 	var fsModal = null;
 	var installModal = null;
+	var startGate = null;
 	var deferredPrompt = null;
 	var cssFullscreen = false;
 	var audioContexts = [];
+	var audioUnlocked = false;
 
 	// Patch early (before Godot boots) so we can resume the engine AudioContext after a tap.
 	(function patchAudioContext() {
@@ -38,22 +40,99 @@
 		try { ctx.resume(); } catch (e) {}
 	}
 
-	function unlockAudio() {
+	function resumeAudioContexts() {
 		for (var i = 0; i < audioContexts.length; i++) {
 			resumeOne(audioContexts[i]);
 		}
 		try {
-			var Ctx = window.AudioContext || window.webkitAudioContext;
-			if (!Ctx) return;
-			if (!window.__wdAudioKick) window.__wdAudioKick = new Ctx();
-			resumeOne(window.__wdAudioKick);
-			// Tiny silent buffer forces some mobile browsers to fully unlock output.
-			var buf = window.__wdAudioKick.createBuffer(1, 1, 22050);
-			var src = window.__wdAudioKick.createBufferSource();
-			src.buffer = buf;
-			src.connect(window.__wdAudioKick.destination);
-			src.start(0);
+			if (window.__wdAudioKick) resumeOne(window.__wdAudioKick);
 		} catch (e) {}
+	}
+
+	function unlockAudio() {
+		resumeAudioContexts();
+		try {
+			var Ctx = window.AudioContext || window.webkitAudioContext;
+			if (Ctx && !window.__wdAudioKick) {
+				window.__wdAudioKick = new Ctx();
+				var buf = window.__wdAudioKick.createBuffer(1, 1, 22050);
+				var src = window.__wdAudioKick.createBufferSource();
+				src.buffer = buf;
+				src.connect(window.__wdAudioKick.destination);
+				src.start(0);
+			}
+			resumeOne(window.__wdAudioKick);
+		} catch (e) {}
+	}
+
+	function unlockAndStartGame() {
+		unlockAudio();
+		audioUnlocked = true;
+		window.__wdAudioUnlocked = true;
+		hideStartGate();
+		try {
+			if (typeof window.__wdGodotUnlock === "function") {
+				window.__wdGodotUnlock();
+			}
+		} catch (e) {}
+	}
+
+	function ensureStartGate() {
+		if (startGate) return startGate;
+		startGate = document.createElement("div");
+		startGate.id = "wd-start-gate";
+		startGate.style.cssText = [
+			"position:fixed",
+			"inset:0",
+			"z-index:2147483647",
+			"display:flex",
+			"align-items:center",
+			"justify-content:center",
+			"background:rgba(8,10,14,0.92)",
+			"padding:24px",
+			"box-sizing:border-box",
+		].join(";");
+		var card = document.createElement("div");
+		card.style.cssText = [
+			"max-width:360px",
+			"width:100%",
+			"background:#1a222c",
+			"color:#e8eef2",
+			"border-radius:12px",
+			"padding:22px 18px",
+			"text-align:center",
+			"font:16px/1.35 system-ui,sans-serif",
+			"box-shadow:0 12px 40px rgba(0,0,0,0.45)",
+		].join(";");
+		card.innerHTML = "<b style=\"font-size:22px;display:block;margin-bottom:10px;\">Wave Defence</b>" +
+			"<div style=\"opacity:0.85;margin-bottom:16px;\">Browsers block game audio until you tap. Tap below to start with sound.</div>";
+		var go = document.createElement("button");
+		go.type = "button";
+		go.textContent = "Tap to start";
+		go.style.cssText = [
+			"display:block",
+			"width:100%",
+			"padding:16px 16px",
+			"border:0",
+			"border-radius:8px",
+			"background:#d4a017",
+			"color:#141414",
+			"font:700 18px/1.1 system-ui,sans-serif",
+			"touch-action:manipulation",
+		].join(";");
+		go.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			unlockAndStartGame();
+		});
+		card.appendChild(go);
+		startGate.appendChild(card);
+		document.body.appendChild(startGate);
+		return startGate;
+	}
+
+	function hideStartGate() {
+		if (startGate) startGate.style.display = "none";
 	}
 
 	function isTouchish() {
@@ -599,6 +678,8 @@
 		promptFullscreen: promptFullscreen,
 		promptInstall: promptInstall,
 		unlockAudio: unlockAudio,
+		unlockAndStartGame: unlockAndStartGame,
+		isAudioUnlocked: function () { return !!audioUnlocked; },
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,
@@ -609,11 +690,12 @@
 	function boot() {
 		applyCssLandscape();
 		refreshChromeButtons();
+		ensureStartGate();
 
-		document.addEventListener("pointerdown", function onFirstPointer() {
-			unlockAudio();
-			document.removeEventListener("pointerdown", onFirstPointer, true);
-		}, true);
+		// Resume on every real DOM gesture. Do not notify Godot here (avoids a resume/unlock loop).
+		document.addEventListener("pointerdown", resumeAudioContexts, true);
+		document.addEventListener("touchstart", resumeAudioContexts, true);
+		document.addEventListener("keydown", resumeAudioContexts, true);
 
 		window.addEventListener("beforeinstallprompt", function (e) {
 			e.preventDefault();
