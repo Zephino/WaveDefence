@@ -12,10 +12,12 @@ signal command_ability_pressed(ability_id: String)
 signal tower_type_selected(tower_id: String)
 signal end_run_confirmed
 signal multi_select_changed(enabled: bool)
+signal pan_mode_changed(enabled: bool)
 signal pause_pressed
 
 var game_state: GameState
 var multi_select_enabled: bool = false
+var pan_mode_enabled: bool = false
 
 var gold_label: Label
 var lives_label: Label
@@ -33,6 +35,7 @@ var sell_button: Button
 var deselect_button: Button
 var upgrade_button: Button
 var multi_select_button: Button
+var pan_mode_button: Button
 var end_run_button: Button
 var final_buttons: Dictionary = {}
 var tower_buttons: Dictionary = {}
@@ -308,6 +311,34 @@ func _refresh_multi_select_button() -> void:
 	multi_select_button.modulate = Color(1.15, 1.1, 0.7) if multi_select_enabled else Color.WHITE
 
 
+func _toggle_pan_mode() -> void:
+	set_pan_mode(not pan_mode_enabled)
+
+
+func set_pan_mode(on: bool) -> void:
+	if pan_mode_enabled == on:
+		_refresh_pan_mode_button()
+		return
+	pan_mode_enabled = on
+	_refresh_pan_mode_button()
+	pan_mode_changed.emit(pan_mode_enabled)
+
+
+func set_pan_available(available: bool) -> void:
+	if pan_mode_button == null:
+		return
+	pan_mode_button.visible = available
+	if not available and pan_mode_enabled:
+		set_pan_mode(false)
+
+
+func _refresh_pan_mode_button() -> void:
+	if pan_mode_button == null:
+		return
+	pan_mode_button.text = "Pan: On" if pan_mode_enabled else "Pan: Off"
+	pan_mode_button.modulate = Color(0.75, 1.15, 1.1) if pan_mode_enabled else Color.WHITE
+
+
 func set_run_summary_presented(on: bool) -> void:
 	if _top_bar:
 		_top_bar.visible = not on
@@ -459,6 +490,13 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	multi_select_button.pressed.connect(_toggle_multi_select)
 	sidebar.add_child(multi_select_button)
 	_refresh_multi_select_button()
+
+	pan_mode_button = _sidebar_button("Pan: Off", GameLayout.button_height(26.0))
+	pan_mode_button.tooltip_text = "Drag the map without placing towers (also hold Space on desktop)"
+	pan_mode_button.pressed.connect(_toggle_pan_mode)
+	pan_mode_button.visible = false
+	sidebar.add_child(pan_mode_button)
+	_refresh_pan_mode_button()
 
 	deselect_button = _sidebar_button("Deselect", GameLayout.button_height(26.0))
 	deselect_button.disabled = true

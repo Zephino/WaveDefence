@@ -172,5 +172,5 @@ static func button_height(desktop_height: float) -> float:
 
 static func help_text() -> String:
 	if use_touch_ui() or UserSettings.is_large_controls():
-		return "Drag to paint place\nLong-press tower = multi-select\nMulti toggle / Deselect\nTap tower for info\nSiege: drag map to pan"
-	return "Esc/right-click deselect\nCtrl/Shift multi-select\nUpgrade x3 then final\nF1/~ debug overlay\nSiege: drag map to pan"
+		return "Drag to paint place\nLong-press tower = multi-select\nMulti / Pan / Deselect\nTap tower for info\nPan: On = drag map only"
+	return "Esc/right-click deselect\nCtrl/Shift multi-select\nUpgrade x3 then final\nF1/~ debug overlay\nPan: On or hold Space to drag map"

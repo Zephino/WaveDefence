@@ -68,7 +68,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
-  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). **Scroll wheel** over the board zooms out/in (down to fit the whole map). Pan with right/middle mouse, drag from rocks/spawn/exit, or drag after pressing a wall/tower (left-click still places towers on walls and selects)
+  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with the **Pan** sidebar toggle (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
 - **Monsters** — independent of map:
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)

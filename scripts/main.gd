@@ -42,6 +42,7 @@ const LONG_PRESS_SEC := 0.45
 const TAP_MOVE_PX := 18.0
 var _touch_ui: bool = false
 var _multi_select_mode: bool = false
+var _pan_mode: bool = false
 ## Command tower pay-per-use aim mode.
 var _aim_ability_id: String = ""
 var _aim_command_tower: Tower = null
@@ -156,6 +157,11 @@ func _setup_ui() -> void:
 		_multi_select_mode = on
 		hud.set_status("Multi-select %s." % ("ON — tap towers to add/remove" if on else "OFF"))
 	)
+	hud.pan_mode_changed.connect(func(on: bool) -> void:
+		_pan_mode = on
+		if on:
+			hud.set_status("Pan mode — drag the map. Tap Pan again (or pick a tower) to place.")
+	)
 	build_system.selected_towers_changed.connect(_on_selected_towers_changed)
 	build_system.selection_upgrade_changed.connect(hud.update_upgrade_buttons)
 	hud.end_run_confirmed.connect(_on_end_run_confirmed)
@@ -199,15 +205,16 @@ func _set_start_status() -> void:
 			]
 		)
 	elif WaveScaler.is_siege_mode(game_state.game_mode):
-		hud.set_status("Siege — defend the center. Drag (RMB/middle/blocked cell) to pan. Start Round when ready.")
+		hud.set_status("Siege — defend the center. Use Pan (or hold Space / RMB) to move the map. Start Round when ready.")
 	elif WaveScaler.is_custom_layout(game_state.map_layout_mode):
 		hud.set_status(
 			"Classic custom map (seed %d) — fixed all run. Build, then Start Round." % game_state.current_map_seed
 		)
 	elif _touch_ui:
-		hud.set_status("Touch: drag to place, long-press tower to multi-select, then Start Round.")
+		hud.set_status("Touch: drag to place, Pan to move the map, long-press tower to multi-select.")
 	else:
 		hud.set_status("Build your maze, then press Start Round.")
+	_refresh_pan_availability()
 
 
 func _process(delta: float) -> void:
@@ -379,10 +386,11 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 		_resolve_command_aim(local_map)
 		return
 
-	# Pan from blocked / occupied cells when the map is larger than the view.
-	if _map_needs_pan() and _can_start_pan_at(local_map) and not _is_additive_select():
-		_begin_pan(screen)
-		return
+	# Pan mode / Space / blocked cells: move the camera without placing.
+	if _map_needs_pan() and not _is_additive_select():
+		if _pan_mode or _space_pan_held() or _can_start_pan_at(local_map):
+			_begin_pan(screen)
+			return
 
 	var additive := event.ctrl_pressed or event.shift_pressed or _multi_select_mode
 	_paint_holding = true
@@ -536,6 +544,16 @@ func _can_start_pan_at(local_map: Vector2) -> bool:
 	return false
 
 
+func _space_pan_held() -> bool:
+	return Input.is_key_pressed(KEY_SPACE)
+
+
+func _refresh_pan_availability() -> void:
+	if hud == null:
+		return
+	hud.set_pan_available(_map_needs_pan())
+
+
 func _begin_pan(screen: Vector2) -> void:
 	_panning = true
 	_pan_moved = false
@@ -580,14 +598,15 @@ func _update_map_camera() -> void:
 	_map_camera.position = map_offset + view * 0.5 + map_pan * map_zoom
 
 
-func _focus_camera_on_spawn_exit() -> void:
+## Pan so the board center (Siege exit) sits in the middle of the play view.
+func _focus_camera_on_map_center() -> void:
 	if grid == null or not _map_needs_pan():
 		map_pan = Vector2.ZERO
 		_clamp_map_pan()
 		_sync_world_positions()
 		_update_map_camera()
 		return
-	var mid := (grid.cell_to_world_center(grid.spawn_cell) + grid.cell_to_world_center(grid.exit_cell)) * 0.5
+	var mid := grid.map_pixel_size() * 0.5
 	var visible := _visible_map_extent()
 	map_pan = mid - visible * 0.5
 	_clamp_map_pan()
@@ -622,6 +641,8 @@ func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:
 
 
 func _on_tower_type_selected(tower_id: String) -> void:
+	if _pan_mode and hud != null:
+		hud.set_pan_mode(false)
 	build_system.select_tower_type(tower_id)
 	var def := TowerData.get_def(tower_id)
 	var name := str(def.get("display_name", tower_id))
@@ -892,7 +913,7 @@ func _on_spawn_rotate_requested(wave: int) -> void:
 	wave_manager.invalidate_ground_path()
 	wave_manager.repath_living_enemies()
 	build_system.refresh_after_reset()
-	_focus_camera_on_spawn_exit()
+	_focus_camera_on_map_center()
 	if ok:
 		hud.set_status("Wave %d cleared — entry moved to a new rim. Path must stay open to the center." % wave)
 	else:
@@ -937,9 +958,10 @@ func _apply_run_map(new_random: bool) -> void:
 	map_zoom = 1.0
 	_sync_world_positions()
 	if WaveScaler.is_siege_mode(mode):
-		_focus_camera_on_spawn_exit()
+		_focus_camera_on_map_center()
 	else:
 		_update_map_camera()
+	_refresh_pan_availability()
 	if hud != null:
 		hud.refresh_run_labels()
 

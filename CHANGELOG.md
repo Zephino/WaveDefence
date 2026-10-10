@@ -1,4 +1,25 @@
-﻿## Version 00.02.36
+﻿## Version 00.02.38
+Date: 10/10/2026
+Time: 12:28 PM
+
+### Changes
+- Large maps (Siege) show a **Pan** sidebar toggle — with Pan on, drag moves the camera without placing towers; picking a shop tower turns Pan off
+- Hold **Space** while dragging also pans on desktop (right/middle mouse still work)
+
+### Reason
+Players needed a clear way to look around the Siege board without accidentally building.
+
+## Version 00.02.37
+Date: 10/10/2026
+Time: 12:26 PM
+
+### Changes
+- Siege mode now opens the view centered on the middle of the map (the exit), instead of halfway between the rim spawn and the exit
+
+### Reason
+Siege should start looking at the center of the board where defense is built.
+
+## Version 00.02.36
 Date: 10/10/2026
 Time: 12:23 PM
 
