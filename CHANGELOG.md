@@ -1,4 +1,15 @@
-﻿## Version 00.02.21
+﻿## Version 00.02.22
+Date: 10/10/2026
+Time: 10:33 AM
+
+### Changes
+- Music restarts on every web audio unlock / first SFX click so browsers that blocked autoplay still start the menu and in-game loops
+- Music context is stored even before unlock; game runs unlock before selecting the bed; null/failed loops are skipped cleanly
+
+### Reason
+Web autoplay blocked the first music start, and later unlocks did not force a replay, so the game stayed silent while button SFX still worked.
+
+## Version 00.02.21
 Date: 10/10/2026
 Time: 10:31 AM
 

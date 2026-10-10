@@ -56,13 +56,17 @@ func _ready() -> void:
 
 
 func _setup_buses() -> void:
-	if AudioServer.bus_count <= 1:
-		AudioServer.add_bus(1)
-		AudioServer.set_bus_name(1, "Music")
-		AudioServer.add_bus(2)
-		AudioServer.set_bus_name(2, "SFX")
-		AudioServer.set_bus_send(1, "Master")
-		AudioServer.set_bus_send(2, "Master")
+	_ensure_named_bus("Music")
+	_ensure_named_bus("SFX")
+
+
+func _ensure_named_bus(bus_name: String) -> void:
+	if AudioServer.get_bus_index(bus_name) >= 0:
+		return
+	var idx := AudioServer.bus_count
+	AudioServer.add_bus(idx)
+	AudioServer.set_bus_name(idx, bus_name)
+	AudioServer.set_bus_send(idx, "Master")
 
 
 func _build_sfx_only() -> void:
@@ -79,7 +83,11 @@ func _build_sfx_only() -> void:
 
 func _load_music_loops() -> void:
 	for key in LOOP_PATHS:
-		_loops[key] = _open_loop_bytes(String(LOOP_PATHS[key]))
+		var stream := _open_loop_bytes(String(LOOP_PATHS[key]))
+		if stream != null:
+			_loops[key] = stream
+		else:
+			push_error("Failed to load music loop: %s" % String(LOOP_PATHS[key]))
 
 
 func _arm_loop(stream: AudioStreamWAV) -> void:
@@ -95,33 +103,50 @@ func _arm_loop(stream: AudioStreamWAV) -> void:
 
 
 func _open_loop_bytes(path: String) -> AudioStreamWAV:
-	# Exported packs ship the imported AudioStreamWAV, not the raw .wav bytes.
+	# Prefer raw PCM bytes when present (editor / include_filter exports).
+	var from_file := _open_loop_from_file(path)
+	if from_file != null:
+		return from_file
+	# Exported packs usually ship the imported AudioStreamWAV only.
 	if ResourceLoader.exists(path):
-		var loaded: Variant = ResourceLoader.load(path)
+		var loaded: Variant = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
 		if loaded is AudioStreamWAV:
-			var imported := (loaded as AudioStreamWAV).duplicate() as AudioStreamWAV
-			_arm_loop(imported)
-			return imported
+			var imported := (loaded as AudioStreamWAV).duplicate(true) as AudioStreamWAV
+			if imported != null and imported.data.size() > 0:
+				_arm_loop(imported)
+				return imported
+	push_error("Music loop missing: %s" % path)
+	return null
+
+
+func _open_loop_from_file(path: String) -> AudioStreamWAV:
+	if not FileAccess.file_exists(path):
+		return null
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		push_error("Music loop missing: %s" % path)
 		return null
 	var raw := file.get_buffer(file.get_length())
 	if raw.size() < 44:
+		return null
+	# Skip non-RIFF / non-PCM containers (imported remaps are not raw WAV).
+	if raw.decode_u32(0) != 0x46464952: # "RIFF"
 		return null
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = raw.decode_u32(24)
 	stream.stereo = raw.decode_u16(22) == 2
 	stream.data = raw.slice(44)
+	if stream.data.is_empty():
+		return null
 	_arm_loop(stream)
 	return stream
 
 
 func unlock() -> void:
 	_unlocked = true
-	if _pending_play:
-		_try_play_context()
+	# Browsers block autoplay until a gesture; every unlock must restart music.
+	_pending_play = true
+	_try_play_context(true)
 
 
 func _slider_db(percent: float) -> float:
@@ -149,33 +174,35 @@ func refresh_volumes() -> void:
 
 
 func set_music_context(ctx: MusicContext) -> void:
-	if not _unlocked and OS.has_feature("web"):
-		return
 	_context = ctx
 	_tension_smooth = 0.0
 	_boss_floor = 0.0
 	_pending_play = true
-	_try_play_context()
+	_try_play_context(false)
 
 
-func _try_play_context() -> void:
+func _loop_ready(key: String) -> bool:
+	return _loops.get(key) is AudioStreamWAV
+
+
+func _try_play_context(force_restart: bool = false) -> void:
 	if not _unlocked and OS.has_feature("web"):
 		return
 	match _context:
 		MusicContext.MENU:
-			if not _loops.has("menu"):
+			if not _loop_ready("menu"):
 				return
-			_play_loop_pair(_loops["menu"], null, 1.0, 0.0)
+			_play_loop_pair(_loops["menu"], null, 1.0, 0.0, force_restart)
 			_pending_play = false
 		MusicContext.GAME_STANDARD:
-			if not _loops.has("calm") or not _loops.has("intense"):
+			if not _loop_ready("calm") or not _loop_ready("intense"):
 				return
-			_play_loop_pair(_loops["calm"], _loops["intense"], 1.0, 0.0)
+			_play_loop_pair(_loops["calm"], _loops["intense"], 1.0, 0.0, force_restart)
 			_pending_play = false
 		MusicContext.GAME_SIEGE:
-			if not _loops.has("siege_calm") or not _loops.has("siege_intense"):
+			if not _loop_ready("siege_calm") or not _loop_ready("siege_intense"):
 				return
-			_play_loop_pair(_loops["siege_calm"], _loops["siege_intense"], 1.0, 0.0)
+			_play_loop_pair(_loops["siege_calm"], _loops["siege_intense"], 1.0, 0.0, force_restart)
 			_pending_play = false
 		_:
 			_pending_play = false
@@ -188,6 +215,8 @@ func _confirm_playback(token: int) -> void:
 	timer.timeout.connect(func() -> void:
 		if token != _playback_token or _context == MusicContext.NONE:
 			return
+		if not _unlocked and OS.has_feature("web"):
+			return
 		var player := _music_players[0]
 		if player.stream == null:
 			return
@@ -196,21 +225,25 @@ func _confirm_playback(token: int) -> void:
 	, CONNECT_ONE_SHOT)
 
 
-func _play_loop_pair(calm: AudioStream, intense: AudioStream, calm_vol: float, intense_vol: float) -> void:
-	if _music_players[0].stream != calm:
+func _play_loop_pair(
+	calm: AudioStream,
+	intense: AudioStream,
+	calm_vol: float,
+	intense_vol: float,
+	force_restart: bool = false
+) -> void:
+	if calm == null:
+		return
+	if force_restart or _music_players[0].stream != calm or not _music_players[0].playing:
 		_music_players[0].stream = calm
-		_music_players[0].play()
-	elif not _music_players[0].playing:
 		_music_players[0].play()
 	_music_players[0].volume_db = linear_to_db(maxf(calm_vol, 0.001))
 	if intense:
-		if _music_players[1].stream != intense:
+		if force_restart or _music_players[1].stream != intense or not _music_players[1].playing:
 			_music_players[1].stream = intense
 			_music_players[1].play()
-		elif not _music_players[1].playing:
-			_music_players[1].play()
 		_music_players[1].volume_db = linear_to_db(maxf(intense_vol, 0.001))
-	elif _music_players[1].playing:
+	elif _music_players[1].playing or _music_players[1].stream != null:
 		_music_players[1].stop()
 		_music_players[1].stream = null
 
@@ -312,6 +345,9 @@ func _play_sfx(key: String) -> void:
 		return
 	if not _sfx.has(key):
 		return
+	# First audible click is a trusted gesture — kick music if autoplay blocked it.
+	if OS.has_feature("web") and (_music_players[0].stream == null or not _music_players[0].playing):
+		_try_play_context(true)
 	_sfx_player.stream = _sfx[key]
 	_sfx_player.pitch_scale = randf_range(0.95, 1.05)
 	_sfx_player.play()

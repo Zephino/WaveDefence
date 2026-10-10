@@ -51,6 +51,7 @@ func _ready() -> void:
 	_setup_layout_mode = Session.map_layout_mode
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
+	# Unlock first so web can arm audio; first real button tap restarts music after autoplay block.
 	SoundHub.unlock()
 	SoundHub.set_music_context(SoundHub.MUSIC_MENU)
 

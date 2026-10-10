@@ -180,11 +180,11 @@ func _setup_ui() -> void:
 	hud.refresh_run_labels()
 	_set_start_status()
 	hud.update_timer(0.0, true, "prep")
+	SoundHub.unlock()
 	if WaveScaler.is_siege_mode(game_state.game_mode):
 		SoundHub.set_music_context(SoundHub.MUSIC_GAME_SIEGE)
 	else:
 		SoundHub.set_music_context(SoundHub.MUSIC_GAME_STANDARD)
-	SoundHub.unlock()
 	if game_state.tutorial_run:
 		_tutorial_step = 0
 		_refresh_tutorial_status()
