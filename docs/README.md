@@ -17,3 +17,5 @@ Rebuild:
 Wait for the game to finish loading, then click or tap once — browsers start music on that first gesture. Click the game canvas once if input seems stuck (browser focus).
 
 **Installed app updates:** open **Settings → Update app**. That checks for a newer build, clears the local cache, and reloads from GitHub Pages. You do not need to uninstall the home-screen icon.
+
+**Fullscreen:** the first tap starts sound and requests immersive fullscreen. The PWA manifest uses `display: fullscreen`. If an older home-screen install still opens with browser chrome, use **Update app**, then if needed remove and re-add the icon once so the new manifest applies.

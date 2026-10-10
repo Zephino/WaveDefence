@@ -107,9 +107,9 @@ func _build_ui() -> void:
 	_build_choice_columns(_center)
 	call_deferred("_maybe_offer_tutorial")
 	_center.add_child(_spacer(8))
-	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
+	# Settings before Leaderboard so the primary gear action is higher on phones.
 	_center.add_child(_menu_button("Settings", _show_settings_popup))
-	_center.add_child(_menu_button("Quit", _on_quit))
+	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
 	if _reopen_settings_after_rebuild:
 		_reopen_settings_after_rebuild = false
 		call_deferred("_show_settings_popup")
@@ -124,6 +124,16 @@ func _build_ui() -> void:
 		func(_ok: bool) -> void:
 			boards_label.text = _boards_status_text()
 	)
+	# Quit last + spaced on touch so a Settings tap is harder to miss.
+	_center.add_child(_spacer(28.0 if _touch_layout else 8.0))
+	var quit_btn := _menu_button("Quit", _on_quit)
+	if _touch_layout:
+		quit_btn.modulate = Color(0.82, 0.62, 0.62)
+		quit_btn.custom_minimum_size = Vector2(
+			_menu_button_size().x,
+			GameLayout.button_height(40.0)
+		)
+	_center.add_child(quit_btn)
 
 
 func _build_header(parent: VBoxContainer) -> void:
@@ -986,7 +996,41 @@ func _on_update_app() -> void:
 
 
 func _on_quit() -> void:
-	Session.quit_game()
+	# Phones often mistap Quit when aiming for Settings — confirm first.
+	if _touch_layout or OS.has_feature("web"):
+		_confirm_quit()
+	else:
+		Session.quit_game()
+
+
+func _confirm_quit() -> void:
+	var modal := _make_modal_overlay(40)
+	var box: VBoxContainer = modal["box"]
+	var title := Label.new()
+	title.text = "Leave Wave Defence?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+	var body := Label.new()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(300, 0)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.text = "You can keep playing — Quit closes this session."
+	box.add_child(body)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	row.add_child(_menu_button("Stay", func() -> void:
+		modal["overlay"].queue_free()
+	, true))
+	var leave := _menu_button("Leave", func() -> void:
+		modal["overlay"].queue_free()
+		Session.quit_game()
+	, true)
+	leave.modulate = Color(0.9, 0.65, 0.65)
+	row.add_child(leave)
+	call_deferred("_finalize_modal_size", modal["panel"], box, modal["max_size"])
 
 
 func _settings_check(label: String, pressed: bool, cb: Callable) -> CheckButton:

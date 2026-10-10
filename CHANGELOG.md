@@ -1,4 +1,15 @@
-﻿## Version 00.02.35
+﻿## Version 00.02.36
+Date: 10/10/2026
+Time: 12:23 PM
+
+### Changes
+- Phone menu: **Settings** moved above Leaderboard; **Quit** moved to the bottom with spacing, a muted color, and a Stay/Leave confirm so it is harder to hit by mistake
+- Web/PWA: first tap requests immersive fullscreen; manifest/`export` display set to **fullscreen**; CSS viewport fill stays on for phones and installed apps
+
+### Reason
+Players kept mistapping Quit instead of Settings, and the installed phone app was not filling the screen like a full-screen game.
+
+## Version 00.02.35
 Date: 10/10/2026
 Time: 12:18 PM
 

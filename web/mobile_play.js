@@ -288,6 +288,19 @@
 	function onFirstUserGesture() {
 		if (audioUnlocked) return;
 		unlockAndStartGame();
+		// Same trusted tap: go immersive on phones (Fullscreen API or CSS fill).
+		if (isTouchish() && !isFullscreen()) {
+			enterFullscreen();
+		}
+	}
+
+	function isDisplayFullscreen() {
+		try {
+			if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) {
+				return true;
+			}
+		} catch (e) {}
+		return false;
 	}
 
 	function isTouchish() {
@@ -332,7 +345,9 @@
 	}
 
 	function fullscreenOk() {
-		return isFullscreen() || cssFullscreen || isStandalone();
+		// Installed "standalone" is not the same as immersive fullscreen — still allow
+		// the Fullscreen chip / CSS fill so phones can hide system UI when possible.
+		return isFullscreen() || cssFullscreen || isDisplayFullscreen();
 	}
 
 	function canvasEl() {
@@ -907,7 +922,10 @@
 
 	function onResume() {
 		if (released) return;
-		if (!isFullscreen()) cssFullscreen = false;
+		if (!isFullscreen()) {
+			// Keep CSS viewport fill on phones / installed apps after tab resume.
+			cssFullscreen = isStandalone() || isTouchish();
+		}
 		mode = "";
 		applyCssLandscape();
 		refreshChromeButtons();
@@ -959,6 +977,10 @@
 	};
 
 	function boot() {
+		// Installed / phone: fill the viewport immediately (status bars still need a tap for true FS).
+		if (isStandalone() || isTouchish()) {
+			cssFullscreen = true;
+		}
 		applyCssLandscape();
 		refreshChromeButtons();
 		// Warm-decode loops while the AudioContext is still suspended.
