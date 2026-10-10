@@ -1,4 +1,15 @@
-﻿## Version 00.02.32
+﻿## Version 00.02.33
+Date: 10/10/2026
+Time: 12:10 PM
+
+### Changes
+- Settings (menu and pause) now have **Mute music** and **Mute sounds** toggles that persist separately from the volume sliders
+- Swiping to scroll settings no longer changes sliders or toggles — only a tap/click on a control edits it
+
+### Reason
+Players needed quick mute switches, and touch scrolling was accidentally flipping options and dragging volume sliders.
+
+## Version 00.02.32
 Date: 10/10/2026
 Time: 12:05 PM
 

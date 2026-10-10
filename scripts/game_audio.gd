@@ -328,6 +328,8 @@ func _slider_db(percent: float) -> float:
 
 
 func _web_music_volume() -> float:
+	if UserSettings.is_music_muted():
+		return 0.0
 	var master := clampf(float(UserSettings.master_volume) / 100.0, 0.0, 1.0)
 	var music := clampf(float(UserSettings.music_volume) / 100.0, 0.0, 1.0)
 	var duck := 0.4 if _paused_duck else 1.0
@@ -365,10 +367,12 @@ func _apply_volumes() -> void:
 	if master_idx >= 0:
 		AudioServer.set_bus_volume_db(master_idx, _slider_db(UserSettings.master_volume))
 	if music_idx >= 0:
-		var music_percent := UserSettings.music_volume * (0.4 if _paused_duck else 1.0)
+		var music_percent := 0.0 if UserSettings.is_music_muted() else float(UserSettings.music_volume)
+		music_percent *= 0.4 if _paused_duck else 1.0
 		AudioServer.set_bus_volume_db(music_idx, _slider_db(music_percent))
 	if sfx_idx >= 0:
-		AudioServer.set_bus_volume_db(sfx_idx, _slider_db(UserSettings.sfx_volume))
+		var sfx_percent := 0.0 if UserSettings.is_sfx_muted() else float(UserSettings.sfx_volume)
+		AudioServer.set_bus_volume_db(sfx_idx, _slider_db(sfx_percent))
 	_sync_web_music()
 	_update_music_mix()
 
@@ -521,7 +525,7 @@ func _update_music_mix() -> void:
 
 
 func play_ui() -> void:
-	if OS.has_feature("web"):
+	if OS.has_feature("web") and not UserSettings.is_sfx_muted():
 		_js_music("if(window.WaveDefenceMobile&&WaveDefenceMobile.playUiBlip){WaveDefenceMobile.playUiBlip();}")
 	_play_sfx("ui")
 
@@ -559,6 +563,8 @@ func play_achievement() -> void:
 
 func _play_sfx(key: String) -> void:
 	if not _unlocked:
+		return
+	if UserSettings.is_sfx_muted():
 		return
 	if not _sfx.has(key):
 		return

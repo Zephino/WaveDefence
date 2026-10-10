@@ -1,6 +1,8 @@
 class_name PauseMenuOverlay
 extends Control
 
+const SettingsTouch := preload("res://scripts/settings_touch.gd")
+
 signal resume_requested
 signal quit_to_menu_requested
 signal screenshot_requested
@@ -10,10 +12,8 @@ var _timeline_text: String = ""
 var _seed_clipboard: String = ""
 var _root_box: VBoxContainer
 var _settings_overlay: Control
-var _music_before_mute: int = -1
-var _music_slider: HSlider
-var _music_label: Label
-var _mute_check: CheckButton
+var _music_mute_check: CheckButton
+var _sfx_mute_check: CheckButton
 var _updating_mute_ui: bool = false
 
 
@@ -121,10 +121,21 @@ func _show_settings() -> void:
 
 	var panel := PanelContainer.new()
 	center.add_child(panel)
+
+	var vp_h := get_viewport().get_visible_rect().size.y
+	if vp_h < 32.0:
+		vp_h = GameLayout.VIEW_HEIGHT
+	var scroll := ScrollContainer.new()
+	SettingsTouch.prepare_scroll(scroll)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(340, minf(420.0, maxf(vp_h - 80.0, 220.0)))
+	panel.add_child(scroll)
+
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
-	box.custom_minimum_size = Vector2(340, 0)
-	panel.add_child(box)
+	box.custom_minimum_size = Vector2(320, 0)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
 
 	var title := Label.new()
 	title.text = "Settings"
@@ -136,29 +147,36 @@ func _show_settings() -> void:
 		UserSettings.set_master_volume(v)
 		SoundHub.refresh_volumes()
 	))
-	var music_row := _volume_row("Music volume", UserSettings.music_volume, func(v: int) -> void:
+	box.add_child(_volume_row("Music volume", UserSettings.music_volume, func(v: int) -> void:
 		UserSettings.set_music_volume(v)
-		if v > 0:
-			_music_before_mute = -1
-		_sync_mute_check(v <= 0)
+		if v > 0 and UserSettings.is_music_muted():
+			UserSettings.set_music_muted(false)
+			_sync_mute_checks()
 		SoundHub.refresh_volumes()
-	)
-	_music_label = music_row.get_child(0) as Label
-	_music_slider = music_row.get_child(1) as HSlider
-	box.add_child(music_row)
+	))
 	box.add_child(_volume_row("SFX volume", UserSettings.sfx_volume, func(v: int) -> void:
 		UserSettings.set_sfx_volume(v)
+		if v > 0 and UserSettings.is_sfx_muted():
+			UserSettings.set_sfx_muted(false)
+			_sync_mute_checks()
 		SoundHub.refresh_volumes()
 	))
 
-	_mute_check = CheckButton.new()
-	_mute_check.text = "Mute music"
-	_mute_check.button_pressed = UserSettings.music_volume <= 0
-	_mute_check.focus_mode = Control.FOCUS_NONE
-	_mute_check.custom_minimum_size = Vector2(300, 40)
-	_mute_check.tooltip_text = "Sets Music volume to 0. Uncheck to restore the previous level."
-	_mute_check.toggled.connect(_on_mute_music_toggled)
-	box.add_child(_mute_check)
+	_music_mute_check = CheckButton.new()
+	_music_mute_check.text = "Mute music"
+	_music_mute_check.button_pressed = UserSettings.is_music_muted()
+	_music_mute_check.custom_minimum_size = Vector2(300, 40)
+	_music_mute_check.tooltip_text = "Silence music without changing the Music volume slider."
+	SettingsTouch.wire_check(_music_mute_check, _on_mute_music_toggled)
+	box.add_child(_music_mute_check)
+
+	_sfx_mute_check = CheckButton.new()
+	_sfx_mute_check.text = "Mute sounds"
+	_sfx_mute_check.button_pressed = UserSettings.is_sfx_muted()
+	_sfx_mute_check.custom_minimum_size = Vector2(300, 40)
+	_sfx_mute_check.tooltip_text = "Silence SFX / UI clicks without changing the SFX volume slider."
+	SettingsTouch.wire_check(_sfx_mute_check, _on_mute_sfx_toggled)
+	box.add_child(_sfx_mute_check)
 
 	box.add_child(_btn("Close", _hide_settings))
 
@@ -167,34 +185,30 @@ func _hide_settings() -> void:
 	if _settings_overlay != null and is_instance_valid(_settings_overlay):
 		_settings_overlay.queue_free()
 	_settings_overlay = null
-	_music_slider = null
-	_music_label = null
-	_mute_check = null
+	_music_mute_check = null
+	_sfx_mute_check = null
 
 
-func _sync_mute_check(muted: bool) -> void:
-	if _mute_check == null or not is_instance_valid(_mute_check):
-		return
+func _sync_mute_checks() -> void:
 	_updating_mute_ui = true
-	_mute_check.button_pressed = muted
+	if _music_mute_check != null and is_instance_valid(_music_mute_check):
+		_music_mute_check.set_pressed_no_signal(UserSettings.is_music_muted())
+	if _sfx_mute_check != null and is_instance_valid(_sfx_mute_check):
+		_sfx_mute_check.set_pressed_no_signal(UserSettings.is_sfx_muted())
 	_updating_mute_ui = false
 
 
 func _on_mute_music_toggled(on: bool) -> void:
 	if _updating_mute_ui:
 		return
-	if on:
-		if UserSettings.music_volume > 0:
-			_music_before_mute = UserSettings.music_volume
-		UserSettings.set_music_volume(0)
-	else:
-		var restore := _music_before_mute if _music_before_mute > 0 else 70
-		UserSettings.set_music_volume(restore)
-		_music_before_mute = -1
-	if _music_slider != null and is_instance_valid(_music_slider):
-		_music_slider.value = UserSettings.music_volume
-	if _music_label != null and is_instance_valid(_music_label):
-		_music_label.text = "Music volume (%d%%)" % UserSettings.music_volume
+	UserSettings.set_music_muted(on)
+	SoundHub.refresh_volumes()
+
+
+func _on_mute_sfx_toggled(on: bool) -> void:
+	if _updating_mute_ui:
+		return
+	UserSettings.set_sfx_muted(on)
 	SoundHub.refresh_volumes()
 
 
@@ -208,9 +222,8 @@ func _volume_row(label_text: String, value: int, cb: Callable) -> VBoxContainer:
 	slider.max_value = 100
 	slider.step = 5
 	slider.value = value
-	slider.custom_minimum_size = Vector2(300, 24)
-	slider.focus_mode = Control.FOCUS_ALL
-	slider.value_changed.connect(func(v: float) -> void:
+	slider.custom_minimum_size = Vector2(300, 28)
+	SettingsTouch.wire_slider(slider, func(v: float) -> void:
 		lab.text = "%s (%d%%)" % [label_text, int(v)]
 		cb.call(int(v))
 	)

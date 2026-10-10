@@ -4,6 +4,7 @@ const _Achievements := preload("res://data/achievements.gd")
 const _AchievementStore := preload("res://scripts/achievement_store.gd")
 const _PlayerStats := preload("res://scripts/player_stats.gd")
 const SoundHub := preload("res://scripts/sound_hub.gd")
+const SettingsTouch := preload("res://scripts/settings_touch.gd")
 
 const SELECT_BORDER := Color(0.32, 0.62, 0.4)
 const SELECT_BG := Color(0.12, 0.16, 0.14)
@@ -17,6 +18,8 @@ var selected_mode: int = WaveScaler.GameMode.CLASSIC
 var selected_monster_mode: int = WaveScaler.MonsterMode.CLASSIC
 var _large_controls_check: CheckButton
 var _effects_check: CheckButton
+var _music_mute_check: CheckButton
+var _sfx_mute_check: CheckButton
 var _center: VBoxContainer
 var _touch_layout: bool = false
 var _map_setup_overlay: Control
@@ -450,6 +453,7 @@ func _finalize_modal_size(panel: PanelContainer, box: VBoxContainer, max_size: V
 	var parent := box.get_parent()
 	if parent is ScrollContainer:
 		var scroll := parent as ScrollContainer
+		SettingsTouch.prepare_scroll(scroll)
 		scroll.custom_minimum_size = want
 		scroll.horizontal_scroll_mode = (
 			ScrollContainer.SCROLL_MODE_AUTO if needed.x > inner_max.x else ScrollContainer.SCROLL_MODE_DISABLED
@@ -462,6 +466,7 @@ func _finalize_modal_size(panel: PanelContainer, box: VBoxContainer, max_size: V
 	# Too tall/wide: wrap content in a sized ScrollContainer.
 	panel.remove_child(box)
 	var scroll := ScrollContainer.new()
+	SettingsTouch.prepare_scroll(scroll)
 	scroll.horizontal_scroll_mode = (
 		ScrollContainer.SCROLL_MODE_AUTO if needed.x > inner_max.x else ScrollContainer.SCROLL_MODE_DISABLED
 	)
@@ -488,18 +493,16 @@ func _show_settings_popup() -> void:
 	_large_controls_check = CheckButton.new()
 	_large_controls_check.text = "Large Controls"
 	_large_controls_check.button_pressed = UserSettings.is_large_controls()
-	_large_controls_check.focus_mode = Control.FOCUS_NONE
 	_large_controls_check.custom_minimum_size = Vector2(320, GameLayout.button_height(40.0))
-	_large_controls_check.toggled.connect(_on_large_controls_toggled)
+	SettingsTouch.wire_check(_large_controls_check, _on_large_controls_toggled)
 	box.add_child(_large_controls_check)
 
 	_effects_check = CheckButton.new()
 	_effects_check.text = "Effects"
 	_effects_check.tooltip_text = "Tower attack visuals (flame, ice, poison cloud, lightning)."
 	_effects_check.button_pressed = UserSettings.is_effects_enabled()
-	_effects_check.focus_mode = Control.FOCUS_NONE
 	_effects_check.custom_minimum_size = Vector2(320, GameLayout.button_height(40.0))
-	_effects_check.toggled.connect(_on_effects_toggled)
+	SettingsTouch.wire_check(_effects_check, _on_effects_toggled)
 	box.add_child(_effects_check)
 
 	box.add_child(_settings_volume_row("Master volume", UserSettings.master_volume, func(v: int) -> void:
@@ -508,12 +511,34 @@ func _show_settings_popup() -> void:
 	))
 	box.add_child(_settings_volume_row("Music volume", UserSettings.music_volume, func(v: int) -> void:
 		UserSettings.set_music_volume(v)
+		if v > 0 and UserSettings.is_music_muted():
+			UserSettings.set_music_muted(false)
+			_sync_settings_mute_checks()
 		SoundHub.refresh_volumes()
 	))
 	box.add_child(_settings_volume_row("SFX volume", UserSettings.sfx_volume, func(v: int) -> void:
 		UserSettings.set_sfx_volume(v)
+		if v > 0 and UserSettings.is_sfx_muted():
+			UserSettings.set_sfx_muted(false)
+			_sync_settings_mute_checks()
 		SoundHub.refresh_volumes()
 	))
+	_music_mute_check = _settings_check(
+		"Mute music",
+		UserSettings.is_music_muted(),
+		func(on: bool) -> void:
+			UserSettings.set_music_muted(on)
+			SoundHub.refresh_volumes()
+	)
+	box.add_child(_music_mute_check)
+	_sfx_mute_check = _settings_check(
+		"Mute sounds",
+		UserSettings.is_sfx_muted(),
+		func(on: bool) -> void:
+			UserSettings.set_sfx_muted(on)
+			SoundHub.refresh_volumes()
+	)
+	box.add_child(_sfx_mute_check)
 	box.add_child(_settings_build_speed_row())
 	box.add_child(_settings_check(
 		"Show tower range",
@@ -565,6 +590,15 @@ func _hide_settings_popup() -> void:
 	_settings_overlay = null
 	_large_controls_check = null
 	_effects_check = null
+	_music_mute_check = null
+	_sfx_mute_check = null
+
+
+func _sync_settings_mute_checks() -> void:
+	if _music_mute_check != null and is_instance_valid(_music_mute_check):
+		_music_mute_check.set_pressed_no_signal(UserSettings.is_music_muted())
+	if _sfx_mute_check != null and is_instance_valid(_sfx_mute_check):
+		_sfx_mute_check.set_pressed_no_signal(UserSettings.is_sfx_muted())
 
 
 func _default_seed_preview_kind() -> int:
@@ -952,9 +986,8 @@ func _settings_check(label: String, pressed: bool, cb: Callable) -> CheckButton:
 	var c := CheckButton.new()
 	c.text = label
 	c.button_pressed = pressed
-	c.focus_mode = Control.FOCUS_NONE
 	c.custom_minimum_size = Vector2(320, GameLayout.button_height(36.0))
-	c.toggled.connect(func(on: bool) -> void: cb.call(on))
+	SettingsTouch.wire_check(c, cb)
 	return c
 
 
@@ -968,8 +1001,8 @@ func _settings_volume_row(label_text: String, value: int, cb: Callable) -> VBoxC
 	slider.max_value = 100
 	slider.step = 5
 	slider.value = value
-	slider.custom_minimum_size = Vector2(300, 24)
-	slider.value_changed.connect(func(v: float) -> void:
+	slider.custom_minimum_size = Vector2(300, 28)
+	SettingsTouch.wire_slider(slider, func(v: float) -> void:
 		lab.text = "%s (%d%%)" % [label_text, int(v)]
 		cb.call(int(v))
 	)
@@ -987,8 +1020,8 @@ func _settings_build_speed_row() -> VBoxContainer:
 	slider.max_value = 2.5
 	slider.step = 0.25
 	slider.value = UserSettings.get_build_speed_mult()
-	slider.custom_minimum_size = Vector2(300, 24)
-	slider.value_changed.connect(func(v: float) -> void:
+	slider.custom_minimum_size = Vector2(300, 28)
+	SettingsTouch.wire_slider(slider, func(v: float) -> void:
 		UserSettings.set_build_speed_mult(v)
 		lab.text = "Build speed (%.2f×)" % v
 	)

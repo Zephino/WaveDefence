@@ -89,7 +89,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 
 ### Audio
 
-Music is original retro console-style loops in `audio/music/` (32 bars, seamless WAV; `MIX_CONSOLES` blends NES, Game Boy, GBA, SNES, Master System, Game Gear, and Genesis timbres) and starts on the main menu. Desktop uses full stereo beds; the web build uses lighter mono `web_loop_*.wav` copies played through the browser Web Audio API. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. Older beds are kept in `audio/music/old_audio/`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. On web, music starts on your first click/tap (browsers block sound before any gesture). If an old home-screen icon stays silent, close it fully and reopen (or clear site data) so it can fetch the new build.
+Music is original retro console-style loops in `audio/music/` (32 bars, seamless WAV; `MIX_CONSOLES` blends NES, Game Boy, GBA, SNES, Master System, Game Gear, and Genesis timbres) and starts on the main menu. Desktop uses full stereo beds; the web build uses lighter mono `web_loop_*.wav` copies played through the browser Web Audio API. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. Older beds are kept in `audio/music/old_audio/`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. **Mute music** / **Mute sounds** silence those buses without wiping the slider levels. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. On web, music starts on your first click/tap (browsers block sound before any gesture). If an old home-screen icon stays silent, close it fully and reopen (or clear site data) so it can fetch the new build.
 
 When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard**. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
@@ -97,7 +97,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 
 ## How to play
 
-- **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), **Settings** (Master / Music / SFX volume + mute music), save maze image, quit to menu (no mid-run save).
+- **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), **Settings** (Master / Music / SFX volume + Mute music / Mute sounds; swipe to scroll without changing controls), save maze image, quit to menu (no mid-run save).
 - **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
 - Select a tower from the left shop, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).

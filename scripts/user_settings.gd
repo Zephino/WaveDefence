@@ -11,6 +11,8 @@ const KEY_TUTORIAL_COMPLETED := "tutorial_completed"
 const KEY_MASTER_VOLUME := "master_volume"
 const KEY_MUSIC_VOLUME := "music_volume"
 const KEY_SFX_VOLUME := "sfx_volume"
+const KEY_MUSIC_MUTED := "music_muted"
+const KEY_SFX_MUTED := "sfx_muted"
 const KEY_BUILD_SPEED := "build_speed_mult"
 const KEY_SHOW_TOWER_RANGE := "show_tower_range"
 const KEY_HIGH_CONTRAST := "high_contrast"
@@ -26,6 +28,8 @@ static var tutorial_completed: bool = false
 static var master_volume: int = 80
 static var music_volume: int = 70
 static var sfx_volume: int = 80
+static var music_muted: bool = false
+static var sfx_muted: bool = false
 static var build_speed_mult: float = 1.0
 static var show_tower_range: bool = true
 static var high_contrast: bool = false
@@ -50,6 +54,8 @@ static func ensure_loaded() -> void:
 	master_volume = int(cfg.get_value(SECTION, KEY_MASTER_VOLUME, 80))
 	music_volume = int(cfg.get_value(SECTION, KEY_MUSIC_VOLUME, 70))
 	sfx_volume = int(cfg.get_value(SECTION, KEY_SFX_VOLUME, 80))
+	music_muted = bool(cfg.get_value(SECTION, KEY_MUSIC_MUTED, false))
+	sfx_muted = bool(cfg.get_value(SECTION, KEY_SFX_MUTED, false))
 	build_speed_mult = float(cfg.get_value(SECTION, KEY_BUILD_SPEED, 1.0))
 	show_tower_range = bool(cfg.get_value(SECTION, KEY_SHOW_TOWER_RANGE, true))
 	high_contrast = bool(cfg.get_value(SECTION, KEY_HIGH_CONTRAST, false))
@@ -67,6 +73,8 @@ static func _apply_defaults() -> void:
 	master_volume = 80
 	music_volume = 70
 	sfx_volume = 80
+	music_muted = false
+	sfx_muted = false
 	build_speed_mult = 1.0
 	show_tower_range = true
 	high_contrast = false
@@ -85,6 +93,8 @@ static func _save_prefs() -> void:
 	cfg.set_value(SECTION, KEY_MASTER_VOLUME, master_volume)
 	cfg.set_value(SECTION, KEY_MUSIC_VOLUME, music_volume)
 	cfg.set_value(SECTION, KEY_SFX_VOLUME, sfx_volume)
+	cfg.set_value(SECTION, KEY_MUSIC_MUTED, music_muted)
+	cfg.set_value(SECTION, KEY_SFX_MUTED, sfx_muted)
 	cfg.set_value(SECTION, KEY_BUILD_SPEED, build_speed_mult)
 	cfg.set_value(SECTION, KEY_SHOW_TOWER_RANGE, show_tower_range)
 	cfg.set_value(SECTION, KEY_HIGH_CONTRAST, high_contrast)
@@ -144,6 +154,28 @@ static func set_sfx_volume(v: int) -> void:
 	ensure_loaded()
 	sfx_volume = clampi(v, 0, 100)
 	_save_prefs()
+
+
+static func set_music_muted(on: bool) -> void:
+	ensure_loaded()
+	music_muted = on
+	_save_prefs()
+
+
+static func is_music_muted() -> bool:
+	ensure_loaded()
+	return music_muted
+
+
+static func set_sfx_muted(on: bool) -> void:
+	ensure_loaded()
+	sfx_muted = on
+	_save_prefs()
+
+
+static func is_sfx_muted() -> bool:
+	ensure_loaded()
+	return sfx_muted
 
 
 static func set_build_speed_mult(v: float) -> void:
