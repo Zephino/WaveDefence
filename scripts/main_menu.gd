@@ -327,25 +327,56 @@ func _panel_style() -> StyleBoxFlat:
 	return panel_style
 
 
+func _modal_max_size(pad: float = 28.0) -> Vector2:
+	var vp := get_viewport().get_visible_rect().size
+	if vp.x < 32.0 or vp.y < 32.0:
+		vp = Vector2(GameLayout.VIEW_WIDTH, GameLayout.VIEW_HEIGHT)
+	return Vector2(maxf(vp.x - pad * 2.0, 200.0), maxf(vp.y - pad * 2.0, 200.0))
+
+
 func _make_modal_overlay(z: int) -> Dictionary:
+	## Dim + centered panel capped to the visible screen; body scrolls if taller.
+	var pad := 28
+	var max_size := _modal_max_size(float(pad))
 	var overlay := Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.z_index = z
 	add_child(overlay)
+
 	var dim := ColorRect.new()
 	dim.color = Color(0.04, 0.05, 0.07, 0.82)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(dim)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", pad)
+	margin.add_theme_constant_override("margin_right", pad)
+	margin.add_theme_constant_override("margin_top", pad)
+	margin.add_theme_constant_override("margin_bottom", pad)
+	overlay.add_child(margin)
+
 	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(center)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(center)
+
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _panel_style())
+	panel.custom_maximum_size = max_size
 	center.add_child(panel)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_maximum_size = Vector2(max_size.x - 4.0, max_size.y - 4.0)
+	scroll.custom_minimum_size = Vector2(minf(400.0, max_size.x - 4.0), 0.0)
+	panel.add_child(scroll)
+
 	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
-	return {"overlay": overlay, "box": box}
+	scroll.add_child(box)
+	return {"overlay": overlay, "box": box, "max_size": max_size}
 
 
 func _show_settings_popup() -> void:
@@ -478,8 +509,9 @@ func _show_seed_browser() -> void:
 	seed_actions.add_child(_menu_button("Preview", _refresh_seed_preview, true))
 
 	_seed_viewport_container = SubViewportContainer.new()
-	_seed_viewport_container.stretch = true
-	_seed_viewport_container.custom_minimum_size = Vector2(420, 300)
+	# Size is set in _refresh_seed_preview so the whole map fits (no crop).
+	_seed_viewport_container.stretch = false
+	_seed_viewport_container.custom_minimum_size = Vector2(280, 200)
 	box.add_child(_seed_viewport_container)
 
 	_seed_viewport = SubViewport.new()
@@ -546,22 +578,48 @@ func _refresh_seed_preview() -> void:
 	_seed_preview_path = Pathfinder.new(_seed_preview_grid)
 	_seed_preview_path.rebuild()
 	_seed_preview_grid.set_path_preview(_seed_preview_path.get_world_path())
+	_fit_seed_preview_viewport()
 	_seed_preview_grid.queue_redraw()
 
-	var map_size := _seed_preview_grid.map_pixel_size()
-	_seed_viewport.size = Vector2i(maxi(int(map_size.x), 1), maxi(int(map_size.y), 1))
-	var max_w := 420.0
-	var max_h := 320.0
-	var scale_f := minf(max_w / maxf(map_size.x, 1.0), max_h / maxf(map_size.y, 1.0))
-	_seed_viewport_container.custom_minimum_size = Vector2(
-		maxi(int(map_size.x * scale_f), 120),
-		maxi(int(map_size.y * scale_f), 90)
-	)
 	var shown := _seed_preview_grid.last_layout_seed if _seed_preview_grid.last_layout_seed >= 0 else seed_val
 	if _seed_resolved_label:
 		_seed_resolved_label.text = "Resolved seed: %d" % shown
 	if _seed_status_label:
 		_seed_status_label.text = ""
+
+
+## Scale the preview grid so the entire map fits in a small box (Siege included).
+func _fit_seed_preview_viewport() -> void:
+	if _seed_preview_grid == null or _seed_viewport == null or _seed_viewport_container == null:
+		return
+	var map_size := _seed_preview_grid.map_pixel_size()
+	# Keep preview modest so the dialog (title + controls + map) fits on screen.
+	var modal_max: Vector2 = _modal_max_size(28.0)
+	var max_box := Vector2(
+		minf(340.0, modal_max.x - 48.0),
+		minf(220.0, modal_max.y * 0.42)
+	)
+	if GameLayout.use_touch_ui() or UserSettings.is_large_controls():
+		max_box = Vector2(
+			minf(300.0, modal_max.x - 48.0),
+			minf(180.0, modal_max.y * 0.38)
+		)
+	max_box.x = maxf(max_box.x, 160.0)
+	max_box.y = maxf(max_box.y, 120.0)
+	var scale_f := minf(
+		max_box.x / maxf(map_size.x, 1.0),
+		max_box.y / maxf(map_size.y, 1.0)
+	)
+	scale_f = clampf(scale_f, 0.06, 1.0)
+	_seed_preview_grid.position = Vector2.ZERO
+	_seed_preview_grid.scale = Vector2(scale_f, scale_f)
+	var display := Vector2(
+		maxf(map_size.x * scale_f, 1.0),
+		maxf(map_size.y * scale_f, 1.0)
+	)
+	_seed_viewport.size = Vector2i(ceili(display.x), ceili(display.y))
+	_seed_viewport_container.custom_minimum_size = display
+	_seed_viewport_container.size = display
 
 
 func _use_seed_from_preview() -> void:
@@ -604,36 +662,9 @@ func _show_map_setup(difficulty: int) -> void:
 	_setup_difficulty = difficulty
 	if _map_setup_overlay != null and is_instance_valid(_map_setup_overlay):
 		_map_setup_overlay.queue_free()
-	_map_setup_overlay = Control.new()
-	_map_setup_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_map_setup_overlay.z_index = 20
-	add_child(_map_setup_overlay)
-
-	var dim := ColorRect.new()
-	dim.color = Color(0.04, 0.05, 0.07, 0.82)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_map_setup_overlay.add_child(dim)
-
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_map_setup_overlay.add_child(center)
-
-	var panel := PanelContainer.new()
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.11, 0.13, 0.16)
-	panel_style.set_border_width_all(2)
-	panel_style.border_color = Color(0.28, 0.34, 0.4)
-	panel_style.set_corner_radius_all(10)
-	panel_style.content_margin_left = 20
-	panel_style.content_margin_right = 20
-	panel_style.content_margin_top = 16
-	panel_style.content_margin_bottom = 16
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
+	var modal := _make_modal_overlay(20)
+	_map_setup_overlay = modal["overlay"]
+	var box: VBoxContainer = modal["box"]
 
 	var title := Label.new()
 	title.text = "Map setup — %s / %s" % [

@@ -1,4 +1,25 @@
-﻿## Version 00.01.94
+﻿## Version 00.01.96
+Date: 10/10/2026
+Time: 1:25 AM
+
+### Changes
+- Settings / View Seeds / Map setup popups are capped to the visible screen with padding and scroll if content is tall
+- Seed preview height scales down further on short viewports so the dialog stays fully on-screen
+
+### Reason
+Popup windows were overflowing off the bottom of the screen.
+
+## Version 00.01.95
+Date: 10/10/2026
+Time: 1:23 AM
+
+### Changes
+- View Seeds map preview scales the whole board into a small box so Classic/Random/Siege maps are fully visible (no crop)
+
+### Reason
+The seed preview was too large / clipped, so players could not see the full layout.
+
+## Version 00.01.94
 Date: 10/10/2026
 Time: 1:21 AM
 
