@@ -25,6 +25,9 @@ const LOOP_PATHS_WEB := {
 }
 
 var _unlocked: bool = false
+## Web only: true after a real click/tap/key. Menu _ready must not count as a gesture.
+var _web_gesture: bool = false
+var _web_retry_token: int = 0
 var _context: MusicContext = MusicContext.NONE
 var _music_players: Array[AudioStreamPlayer] = []
 var _sfx_player: AudioStreamPlayer
@@ -62,6 +65,7 @@ func _ready() -> void:
 	UserSettings.ensure_loaded()
 	_apply_volumes()
 	_load_music_loops()
+	set_process_input(OS.has_feature("web"))
 
 
 func _setup_buses() -> void:
@@ -138,9 +142,13 @@ func _open_loop_from_resource(path: String) -> AudioStreamWAV:
 	var loaded: Variant = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
 	if loaded is AudioStreamWAV:
 		var imported := (loaded as AudioStreamWAV).duplicate(true) as AudioStreamWAV
-		if imported != null and imported.data.size() > 0:
-			_arm_loop(imported)
-			return imported
+		if imported == null or imported.data.size() <= 0:
+			return null
+		# IMA-ADPCM / QOA imports are often silent on HTML5; only accept PCM.
+		if OS.has_feature("web") and imported.format != AudioStreamWAV.FORMAT_16_BITS and imported.format != AudioStreamWAV.FORMAT_8_BITS:
+			return null
+		_arm_loop(imported)
+		return imported
 	return null
 
 
@@ -151,29 +159,83 @@ func _open_loop_from_file(path: String) -> AudioStreamWAV:
 	if file == null:
 		return null
 	var raw := file.get_buffer(file.get_length())
+	return _wav_from_riff(raw)
+
+
+func _wav_from_riff(raw: PackedByteArray) -> AudioStreamWAV:
 	if raw.size() < 44:
 		return null
-	# Skip non-RIFF / non-PCM containers (imported remaps are not raw WAV).
 	if raw.decode_u32(0) != 0x46464952: # "RIFF"
 		return null
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = raw.decode_u32(24)
-	stream.stereo = raw.decode_u16(22) == 2
-	stream.data = raw.slice(44)
-	if stream.data.is_empty():
+	var offset := 12
+	var audio_format := 1
+	var channels := 1
+	var mix_rate := 22050
+	var bits := 16
+	var data := PackedByteArray()
+	while offset + 8 <= raw.size():
+		var chunk_id := raw.decode_u32(offset)
+		var chunk_size := raw.decode_u32(offset + 4)
+		var payload := offset + 8
+		if payload + chunk_size > raw.size():
+			break
+		if chunk_id == 0x20746d66: # "fmt "
+			audio_format = raw.decode_u16(payload)
+			channels = raw.decode_u16(payload + 2)
+			mix_rate = raw.decode_u32(payload + 4)
+			bits = raw.decode_u16(payload + 14)
+		elif chunk_id == 0x61746164: # "data"
+			data = raw.slice(payload, payload + chunk_size)
+			break
+		offset = payload + chunk_size + (chunk_size & 1)
+	if audio_format != 1 or data.is_empty():
 		return null
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_8_BITS if bits == 8 else AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = mix_rate
+	stream.stereo = channels == 2
+	stream.data = data
 	_arm_loop(stream)
 	return stream
+
+
+func _input(event: InputEvent) -> void:
+	if not OS.has_feature("web") or _web_gesture:
+		return
+	var pressed := false
+	if event is InputEventMouseButton:
+		pressed = (event as InputEventMouseButton).pressed
+	elif event is InputEventScreenTouch:
+		pressed = (event as InputEventScreenTouch).pressed
+	elif event is InputEventKey:
+		pressed = (event as InputEventKey).pressed
+	if pressed:
+		unlock()
 
 
 func unlock() -> void:
 	_unlocked = true
 	if OS.has_feature("web"):
+		_web_gesture = true
 		_resume_web_audio_context()
 	# Browsers block autoplay until a gesture; every unlock must restart music.
 	_pending_play = true
 	_try_play_context(true)
+	if OS.has_feature("web"):
+		_schedule_web_retries()
+
+
+func _schedule_web_retries() -> void:
+	_web_retry_token += 1
+	var token := _web_retry_token
+	for delay in [0.08, 0.25, 0.6]:
+		var timer := get_tree().create_timer(delay)
+		timer.timeout.connect(func() -> void:
+			if token != _web_retry_token:
+				return
+			_resume_web_audio_context()
+			_try_play_context(true)
+		, CONNECT_ONE_SHOT)
 
 
 func _resume_web_audio_context() -> void:
@@ -237,7 +299,7 @@ func _loop_ready(key: String) -> bool:
 
 
 func _try_play_context(force_restart: bool = false) -> void:
-	if not _unlocked and OS.has_feature("web"):
+	if OS.has_feature("web") and not _web_gesture:
 		return
 	match _context:
 		MusicContext.MENU:
@@ -266,7 +328,7 @@ func _confirm_playback(token: int) -> void:
 	timer.timeout.connect(func() -> void:
 		if token != _playback_token or _context == MusicContext.NONE:
 			return
-		if not _unlocked and OS.has_feature("web"):
+		if OS.has_feature("web") and not _web_gesture:
 			return
 		var player := _music_players[0]
 		if player.stream == null:

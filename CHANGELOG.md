@@ -1,4 +1,14 @@
-﻿## Version 00.02.27
+﻿## Version 00.02.28
+Date: 10/10/2026
+Time: 11:40 AM
+
+### Changes
+- Web music loads only PCM loops (rejects silent IMA-ADPCM imports) and starts after the first tap, with retries once the browser AudioContext resumes
+
+### Reason
+Godot reimported the new web beds as IMA-ADPCM, and the menu unlocked/played audio on load before a user gesture, so browsers stayed silent.
+
+## Version 00.02.27
 Date: 10/10/2026
 Time: 11:36 AM
 

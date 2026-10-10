@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -673,6 +675,62 @@ def run_checks(audio: np.ndarray, sr: int, tempo: float, bars: int, signature: t
     return results
 
 
+def write_godot_pcm_import(wav_path: Path) -> None:
+    """Force Godot to import this WAV as looping PCM (IMA-ADPCM is silent on web)."""
+    rel = wav_path.as_posix()
+    if "audio/music/" in rel:
+        rel = "res://audio/music/" + wav_path.name
+    else:
+        rel = "res://" + wav_path.name
+    digest = hashlib.md5(wav_path.name.encode("utf-8")).hexdigest()
+    uid = f"uid://pcm{digest[:12]}"
+    import_path = Path(str(wav_path) + ".import")
+    if import_path.exists():
+        text = import_path.read_text(encoding="utf-8")
+        uid_m = re.search(r'^uid="([^"]+)"', text, re.M)
+        path_m = re.search(r'^path="([^"]+)"', text, re.M)
+        if uid_m:
+            uid = uid_m.group(1)
+        if path_m and ".sample" in path_m.group(1):
+            dest = path_m.group(1)
+        else:
+            dest = f"res://.godot/imported/{wav_path.name}-{digest}.sample"
+    else:
+        dest = f"res://.godot/imported/{wav_path.name}-{digest}.sample"
+    import_path.write_text(
+        "\n".join(
+            [
+                "[remap]",
+                "",
+                'importer="wav"',
+                'type="AudioStreamWAV"',
+                f'uid="{uid}"',
+                f'path="{dest}"',
+                "",
+                "[deps]",
+                "",
+                f'source_file="{rel}"',
+                f'dest_files=["{dest}"]',
+                "",
+                "[params]",
+                "",
+                "force/8_bit=false",
+                "force/mono=false",
+                "force/max_rate=false",
+                "force/max_rate_hz=44100",
+                "edit/trim=false",
+                "edit/normalize=false",
+                "edit/loop_mode=1",
+                "edit/loop_begin=0",
+                "edit/loop_end=-1",
+                "compress/mode=0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def make_web_mono(stereo: np.ndarray, sr: int) -> tuple[np.ndarray, int]:
     mono = np.mean(stereo, axis=1)
     web_sr = 22050
@@ -819,6 +877,8 @@ def generate_one(preset: dict) -> int:
 
     web_audio, web_sr = make_web_mono(audio, sr)
     write_wav_pcm16_mono(OUT_DIR / f"{preset['web_file']}.wav", web_audio, web_sr)
+    write_godot_pcm_import(Path(str(prefix) + ".wav"))
+    write_godot_pcm_import(OUT_DIR / f"{preset['web_file']}.wav")
 
     provenance = {
         "seed": SEED,

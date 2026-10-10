@@ -33,18 +33,20 @@
 		if (window.webkitAudioContext) window.webkitAudioContext = wrap(window.webkitAudioContext);
 	})();
 
+	function resumeOne(ctx) {
+		if (!ctx || ctx.state !== "suspended") return;
+		try { ctx.resume(); } catch (e) {}
+	}
+
 	function unlockAudio() {
 		for (var i = 0; i < audioContexts.length; i++) {
-			var ctx = audioContexts[i];
-			if (ctx && ctx.state === "suspended") {
-				try { ctx.resume(); } catch (e) {}
-			}
+			resumeOne(audioContexts[i]);
 		}
 		try {
 			var Ctx = window.AudioContext || window.webkitAudioContext;
 			if (!Ctx) return;
 			if (!window.__wdAudioKick) window.__wdAudioKick = new Ctx();
-			if (window.__wdAudioKick.state === "suspended") window.__wdAudioKick.resume();
+			resumeOne(window.__wdAudioKick);
 			// Tiny silent buffer forces some mobile browsers to fully unlock output.
 			var buf = window.__wdAudioKick.createBuffer(1, 1, 22050);
 			var src = window.__wdAudioKick.createBufferSource();
