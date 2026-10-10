@@ -15,3 +15,5 @@ Rebuild:
 ```
 
 Wait for the game to finish loading, then click or tap once — browsers start music on that first gesture. Click the game canvas once if input seems stuck (browser focus).
+
+**Installed app updates:** open **Settings → Update app**. That checks for a newer build, clears the local cache, and reloads from GitHub Pages. You do not need to uninstall the home-screen icon.

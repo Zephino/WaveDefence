@@ -86,6 +86,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 - First launch offers **Start Tutorial** or **Skip** (saved in settings).
 - Footer may show your best **Medium** wave on this device.
 - **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
+- **Update app** (web / installed home-screen app) — in Settings: checks GitHub Pages for a newer build, then clears the service-worker cache and reloads so the home-screen icon picks up the update without uninstalling.
 
 ### Audio
 

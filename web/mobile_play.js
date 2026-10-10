@@ -679,6 +679,91 @@
 		return false;
 	}
 
+	function currentAppVersion() {
+		return scriptVersion() || (function () {
+			try { return localStorage.getItem("wd_game_ver") || ""; } catch (e) { return ""; }
+		})();
+	}
+
+	function fetchRemoteVersion() {
+		return fetch("index.html?cb=" + Date.now(), { cache: "no-store", credentials: "same-origin" })
+			.then(function (r) {
+				if (!r.ok) throw new Error("HTTP " + r.status);
+				return r.text();
+			})
+			.then(function (html) {
+				var m = html.match(/var VER\s*=\s*"([^"]+)"/);
+				return m ? m[1] : "";
+			})
+			.catch(function () { return ""; });
+	}
+
+	/** Wipe SW caches and reload so the installed PWA pulls the newest GitHub Pages build. */
+	function forceAppUpdate() {
+		hideInstallModal();
+		var finish = function () {
+			var path = location.pathname || "/";
+			location.replace(location.origin + path + "?updated=" + Date.now());
+		};
+		var jobs = [];
+		try {
+			localStorage.removeItem("wd_game_ver");
+		} catch (e) {}
+		if ("serviceWorker" in navigator) {
+			jobs.push(
+				navigator.serviceWorker.getRegistrations().then(function (regs) {
+					return Promise.all(regs.map(function (r) { return r.unregister(); }));
+				})
+			);
+		}
+		if (window.caches && caches.keys) {
+			jobs.push(
+				caches.keys().then(function (keys) {
+					return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+				})
+			);
+		}
+		Promise.all(jobs).then(finish).catch(finish);
+		return true;
+	}
+
+	/**
+	 * Settings → Update app. Installed PWAs cannot uninstall themselves, but clearing
+	 * the service-worker cache and reloading fetches the latest build from the site.
+	 */
+	function promptUpdateApp() {
+		if (released) return false;
+		var localVer = currentAppVersion() || "unknown";
+		showInstallCard(
+			"Checking for updates…",
+			"Looking up the latest Wave Defence build on GitHub Pages."
+		);
+		fetchRemoteVersion().then(function (remoteVer) {
+			var body;
+			var label = "Update now";
+			if (remoteVer && localVer && remoteVer !== "unknown" && remoteVer === localVer) {
+				body =
+					"This install is already on <b>" + localVer + "</b>. " +
+					"You can still clear the cache and reload if something looks stuck. " +
+					"Saved settings and scores on this device are kept.";
+				label = "Reload / clear cache";
+			} else if (remoteVer) {
+				body =
+					"Newer build online: <b>" + remoteVer + "</b><br>" +
+					"This install: <b>" + localVer + "</b><br><br>" +
+					"Tap below to clear the app cache and download the update. " +
+					"You do not need to uninstall — the home-screen icon stays. " +
+					"Settings and scores on this device are kept.";
+			} else {
+				body =
+					"Could not reach the update check, but you can still clear the cache and reload. " +
+					"This install: <b>" + localVer + "</b>. Needs an internet connection.";
+			}
+			showInstallCard("Update app", body, label, forceAppUpdate);
+		});
+		return true;
+	}
+
 	/** Quit: undo fullscreen / CSS and try to leave the page. */
 	function exitPlayMode() {
 		released = true;
@@ -832,6 +917,8 @@
 		enterFullscreen: enterFullscreen,
 		promptFullscreen: promptFullscreen,
 		promptInstall: promptInstall,
+		promptUpdateApp: promptUpdateApp,
+		forceAppUpdate: forceAppUpdate,
 		unlockAudio: unlockAudio,
 		unlockAndStartGame: unlockAndStartGame,
 		isAudioUnlocked: function () { return !!audioUnlocked; },

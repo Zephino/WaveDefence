@@ -1,4 +1,14 @@
-﻿## Version 00.02.34
+﻿## Version 00.02.35
+Date: 10/10/2026
+Time: 12:18 PM
+
+### Changes
+- Web Settings (menu and pause) add **Update app**: checks GitHub Pages for a newer build, clears the service-worker cache, and reloads so an installed home-screen copy can update without uninstalling
+
+### Reason
+Installed PWAs kept old cached builds; players needed an in-app way to pull the latest site version on their phone.
+
+## Version 00.02.34
 Date: 10/10/2026
 Time: 12:14 PM
 

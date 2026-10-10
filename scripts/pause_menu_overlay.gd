@@ -178,6 +178,11 @@ func _show_settings() -> void:
 	SettingsTouch.wire_check(_sfx_mute_check, _on_mute_sfx_toggled)
 	box.add_child(_sfx_mute_check)
 
+	if OS.has_feature("web"):
+		var update_btn := _btn("Update app", func() -> void: Session.request_web_update())
+		update_btn.tooltip_text = "Clear the installed app cache and download the newest build from the website."
+		box.add_child(update_btn)
+
 	box.add_child(_btn("Close", _hide_settings))
 
 

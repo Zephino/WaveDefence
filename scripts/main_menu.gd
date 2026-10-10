@@ -576,6 +576,9 @@ func _show_settings_popup() -> void:
 		var install_btn := _menu_button("Install app", _on_install_app, true)
 		install_btn.tooltip_text = "Add Wave Defence to your phone home screen (Chrome install, or Safari Share → Add to Home Screen)."
 		box.add_child(install_btn)
+		var update_btn := _menu_button("Update app", _on_update_app, true)
+		update_btn.tooltip_text = "Clear the installed app cache and download the newest build from the website (keeps your settings/scores)."
+		box.add_child(update_btn)
 
 	box.add_child(_menu_button("View Seeds", _show_seed_browser, true))
 	box.add_child(_menu_button("Achievements", _show_achievements_popup, true))
@@ -976,6 +979,10 @@ func _on_fullscreen() -> void:
 
 func _on_install_app() -> void:
 	Session.request_web_install()
+
+
+func _on_update_app() -> void:
+	Session.request_web_update()
 
 
 func _on_quit() -> void:
