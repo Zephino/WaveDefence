@@ -6,7 +6,6 @@
 	var fsBtn = null;
 	var fsModal = null;
 	var installModal = null;
-	var startGate = null;
 	var deferredPrompt = null;
 	var cssFullscreen = false;
 	var audioUnlocked = false;
@@ -86,24 +85,6 @@
 	function unlockAudio() {
 		ensureKickContext();
 		resumeAudioContexts();
-	}
-
-	function playStartChirp() {
-		var ctx = ensureKickContext();
-		if (!ctx) return;
-		try {
-			var o = ctx.createOscillator();
-			var g = ctx.createGain();
-			o.type = "triangle";
-			o.frequency.setValueAtTime(330, ctx.currentTime);
-			o.frequency.exponentialRampToValueAtTime(523.25, ctx.currentTime + 0.14);
-			g.gain.setValueAtTime(0.14, ctx.currentTime);
-			g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32);
-			o.connect(g);
-			g.connect(ctx.destination);
-			o.start();
-			o.stop(ctx.currentTime + 0.34);
-		} catch (e) {}
 	}
 
 	function playUiBlip() {
@@ -287,12 +268,11 @@
 	}
 
 	function unlockAndStartGame() {
+		if (audioUnlocked) return;
 		unlockAudio();
-		playStartChirp();
 		musicArmAndPlayMenu();
 		audioUnlocked = true;
 		window.__wdAudioUnlocked = true;
-		hideStartGate();
 		try {
 			if (typeof window.__wdGodotUnlock === "function") {
 				window.__wdGodotUnlock();
@@ -300,62 +280,9 @@
 		} catch (e) {}
 	}
 
-	function ensureStartGate() {
-		if (startGate) return startGate;
-		startGate = document.createElement("div");
-		startGate.id = "wd-start-gate";
-		startGate.style.cssText = [
-			"position:fixed",
-			"inset:0",
-			"z-index:2147483647",
-			"display:flex",
-			"align-items:center",
-			"justify-content:center",
-			"background:rgba(8,10,14,0.92)",
-			"padding:24px",
-			"box-sizing:border-box",
-		].join(";");
-		var card = document.createElement("div");
-		card.style.cssText = [
-			"max-width:360px",
-			"width:100%",
-			"background:#1a222c",
-			"color:#e8eef2",
-			"border-radius:12px",
-			"padding:22px 18px",
-			"text-align:center",
-			"font:16px/1.35 system-ui,sans-serif",
-			"box-shadow:0 12px 40px rgba(0,0,0,0.45)",
-		].join(";");
-		card.innerHTML = "<b style=\"font-size:22px;display:block;margin-bottom:10px;\">Wave Defence</b>" +
-			"<div style=\"opacity:0.85;margin-bottom:16px;\">Browsers block game audio until you tap. Tap below to start with sound.</div>";
-		var go = document.createElement("button");
-		go.type = "button";
-		go.textContent = "Tap to start";
-		go.style.cssText = [
-			"display:block",
-			"width:100%",
-			"padding:16px 16px",
-			"border:0",
-			"border-radius:8px",
-			"background:#d4a017",
-			"color:#141414",
-			"font:700 18px/1.1 system-ui,sans-serif",
-			"touch-action:manipulation",
-		].join(";");
-		go.addEventListener("click", function (ev) {
-			ev.preventDefault();
-			ev.stopPropagation();
-			unlockAndStartGame();
-		});
-		card.appendChild(go);
-		startGate.appendChild(card);
-		document.body.appendChild(startGate);
-		return startGate;
-	}
-
-	function hideStartGate() {
-		if (startGate) startGate.style.display = "none";
+	function onFirstUserGesture() {
+		if (audioUnlocked) return;
+		unlockAndStartGame();
 	}
 
 	function isTouchish() {
@@ -940,7 +867,17 @@
 	function boot() {
 		applyCssLandscape();
 		refreshChromeButtons();
-		ensureStartGate();
+		// Warm-decode loops while the AudioContext is still suspended.
+		try {
+			ensureMusicGraph();
+			Object.keys(TRACKS).forEach(function (name) { loadTrack(name); });
+		} catch (e) {}
+
+		// Browsers block audible output until a real gesture. First click/tap/key
+		// starts music in that same gesture — no separate "Tap to start" screen.
+		document.addEventListener("pointerdown", onFirstUserGesture, true);
+		document.addEventListener("touchstart", onFirstUserGesture, true);
+		document.addEventListener("keydown", onFirstUserGesture, true);
 
 		// Resume on every real DOM gesture. Do not notify Godot here (avoids a resume/unlock loop).
 		document.addEventListener("pointerdown", resumeAudioContexts, true);

@@ -1,4 +1,15 @@
-﻿## Version 00.02.31
+﻿## Version 00.02.32
+Date: 10/10/2026
+Time: 12:05 PM
+
+### Changes
+- Removed the web **Tap to start** overlay; music now starts on the first click/tap/key like a normal game
+- Loops still preload through the browser Web Audio API so the first gesture can play immediately
+
+### Reason
+The extra audio gate was only needed while we were unlocking Godot's mixer; with browser-side music, the first real game click is enough for browsers.
+
+## Version 00.02.31
 Date: 10/10/2026
 Time: 11:56 AM
 
