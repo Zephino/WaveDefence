@@ -66,10 +66,25 @@ function Install-Godot {
 
 function Test-GodotProject([string]$GodotPath) {
     # Validate the project path (spaces must remain one argument).
-    $output = & $GodotPath --path $ProjectRoot --headless --quit-after 1 2>&1 | Out-String
-    Set-Content -Path $LaunchLog -Value $output -Encoding UTF8
-    if ($output -match "Invalid project path") {
-        throw "Godot rejected the project path. Details in godot_launch.log"
+    # Godot may print leak WARNINGs to stderr; do not treat those as PowerShell errors.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $lines = @(& $GodotPath --path $ProjectRoot --headless --quit-after 1 2>&1)
+        $output = ($lines | Out-String)
+        Set-Content -Path $LaunchLog -Value $output -Encoding UTF8
+        $exit = $LASTEXITCODE
+        if ($exit -ne 0) {
+            throw "Godot preflight failed (exit $exit). See godot_launch.log"
+        }
+        if ($output -match "Invalid project path") {
+            throw "Godot rejected the project path. Details in godot_launch.log"
+        }
+        if ($output -match "SCRIPT ERROR|Parse Error|Failed to load script|Failed to instantiate an autoload") {
+            throw "Project failed to load. See godot_launch.log"
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
 }
 
@@ -96,19 +111,20 @@ function Start-GodotGame([string]$GodotPath, [bool]$OpenEditor) {
     }
 
     Start-Sleep -Seconds 2
+    $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.ProcessName -match "Godot|godot"
+        })
+    if ($running.Count -gt 0) {
+        return
+    }
     try {
         $proc.Refresh()
-        if ($proc.HasExited) {
-            throw "Godot exited immediately (code $($proc.ExitCode)). See godot_launch.log"
+        if (-not $proc.HasExited) {
+            return
         }
+        throw "Godot exited immediately (code $($proc.ExitCode)). See godot_launch.log"
     } catch [InvalidOperationException] {
-        # Process object may not track shim child; fall back to process name search.
-        $running = Get-Process | Where-Object {
-            $_.ProcessName -match "Godot|godot"
-        }
-        if (-not $running) {
-            throw "Godot did not stay running. See godot_launch.log"
-        }
+        throw "Godot did not stay running. See godot_launch.log"
     }
 }
 
@@ -131,11 +147,17 @@ function Main {
     }
 
     Write-Step "Using Godot at: $godot"
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     try {
-        $ver = & $godot --version 2>&1
-        Write-Host "Version: $ver"
-    } catch {
-        Write-Host "Could not read Godot version (continuing)" -ForegroundColor Yellow
+        $ver = (& $godot --version 2>&1 | Out-String).Trim()
+        if ($ver) {
+            Write-Host "Version: $ver"
+        } else {
+            Write-Host "Could not read Godot version (continuing)" -ForegroundColor Yellow
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
 
     Write-Step "Checking project loads"

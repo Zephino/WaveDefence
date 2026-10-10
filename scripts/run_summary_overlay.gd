@@ -13,26 +13,28 @@ func show_summary(state: GameState, coaching: Dictionary) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.06, 0.88)
+	dim.color = Color(0.02, 0.04, 0.06, 0.92)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(420, 0)
+	panel.custom_minimum_size = Vector2(460, 0)
 	center.add_child(panel)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 10)
 	panel.add_child(box)
 	var title := Label.new()
 	title.text = "Run summary"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 26)
 	box.add_child(title)
 	var stats := Label.new()
 	stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	stats.custom_minimum_size = Vector2(380, 0)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats.custom_minimum_size = Vector2(420, 0)
 	stats.text = (
 		"Wave reached: %d\nKills: %d\nLeaks: %d\nGold earned: ~%d\nWalls: %d  Towers: %d"
 		% [
@@ -53,13 +55,15 @@ func show_summary(state: GameState, coaching: Dictionary) -> void:
 		box.add_child(best)
 	var coach := Label.new()
 	coach.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	coach.custom_minimum_size = Vector2(380, 0)
+	coach.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coach.custom_minimum_size = Vector2(420, 0)
 	coach.modulate = Color(0.65, 0.72, 0.78)
 	coach.add_theme_font_size_override("font_size", 13)
 	coach.text = str(coaching.get("coaching_text", ""))
 	box.add_child(coach)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
 	var cont := Button.new()
 	cont.text = "Continue"

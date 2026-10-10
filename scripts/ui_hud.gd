@@ -45,6 +45,9 @@ var _end_run_overlay: Control
 var _tooltip_hide_at_msec: int = 0
 var _command_tower: Tower = null
 var _ability_was_on_cd: Dictionary = {}
+var _shop_shell: PanelContainer
+var _actions_shell: PanelContainer
+var _top_bar: Control
 var boss_hp_label: Label
 var next_wave_brief_label: Label
 var copy_seed_button: Button
@@ -100,6 +103,7 @@ func _build_ui(version_text: String) -> void:
 	top.add_child(banner_label)
 	top.add_child(enemies_label)
 	top.add_child(version_label)
+	_top_bar = top
 	refresh_run_labels()
 	update_enemies_remaining(0, 0, 0)
 
@@ -306,6 +310,29 @@ func _refresh_multi_select_button() -> void:
 	multi_select_button.modulate = Color(1.15, 1.1, 0.7) if multi_select_enabled else Color.WHITE
 
 
+func set_run_summary_presented(on: bool) -> void:
+	if _top_bar:
+		_top_bar.visible = not on
+	if status_label:
+		status_label.visible = not on
+	if next_wave_brief_label:
+		next_wave_brief_label.visible = not on
+	if boss_hp_label:
+		boss_hp_label.visible = not on and boss_hp_label.text != ""
+	if _shop_shell:
+		_shop_shell.visible = not on
+	if _actions_shell:
+		_actions_shell.visible = not on
+	hide_board_tower_tooltip()
+
+
+func attach_run_summary(overlay: Control) -> void:
+	set_run_summary_presented(true)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 400
+	add_child(overlay)
+
+
 func _make_side_panel(root: Control, rect: Rect2, with_scroll: bool) -> VBoxContainer:
 	var side_panel := PanelContainer.new()
 	side_panel.position = rect.position
@@ -313,6 +340,10 @@ func _make_side_panel(root: Control, rect: Rect2, with_scroll: bool) -> VBoxCont
 	side_panel.custom_minimum_size = rect.size
 	side_panel.clip_contents = true
 	root.add_child(side_panel)
+	if _shop_shell == null:
+		_shop_shell = side_panel
+	else:
+		_actions_shell = side_panel
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 5)

@@ -89,7 +89,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 
 ### Audio
 
-All music and SFX are **procedurally generated in-engine** (no imported third-party recordings). Menu, Standard, and Siege use different beds; music intensifies on boss waves and when creeps get close to the exit. Click any menu button once to unlock audio on web.
+All music and SFX are **procedurally generated in-engine** (no imported third-party recordings). Menu, Standard, and Siege use stereo groove loops (kick, hats, arps); music intensifies on boss waves and when creeps get close to the exit. The exit-leak cue is unchanged. Click any menu button once to unlock audio on web.
 
 When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard**. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 

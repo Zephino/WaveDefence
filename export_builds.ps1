@@ -114,20 +114,42 @@ if ($doIos) {
 
 if ($doWeb) {
     Write-Host "==> Exporting Web -> docs/index.html (GitHub Pages)" -ForegroundColor Cyan
+    $exportStarted = Get-Date
+    $pckPath = Join-Path $ProjectRoot "docs\index.pck"
+    $pckBefore = if (Test-Path $pckPath) { (Get-Item $pckPath).Length } else { -1 }
     & $godot --headless --path $ProjectRoot --export-release "Web" "docs/index.html"
     $godotExit = $LASTEXITCODE
-    if ($godotExit -ne 0 -or -not (Test-Path "docs\index.html")) {
+    if (-not (Test-Path "docs\index.html")) {
         throw "Web export did not create docs/index.html (exit $godotExit)"
     }
-    # Godot can flush console after exit; wait until the pack size settles before stamping.
-    $pckPath = Join-Path $ProjectRoot "docs\index.pck"
+    if ($godotExit -ne 0) {
+        Write-Host "Godot reported exit $godotExit but web export output exists (continuing)." -ForegroundColor Yellow
+    }
+    # WinGet shim can return before the pack is fully flushed; wait for a fresh, stable .pck.
     $prevSize = -1
-    for ($i = 0; $i -lt 20; $i++) {
-        if (-not (Test-Path $pckPath)) { Start-Sleep -Milliseconds 200; continue }
-        $size = (Get-Item $pckPath).Length
-        if ($size -gt 0 -and $size -eq $prevSize) { break }
+    $stable = 0
+    for ($i = 0; $i -lt 240; $i++) {
+        if (-not (Test-Path $pckPath)) {
+            Start-Sleep -Milliseconds 250
+            continue
+        }
+        $item = Get-Item $pckPath
+        if ($item.LastWriteTime -lt $exportStarted -and $item.Length -eq $pckBefore) {
+            Start-Sleep -Milliseconds 250
+            continue
+        }
+        $size = $item.Length
+        if ($size -gt 0 -and $size -eq $prevSize) {
+            $stable++
+            if ($stable -ge 3) { break }
+        } else {
+            $stable = 0
+        }
         $prevSize = $size
-        Start-Sleep -Milliseconds 200
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not (Test-Path $pckPath) -or $prevSize -le 0) {
+        throw "Web export did not finish writing docs/index.pck"
     }
     # GitHub Pages: skip Jekyll so wasm/pck paths work.
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline

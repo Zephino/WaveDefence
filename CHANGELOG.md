@@ -1,4 +1,27 @@
-﻿## Version 00.03.00
+﻿## Version 00.02.03
+Date: 10/10/2026
+Time: 2:30 AM
+
+### Changes
+- Version numbering corrected to continue **00.02.xx** (00.02.01–03); renames mistaken 00.03.xx labels in the changelog
+- Run summary is centered and shown alone: tower shop, actions, top HUD, and debug panel hide while the modal is up; board selection and range ring clear
+- Procedural music uses stereo grooves (kick, hats, arps, pads); UI and gameplay SFX refreshed; exit-leak sound unchanged
+- Web export script tolerates harmless Godot non-zero exit when `docs/index.html` is written; refreshed GitHub Pages build
+
+### Reason
+End-of-run stats should be the only focus, and background audio should feel less flat without losing the leak cue players liked.
+
+## Version 00.02.02
+Date: 10/10/2026
+Time: 2:18 AM
+
+### Changes
+- `play.ps1` no longer fails when Godot prints harmless stderr warnings during headless preflight (WinGet shim)
+
+### Reason
+Launcher reported exit code 1 even though the project loaded; PowerShell treated Godot leak warnings as terminating errors.
+
+## Version 00.02.01
 Date: 10/10/2026
 Time: 2:15 AM
 

@@ -1031,9 +1031,16 @@ func _show_run_summary(wave_reached: int) -> void:
 		"coaching_text": _RunSummaryOverlay.build_coaching_text(game_state),
 		"screenshot_cb": _save_maze_screenshot,
 	}
+	if debug_panel:
+		debug_panel.visible = false
+	if build_system:
+		build_system.clear_selection()
+	if _range_overlay:
+		_range_overlay.show_ring = false
+		_range_overlay.queue_redraw()
 	var summary: Control = _RunSummaryOverlay.new()
-	add_child(summary)
 	summary.show_summary(game_state, coaching)
+	hud.attach_run_summary(summary)
 	summary.continued.connect(func() -> void:
 		if game_state.tutorial_run:
 			UserSettings.set_tutorial_completed(true)
