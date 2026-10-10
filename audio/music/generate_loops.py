@@ -879,6 +879,10 @@ def generate_one(preset: dict) -> int:
     write_wav_pcm16_mono(OUT_DIR / f"{preset['web_file']}.wav", web_audio, web_sr)
     write_godot_pcm_import(Path(str(prefix) + ".wav"))
     write_godot_pcm_import(OUT_DIR / f"{preset['web_file']}.wav")
+    pcm_dir = OUT_DIR / "web_pcm"
+    pcm_dir.mkdir(exist_ok=True)
+    raw_web = (OUT_DIR / f"{preset['web_file']}.wav").read_bytes()
+    (pcm_dir / f"{preset['web_file']}.bin").write_bytes(raw_web)
 
     provenance = {
         "seed": SEED,

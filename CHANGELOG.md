@@ -1,4 +1,14 @@
-﻿## Version 00.02.28
+﻿## Version 00.02.29
+Date: 10/10/2026
+Time: 11:44 AM
+
+### Changes
+- Web/PWA music now loads raw PCM `.bin` beds (skips Godot's WAV importer) and falls back to procedural loops if those fail
+
+### Reason
+The installed web app stayed silent because Godot's imported WAV samples and an old service-worker cache do not play reliably in browsers, even after a tap.
+
+## Version 00.02.28
 Date: 10/10/2026
 Time: 11:40 AM
 

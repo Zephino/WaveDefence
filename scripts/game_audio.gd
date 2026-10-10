@@ -4,6 +4,7 @@ extends Node
 ## Loops are prebuilt so startup does not synthesize music.
 
 const _PA := preload("res://scripts/procedural_audio.gd")
+const _PM := preload("res://scripts/procedural_music.gd")
 
 enum MusicContext { NONE, MENU, GAME_STANDARD, GAME_SIEGE }
 
@@ -22,6 +23,23 @@ const LOOP_PATHS_WEB := {
 	"intense": "res://audio/music/web_loop_03.wav",
 	"siege_calm": "res://audio/music/web_loop_04.wav",
 	"siege_intense": "res://audio/music/web_loop_05.wav",
+}
+
+## Raw RIFF copies (.bin) skip Godot's WAV importer, which often packs IMA-ADPCM that HTML5 cannot play.
+const LOOP_PATHS_WEB_RAW := {
+	"menu": "res://audio/music/web_pcm/web_loop_01.bin",
+	"calm": "res://audio/music/web_pcm/web_loop_02.bin",
+	"intense": "res://audio/music/web_pcm/web_loop_03.bin",
+	"siege_calm": "res://audio/music/web_pcm/web_loop_04.bin",
+	"siege_intense": "res://audio/music/web_pcm/web_loop_05.bin",
+}
+
+const PROCEDURAL_RECIPES := {
+	"menu": "menu",
+	"calm": "game_calm",
+	"intense": "game_intense",
+	"siege_calm": "siege_calm",
+	"siege_intense": "siege_intense",
 }
 
 var _unlocked: bool = false
@@ -101,14 +119,21 @@ func _loop_paths() -> Dictionary:
 func _load_music_loops() -> void:
 	var paths := _loop_paths()
 	for key in paths:
-		var path := String(paths[key])
-		var stream := _open_loop_bytes(path)
+		var stream: AudioStreamWAV = null
+		if OS.has_feature("web") and LOOP_PATHS_WEB_RAW.has(key):
+			stream = _open_loop_from_file(String(LOOP_PATHS_WEB_RAW[key]))
+		if stream == null:
+			stream = _open_loop_bytes(String(paths[key]))
 		if stream == null and OS.has_feature("web") and LOOP_PATHS_DESKTOP.has(key):
 			stream = _open_loop_bytes(String(LOOP_PATHS_DESKTOP[key]))
+		if stream == null and OS.has_feature("web") and PROCEDURAL_RECIPES.has(key):
+			stream = _PM.make_track(String(PROCEDURAL_RECIPES[key]))
+			if stream != null:
+				_arm_loop(stream)
 		if stream != null:
 			_loops[key] = stream
 		else:
-			push_error("Failed to load music loop: %s" % path)
+			push_error("Failed to load music loop: %s" % String(paths[key]))
 
 
 func _arm_loop(stream: AudioStreamWAV) -> void:
@@ -141,10 +166,10 @@ func _open_loop_from_resource(path: String) -> AudioStreamWAV:
 		return null
 	var loaded: Variant = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
 	if loaded is AudioStreamWAV:
-		var imported := (loaded as AudioStreamWAV).duplicate(true) as AudioStreamWAV
-		if imported == null or imported.data.size() <= 0:
+		var imported := loaded as AudioStreamWAV
+		# duplicate() can drop sample bytes on HTML5; use the imported resource as-is.
+		if imported.data.size() <= 0:
 			return null
-		# IMA-ADPCM / QOA imports are often silent on HTML5; only accept PCM.
 		if OS.has_feature("web") and imported.format != AudioStreamWAV.FORMAT_16_BITS and imported.format != AudioStreamWAV.FORMAT_8_BITS:
 			return null
 		_arm_loop(imported)
@@ -211,6 +236,15 @@ func _input(event: InputEvent) -> void:
 		pressed = (event as InputEventKey).pressed
 	if pressed:
 		unlock()
+
+
+func _notification(what: int) -> void:
+	if not OS.has_feature("web"):
+		return
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		if _web_gesture:
+			_resume_web_audio_context()
+			_try_play_context(true)
 
 
 func unlock() -> void:
