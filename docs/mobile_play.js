@@ -1,9 +1,34 @@
-/* Mobile/web helpers: CSS landscape fill, fullscreen button (menu + floating), Quit cleanup. */
+/* Mobile/web helpers: CSS landscape, fullscreen (real DOM gesture), PWA install. */
 (function () {
 	var mode = ""; // "" | "portrait-css" | "landscape-fill"
 	var enterInFlight = false;
 	var released = false;
 	var fsBtn = null;
+	var installBtn = null;
+	var fsModal = null;
+	var iosHint = null;
+	var deferredPrompt = null;
+	var cssFullscreen = false;
+
+	function isTouchish() {
+		try {
+			if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+		} catch (e) {}
+		return "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+	}
+
+	function isIos() {
+		return /iphone|ipad|ipod/i.test(navigator.userAgent || "") ||
+			(navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+	}
+
+	function isStandalone() {
+		try {
+			if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+			if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) return true;
+		} catch (e) {}
+		return !!(navigator.standalone);
+	}
 
 	function isPortrait() {
 		try {
@@ -17,6 +42,10 @@
 
 	function isFullscreen() {
 		return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+	}
+
+	function fullscreenOk() {
+		return isFullscreen() || cssFullscreen || isStandalone();
 	}
 
 	function canvasEl() {
@@ -84,54 +113,246 @@
 		return Promise.resolve(false);
 	}
 
+	function styleChipButton(el, bg) {
+		el.style.cssText = [
+			"position:fixed",
+			"z-index:2147483645",
+			"display:none",
+			"padding:10px 14px",
+			"border:0",
+			"border-radius:8px",
+			"background:" + bg,
+			"color:#141414",
+			"font:600 15px/1.1 system-ui,sans-serif",
+			"box-shadow:0 2px 10px rgba(0,0,0,0.45)",
+			"touch-action:manipulation",
+			"-webkit-tap-highlight-color:transparent",
+		].join(";");
+	}
+
 	function ensureFsButton() {
 		if (fsBtn) return fsBtn;
 		fsBtn = document.createElement("button");
 		fsBtn.type = "button";
 		fsBtn.id = "wd-fs-btn";
 		fsBtn.textContent = "Fullscreen";
-		fsBtn.style.cssText = [
-			"position:fixed",
-			"top:10px",
-			"right:10px",
-			"z-index:2147483645",
-			"display:none",
-			"padding:10px 14px",
-			"border:0",
-			"border-radius:8px",
-			"background:#d4a017",
-			"color:#141414",
-			"font:600 15px/1.1 system-ui,sans-serif",
-			"box-shadow:0 2px 10px rgba(0,0,0,0.45)",
-			"touch-action:manipulation",
-		].join(";");
+		styleChipButton(fsBtn, "#d4a017");
+		fsBtn.style.top = "10px";
+		fsBtn.style.right = "10px";
 		fsBtn.addEventListener("click", function (ev) {
 			ev.preventDefault();
 			ev.stopPropagation();
+			hideFsModal();
 			enterFullscreen();
 		});
 		document.body.appendChild(fsBtn);
 		return fsBtn;
 	}
 
-	/** Show floating Fullscreen when the browser dropped out of FS (sleep, swipe, etc.). */
-	function refreshFsButton() {
+	function ensureInstallButton() {
+		if (installBtn) return installBtn;
+		installBtn = document.createElement("button");
+		installBtn.type = "button";
+		installBtn.id = "wd-install-btn";
+		installBtn.textContent = "Install app";
+		styleChipButton(installBtn, "#3d9a68");
+		installBtn.style.color = "#f4fff8";
+		installBtn.style.top = "10px";
+		installBtn.style.left = "10px";
+		installBtn.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			runInstall();
+		});
+		document.body.appendChild(installBtn);
+		return installBtn;
+	}
+
+	function ensureFsModal() {
+		if (fsModal) return fsModal;
+		fsModal = document.createElement("div");
+		fsModal.id = "wd-fs-modal";
+		fsModal.style.cssText = [
+			"position:fixed",
+			"inset:0",
+			"z-index:2147483646",
+			"display:none",
+			"align-items:center",
+			"justify-content:center",
+			"background:rgba(8,10,14,0.72)",
+			"padding:24px",
+			"box-sizing:border-box",
+		].join(";");
+		var card = document.createElement("div");
+		card.style.cssText = [
+			"max-width:360px",
+			"width:100%",
+			"background:#1a222c",
+			"color:#e8eef2",
+			"border-radius:12px",
+			"padding:22px 18px",
+			"text-align:center",
+			"font:16px/1.35 system-ui,sans-serif",
+			"box-shadow:0 12px 40px rgba(0,0,0,0.45)",
+		].join(";");
+		card.innerHTML = "<b style=\"font-size:20px;display:block;margin-bottom:10px;\">Go fullscreen</b>" +
+			"<div style=\"opacity:0.85;margin-bottom:16px;\">Browsers only allow fullscreen from a real tap. Tap the button below.</div>";
+		var go = document.createElement("button");
+		go.type = "button";
+		go.textContent = "Tap for Fullscreen";
+		go.style.cssText = [
+			"display:block",
+			"width:100%",
+			"padding:14px 16px",
+			"border:0",
+			"border-radius:8px",
+			"background:#d4a017",
+			"color:#141414",
+			"font:700 17px/1.1 system-ui,sans-serif",
+			"touch-action:manipulation",
+		].join(";");
+		go.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			hideFsModal();
+			enterFullscreen();
+		});
+		var cancel = document.createElement("button");
+		cancel.type = "button";
+		cancel.textContent = "Not now";
+		cancel.style.cssText = [
+			"display:block",
+			"width:100%",
+			"margin-top:10px",
+			"padding:12px 16px",
+			"border:0",
+			"border-radius:8px",
+			"background:#2a3440",
+			"color:#d7dee5",
+			"font:600 15px/1.1 system-ui,sans-serif",
+			"touch-action:manipulation",
+		].join(";");
+		cancel.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			hideFsModal();
+			refreshChromeButtons();
+		});
+		card.appendChild(go);
+		card.appendChild(cancel);
+		fsModal.appendChild(card);
+		document.body.appendChild(fsModal);
+		return fsModal;
+	}
+
+	function showFsModal() {
+		var m = ensureFsModal();
+		m.style.display = "flex";
+		ensureFsButton().style.display = "block";
+	}
+
+	function hideFsModal() {
+		if (fsModal) fsModal.style.display = "none";
+	}
+
+	function ensureIosHint() {
+		if (iosHint) return iosHint;
+		iosHint = document.createElement("div");
+		iosHint.id = "wd-ios-install";
+		iosHint.style.cssText = [
+			"position:fixed",
+			"left:10px",
+			"right:10px",
+			"bottom:10px",
+			"z-index:2147483645",
+			"display:none",
+			"background:#1a222c",
+			"color:#e8eef2",
+			"border-radius:10px",
+			"padding:12px 14px",
+			"font:14px/1.35 system-ui,sans-serif",
+			"box-shadow:0 8px 28px rgba(0,0,0,0.45)",
+		].join(";");
+		iosHint.innerHTML =
+			"<b>Install Wave Defence</b><br>" +
+			"Safari: tap <b>Share</b> → <b>Add to Home Screen</b>. " +
+			"Then open the icon for fullscreen play.";
+		var dismiss = document.createElement("button");
+		dismiss.type = "button";
+		dismiss.textContent = "Got it";
+		dismiss.style.cssText = [
+			"margin-top:10px",
+			"padding:8px 12px",
+			"border:0",
+			"border-radius:6px",
+			"background:#3d9a68",
+			"color:#f4fff8",
+			"font:600 13px/1 system-ui,sans-serif",
+			"touch-action:manipulation",
+		].join(";");
+		dismiss.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			try { localStorage.setItem("wd_ios_install_hint", "1"); } catch (e) {}
+			iosHint.style.display = "none";
+		});
+		iosHint.appendChild(dismiss);
+		document.body.appendChild(iosHint);
+		return iosHint;
+	}
+
+	function refreshChromeButtons() {
 		if (released) {
 			if (fsBtn) fsBtn.style.display = "none";
+			if (installBtn) installBtn.style.display = "none";
+			if (iosHint) iosHint.style.display = "none";
+			hideFsModal();
 			return;
 		}
 		var btn = ensureFsButton();
-		btn.style.display = isFullscreen() ? "none" : "block";
+		btn.style.display = fullscreenOk() ? "none" : "block";
+
+		var inst = ensureInstallButton();
+		var canInstall = !!deferredPrompt && !isStandalone();
+		inst.style.display = canInstall ? "block" : "none";
+
+		if (isIos() && !isStandalone() && isTouchish()) {
+			var seen = false;
+			try { seen = localStorage.getItem("wd_ios_install_hint") === "1"; } catch (e) {}
+			ensureIosHint().style.display = seen ? "none" : "block";
+		} else if (iosHint) {
+			iosHint.style.display = "none";
+		}
+	}
+
+	function runInstall() {
+		if (deferredPrompt) {
+			var prompt = deferredPrompt;
+			deferredPrompt = null;
+			refreshChromeButtons();
+			prompt.prompt();
+			Promise.resolve(prompt.userChoice).then(function () {
+				deferredPrompt = null;
+				refreshChromeButtons();
+			}).catch(function () {
+				refreshChromeButtons();
+			});
+			return;
+		}
+		if (isIos()) {
+			try { localStorage.removeItem("wd_ios_install_hint"); } catch (e) {}
+			ensureIosHint().style.display = "block";
+		}
 	}
 
 	/** Quit: undo fullscreen / CSS and try to leave the page. */
 	function exitPlayMode() {
 		released = true;
 		enterInFlight = false;
+		cssFullscreen = false;
 		unlockOrientation();
 		clearCanvasCss(canvasEl());
 		mode = "";
-		refreshFsButton();
+		refreshChromeButtons();
 
 		return exitFullscreen().then(function () {
 			try {
@@ -190,7 +411,7 @@
 
 	function requestFullscreen() {
 		if (isFullscreen()) return Promise.resolve(true);
-		var targets = [document.documentElement, document.body].filter(Boolean);
+		var targets = [document.documentElement, document.body, canvasEl()].filter(Boolean);
 
 		function tryOne(i) {
 			if (i >= targets.length) return Promise.resolve(false);
@@ -216,49 +437,85 @@
 		return tryOne(0);
 	}
 
-	/** Menu Fullscreen button + floating restore button. */
+	/** Real-gesture fullscreen (floating button / modal). */
 	function enterFullscreen() {
 		if (released || enterInFlight) return Promise.resolve(false);
 		enterInFlight = true;
 		mode = "";
 		applyCssLandscape();
 		return requestFullscreen()
-			.then(function () {
+			.then(function (ok) {
+				if (!ok && isTouchish()) {
+					// iOS / restricted browsers: CSS fill is the practical fullscreen.
+					cssFullscreen = true;
+				}
 				return lockLandscape();
 			})
 			.then(function () {
 				mode = "";
 				applyCssLandscape();
 				enterInFlight = false;
-				refreshFsButton();
-				return isFullscreen();
+				refreshChromeButtons();
+				return fullscreenOk();
 			})
 			.catch(function () {
 				enterInFlight = false;
-				refreshFsButton();
-				return false;
+				if (isTouchish()) cssFullscreen = true;
+				refreshChromeButtons();
+				return fullscreenOk();
 			});
+	}
+
+	/**
+	 * Called from the Godot menu button. Canvas clicks are not a trusted
+	 * fullscreen gesture, so show a real HTML tap target instead.
+	 */
+	function promptFullscreen() {
+		if (released) return false;
+		if (fullscreenOk()) {
+			mode = "";
+			applyCssLandscape();
+			return true;
+		}
+		if (isTouchish() || !document.fullscreenEnabled) {
+			showFsModal();
+			refreshChromeButtons();
+			return false;
+		}
+		return enterFullscreen();
 	}
 
 	function onResume() {
 		if (released) return;
-		// Screen timeout / app switch drops fullscreen; restore layout + show FS control.
+		if (!isFullscreen()) cssFullscreen = false;
 		mode = "";
 		applyCssLandscape();
-		refreshFsButton();
+		refreshChromeButtons();
 	}
 
 	window.WaveDefenceMobile = {
 		enterFullscreen: enterFullscreen,
+		promptFullscreen: promptFullscreen,
 		exitPlayMode: exitPlayMode,
 		applyCssLandscape: applyCssLandscape,
 		isFullscreen: isFullscreen,
-		refreshFsButton: refreshFsButton,
+		refreshFsButton: refreshChromeButtons,
+		refreshChromeButtons: refreshChromeButtons,
 	};
 
 	function boot() {
 		applyCssLandscape();
-		refreshFsButton();
+		refreshChromeButtons();
+
+		window.addEventListener("beforeinstallprompt", function (e) {
+			e.preventDefault();
+			deferredPrompt = e;
+			refreshChromeButtons();
+		});
+		window.addEventListener("appinstalled", function () {
+			deferredPrompt = null;
+			refreshChromeButtons();
+		});
 
 		window.addEventListener("resize", function () {
 			if (!released) applyCssLandscape();
@@ -269,20 +526,22 @@
 			setTimeout(applyCssLandscape, 80);
 			setTimeout(function () {
 				applyCssLandscape();
-				refreshFsButton();
+				refreshChromeButtons();
 			}, 300);
 		});
 		document.addEventListener("fullscreenchange", function () {
 			if (released) return;
+			if (isFullscreen()) cssFullscreen = false;
 			mode = "";
 			applyCssLandscape();
-			refreshFsButton();
+			refreshChromeButtons();
 		});
 		document.addEventListener("webkitfullscreenchange", function () {
 			if (released) return;
+			if (isFullscreen()) cssFullscreen = false;
 			mode = "";
 			applyCssLandscape();
-			refreshFsButton();
+			refreshChromeButtons();
 		});
 		document.addEventListener("visibilitychange", function () {
 			if (document.visibilityState === "visible") onResume();

@@ -155,21 +155,44 @@ if ($doWeb) {
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline
     $ver = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
     $htmlPath = Join-Path $ProjectRoot "docs\index.html"
-    $html = Get-Content $htmlPath -Raw
-
-    # Mobile helper + cache-bust (always rewrite so VERSION bumps replace old tags).
+    $swPath = Join-Path $ProjectRoot "docs\index.service.worker.js"
+    $manifestPath = Join-Path $ProjectRoot "docs\index.manifest.json"
     $mobileJsSrc = Join-Path $ProjectRoot "web\mobile_play.js"
     $mobileJsDst = Join-Path $ProjectRoot "docs\mobile_play.js"
-    Copy-Item -Force $mobileJsSrc $mobileJsDst
-    $html = [regex]::Replace($html, '(?s)<script src="mobile_play\.js\?v=[^"]*"></script>', "")
-    $html = [regex]::Replace($html, '(?s)<script>\s*\(function \(\) \{\s*var VER = "[^"]*";.*?</script>', "")
-    $inject = @"
-<script src="mobile_play.js?v=$ver"></script>
+    $manifestSrc = Join-Path $ProjectRoot "web\index.manifest.json"
+    $icon192Src = Join-Path $ProjectRoot "web\index.192x192.png"
+    $icon192Dst = Join-Path $ProjectRoot "docs\index.192x192.png"
+
+    function Read-TextFileRetry([string]$Path, [int]$Tries = 20) {
+        for ($i = 0; $i -lt $Tries; $i++) {
+            try {
+                return [System.IO.File]::ReadAllText($Path)
+            } catch {
+                Start-Sleep -Milliseconds 250
+            }
+        }
+        return [System.IO.File]::ReadAllText($Path)
+    }
+
+    function Write-TextFileRetry([string]$Path, [string]$Content, [int]$Tries = 20) {
+        for ($i = 0; $i -lt $Tries; $i++) {
+            try {
+                [System.IO.File]::WriteAllText($Path, $Content)
+                return
+            } catch {
+                Start-Sleep -Milliseconds 250
+            }
+        }
+        [System.IO.File]::WriteAllText($Path, $Content)
+    }
+
+    function Get-WebInject([string]$Version) {
+        return @"
+<script src="mobile_play.js?v=$Version"></script>
 <script>
 (function () {
-	var VER = "$ver";
+	var VER = "$Version";
 	var KEY = "wd_game_ver";
-	// Service worker ignores Ctrl+F5 — clear caches when VERSION changes.
 	try {
 		var prev = localStorage.getItem(KEY);
 		if (prev && prev !== VER && "serviceWorker" in navigator) {
@@ -207,36 +230,76 @@ if ($doWeb) {
 })();
 </script>
 "@
-    # Use Insert — PowerShell -replace treats $ in the inject as backrefs and can drop the tag.
-    $headIdx = $html.IndexOf("</head>")
-    if ($headIdx -lt 0) { throw "docs/index.html missing </head>" }
-    $html = $html.Insert($headIdx, $inject)
-    [System.IO.File]::WriteAllText($htmlPath, $html)
+    }
 
-    # Bump Godot PWA cache name so installs drop the old pack (Ctrl+F5 cannot).
-    $swPath = Join-Path $ProjectRoot "docs\index.service.worker.js"
-    if (Test-Path $swPath) {
-        $sw = [System.IO.File]::ReadAllText($swPath)
-        # Avoid $ in .NET Replace replacements (and PS MatchEvaluator quirks).
-        $swTagged = "const CACHE_VERSION = '" + $ver + "';"
-        $swNew = [regex]::Replace($sw, "const CACHE_VERSION = '[^']*';", $swTagged)
-        if ($swNew -notmatch [regex]::Escape($swTagged)) {
-            throw "Failed to stamp CACHE_VERSION=$ver into service worker"
+    function Stamp-WebShell([string]$Version) {
+        Copy-Item -Force $mobileJsSrc $mobileJsDst
+        if (Test-Path $manifestSrc) {
+            Copy-Item -Force $manifestSrc $manifestPath
         }
-        [System.IO.File]::WriteAllText($swPath, $swNew)
-    }
-    # Verify on disk — in-memory checks can pass while a late Godot write overwrites the stamp.
-    $htmlOnDisk = [System.IO.File]::ReadAllText($htmlPath)
-    if ($htmlOnDisk -notmatch [regex]::Escape('var VER = "' + $ver + '"')) {
-        throw "Failed to inject VER=$ver into docs/index.html (missing after write)"
-    }
-    if (Test-Path $swPath) {
-        $swOnDisk = [System.IO.File]::ReadAllText($swPath)
-        if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $ver + "';")) {
-            throw "Failed to stamp CACHE_VERSION=$ver into service worker (missing after write)"
+        if (Test-Path $icon192Src) {
+            Copy-Item -Force $icon192Src $icon192Dst
+        }
+
+        $html = Read-TextFileRetry $htmlPath
+        $html = [regex]::Replace($html, '(?s)<script src="mobile_play\.js\?v=[^"]*"></script>\s*', "")
+        $html = [regex]::Replace($html, '(?s)<script>\s*\(function \(\) \{\s*var VER = "[^"]*";.*?</script>\s*', "")
+        $inject = Get-WebInject $Version
+        $headIdx = $html.IndexOf("</head>")
+        if ($headIdx -lt 0) { throw "docs/index.html missing </head>" }
+        $html = $html.Insert($headIdx, $inject)
+        Write-TextFileRetry $htmlPath $html
+
+        if (Test-Path $swPath) {
+            $sw = Read-TextFileRetry $swPath
+            $swTagged = "const CACHE_VERSION = '" + $Version + "';"
+            $swNew = [regex]::Replace($sw, "const CACHE_VERSION = '[^']*';", $swTagged)
+            if ($swNew -notmatch [regex]::Escape($swTagged)) {
+                throw "Failed to stamp CACHE_VERSION=$Version into service worker"
+            }
+            Write-TextFileRetry $swPath $swNew
         }
     }
-    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper + SW)" -ForegroundColor Green
+
+    function Test-WebStamp([string]$Version) {
+        $htmlOnDisk = Read-TextFileRetry $htmlPath
+        if ($htmlOnDisk -notmatch [regex]::Escape('var VER = "' + $Version + '"')) { return $false }
+        if ($htmlOnDisk -notmatch 'mobile_play\.js\?v=') { return $false }
+        if (Test-Path $swPath) {
+            $swOnDisk = Read-TextFileRetry $swPath
+            if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $Version + "';")) { return $false }
+        }
+        if (Test-Path $manifestPath) {
+            $man = Read-TextFileRetry $manifestPath
+            if ($man -notmatch '"short_name"' -or $man -notmatch '192x192') { return $false }
+        } elseif (Test-Path $manifestSrc) {
+            return $false
+        }
+        if ((Test-Path $icon192Src) -and -not (Test-Path $icon192Dst)) { return $false }
+        return $true
+    }
+
+    # Godot may keep rewriting HTML/SW/manifest after the pack settles — stamp, wait, re-stamp.
+    $stampOk = $false
+    for ($attempt = 0; $attempt -lt 24; $attempt++) {
+        Stamp-WebShell -Version $ver
+        Start-Sleep -Milliseconds 400
+        if (Test-WebStamp -Version $ver) {
+            Start-Sleep -Milliseconds 800
+            if (Test-WebStamp -Version $ver) {
+                $stampOk = $true
+                break
+            }
+        }
+    }
+    # Final overwrite after Godot is quiet.
+    Stamp-WebShell -Version $ver
+    Start-Sleep -Milliseconds 500
+    Stamp-WebShell -Version $ver
+    if (-not (Test-WebStamp -Version $ver)) {
+        throw "Failed to keep VER=$ver / mobile_play / PWA manifest in docs (Godot overwrite race)"
+    }
+    Write-Host "OK: docs/ (GitHub Pages, cache-bust v$ver + mobile helper + SW + manifest)" -ForegroundColor Green
 }
 
 Write-Host ""

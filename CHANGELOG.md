@@ -1,4 +1,16 @@
-﻿## Version 00.02.19
+﻿## Version 00.02.20
+Date: 10/10/2026
+Time: 10:21 AM
+
+### Changes
+- Phone **Fullscreen** now opens a real on-page tap target (Godot canvas clicks are not a trusted fullscreen gesture)
+- Restored PWA install: **Install app** button when Chrome offers `beforeinstallprompt`, iPhone **Add to Home Screen** tip, manifest `short_name` + 192px icon
+- Web export re-stamps `mobile_play.js` / cache version until Godot stops overwriting `docs/index.html`
+
+### Reason
+Live Pages HTML lost the mobile helper after export, so Fullscreen did nothing, and the install affordance disappeared on phones.
+
+## Version 00.02.19
 Date: 10/10/2026
 Time: 3:21 AM
 

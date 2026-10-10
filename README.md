@@ -14,7 +14,7 @@ After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from 
 
 Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
 
-On **phones**, the web build can **CSS-rotate** the game 90° when upright. Use the menu **Fullscreen** button (or the floating **Fullscreen** control if the screen timed out and left fullscreen) to hide the browser bar when the browser allows it.
+On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap **Fullscreen** in the menu — a real on-page tap target appears (browsers block fullscreen from the game canvas alone). Use the floating **Fullscreen** control if the screen timed out. On Android Chrome, **Install app** appears when the site is installable; on iPhone Safari use **Share → Add to Home Screen** (a tip shows until dismissed).
 
 Rebuild the site files:
 

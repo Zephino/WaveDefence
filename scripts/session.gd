@@ -139,11 +139,16 @@ func _apply_mobile_presentation() -> void:
 func request_web_fullscreen() -> void:
 	if not OS.has_feature("web"):
 		return
+	# Canvas/Godot clicks are not a trusted fullscreen gesture — ask the page
+	# for a real HTML tap (modal / floating button) via promptFullscreen.
 	JavaScriptBridge.eval(
 		"""
 		(function () {
 			try {
-				if (window.WaveDefenceMobile && WaveDefenceMobile.enterFullscreen) {
+				if (!window.WaveDefenceMobile) return;
+				if (WaveDefenceMobile.promptFullscreen) {
+					WaveDefenceMobile.promptFullscreen();
+				} else if (WaveDefenceMobile.enterFullscreen) {
 					WaveDefenceMobile.enterFullscreen();
 				}
 			} catch (e) {}
