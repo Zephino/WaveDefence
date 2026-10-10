@@ -1,3 +1,9 @@
+# Music generator caches / local archives (old beds remain in git history)
+audio/music/__pycache__/
+audio/music/tests/__pycache__/
+audio/music/reports/
+audio/music/old_audio/
+
 # Godot 4+
 .godot/
 *.translation

@@ -1,0 +1,456 @@
+---
+description: Rules for generating original, seamlessly looping, crystal-clear retro videogame music, adaptive layers, stingers, and sound effects (NES, Game Boy, SNES, Sega) with Python (numpy/scipy)
+globs: ["**/music/**/*.py", "**/audio/**/*.py"]
+alwaysApply: false
+---
+
+# Retro Console-Style Looping Music Generator: Rules
+
+You are writing a Python script that procedurally synthesizes an ORIGINAL, seamlessly looping, clean and crisp videogame track in the style of a chosen classic console (NES, Game Boy family, SNES, Sega family). Follow every rule below. If a rule conflicts with a convenience, the rule wins.
+
+## 0. Priorities (in order)
+Read Sections 0.1 to 0.4 first: they define the limits, failure handling, build order, and the shared engine that everything else depends on.
+
+1. The loop must be mathematically seamless (no click, gap, or audible restart).
+2. The audio must be perfectly clean: no static, hiss, crackle, buzz, aliasing, or distortion (Section 6).
+3. No high-pitched, shrill, or harsh sounds (Section 7).
+4. The music must be original. Copyright safety (Section 2) overrides any stylistic request: if the user asks to copy or closely imitate a specific song, refuse that part and offer an original alternative.
+5. The music must sound good: memorable, coherent, varied, and match the chosen console's character.
+
+**Loop-safety guardrail (applies to everything in this file):** every feature beyond the core loop (musical-quality upgrades, layers, SFX, stingers, loudness, fast rendering) is an optional, flag-controlled enhancement (see Section 9). If enabling a feature causes ANY check in Section 10 to fail, automatically disable that feature, re-render, print which feature was disabled and why, and deliver the known-good seamless loop. A working seamless loop always beats a fancier one that breaks.
+
+## 0.1 Threshold Table (single source of truth)
+Every limit lives in this table. If a number elsewhere in this file ever differs from this table, THIS TABLE WINS. Keep these values in one `LIMITS` dictionary in the code and reference it everywhere (never hard-code a number twice).
+
+| ID | Check | Limit | Type | Automatic fix if it fails |
+|---|---|---|---|---|
+| T1 | Loop length | Whole bars AND integer samples | HARD | Nudge tempo slightly (Section 5); if impossible, stop with an error |
+| T2 | Seam test (all subsets of stems too) | Seam jump no larger than the track's typical (99th percentile) jump | HARD | Fix tail wrap-around or circular filtering, then re-run |
+| T3 | Pre-limiter peak | At most -3 dBFS | SOFT | Lower the global gain |
+| T4 | True-peak (4x oversampled) | At most -1 dBFS | SOFT | Lower the global gain |
+| T5 | DC offset | Below 1e-4 | SOFT | Circular high-pass at about 20 Hz |
+| T6 | Aliasing (vs. 2x higher oversampling) | Difference at least 60 dB down | SOFT | Raise oversampling or improve band-limiting |
+| T7 | Clicks (second-difference detector) | 0 outside 10 ms after scheduled onsets | SOFT | Lengthen envelopes, fix phase continuity |
+| T8 | High-frequency energy | At least 45 dB below peak above the `TREBLE_CEILING` check frequency (table below) | SOFT | Lower `TREBLE_CEILING` one step, or soften the offending preset |
+| T9 | Master low-pass | Set by `TREBLE_CEILING` (table below) | SOFT | Not applicable (this is a setting) |
+| T10 | Echo/reverb | Wet at most 20%; decays below -80 dB before the loop end | SOFT | Lower wet level or feedback |
+| T11 | Loudness | `TARGET_LUFS` (default -16), but T3 and T4 always win | SOFT | Use the lower level and warn |
+| T12 | Stems sum / fast render match | Max difference below 1e-9 | SOFT | Disable layers / fall back to the simple render path |
+| T13 | Note ranges | Lead C3-A5, harmony at or below lead, bass C1-C3 | SOFT | Transpose or regenerate the offending notes |
+| T14 | Harshness (2-5 kHz, A-weighted, 50 ms windows) | 0 windows more than 6 dB above the track median | SOFT | Section 18.7 fixes, then step `TREBLE_CEILING` down |
+| T15 | Humanization timing | At most 10 ms | SOFT | Reduce `HUMAN_TIMING_MS` |
+| T16 | Note attack and release | At least 5 ms | SOFT | Lengthen the envelope |
+
+**Treble ceiling (`TREBLE_CEILING`)**: controls how much "air" the sound has without changing which notes are played. Use a steep zero-phase or linear-phase filter, applied circularly (Section 5).
+
+| `TREBLE_CEILING` | Master low-pass (T9) | T8 check frequency | Best for |
+|---|---|---|---|
+| `soft` | 5 kHz | 7 kHz | Calmest and safest; dungeon, underwater, night moods |
+| `standard` (default) | 6 kHz | 8 kHz | Balanced clarity; all consoles |
+| `open` | 7 kHz | 9 kHz | More clarity and air for SNES, GBA, and Genesis |
+
+Note-range limits (T13) stay the same at every setting, so a higher ceiling never means shrill notes. The harshness guard (T14) applies at every setting, and if it still flags windows after its fixes, the ceiling automatically steps down one level.
+
+## 0.2 Failure Handling: Hard vs Soft Checks
+Wherever this file says "assert", read it as "check according to this section" (not "crash the script").
+- **HARD checks** (T1, T2, and the originality rules in Section 2 and 15): never deliver a file that fails. Stop with a clear error and exit code 1.
+- **SOFT checks** (everything else): never crash. For each failure: (1) apply the fix listed in the table, (2) re-render and re-check, up to 3 passes, (3) if it still fails, disable the responsible optional feature flag and re-render, (4) if it still fails and it is a core-audio check (T3-T8), lower the global gain, raise oversampling, or step `TREBLE_CEILING` down one level, (5) if it still fails, deliver the file with a clear WARNING in the report and exit code 2.
+- Never loosen a threshold to make a check pass, and never skip a check silently.
+- Print a final report table with one row per check: ID, check name, measured value, limit, and result (PASS, FIXED, FEATURE DISABLED, WARNING, or FAIL). Exit code 0 means everything passed.
+
+## 0.3 Build Order (do not skip ahead)
+Build in these phases. Finish a phase, run its tests, and see them pass before starting the next. Work on one phase per reply unless the user says to do more. If a later phase breaks an earlier phase's tests, fix it or revert that phase before continuing.
+1. **Engine:** the loop engine in Section 0.4, with its unit tests.
+2. **Minimal track:** one console (NES), an 8-bar loop with lead, bass, and drums, passing every check in Section 0.1.
+3. **Other consoles:** add one console profile at a time (Game Boy, GBA, SNES, Master System/Game Gear, Genesis). Each must pass the full checks before the next is started.
+4. **Composition core:** full 32-bar structure, melody, bass, drums, and voice leading (Section 4), each behind its flag.
+5. **Advanced features:** Section 18 features one at a time, each tested on its own.
+6. **Extras:** mood presets, instrument presets, loudness, layers, SFX, stingers, and fast rendering (Sections 11-17).
+7. **Release layer:** copyright screening and reports (Section 15), regression tests (18.10), and final report.
+
+## 0.4 Loop Engine (build and test this first)
+Create a shared module (for example `engine.py`) before writing any music. It contains the following, and ALL later code must use it and must never re-implement these things:
+- **Loop math:** samples per bar from tempo and signature, integer-length check, tempo nudging.
+- **Oscillators:** polyBLEP and additive pulse/saw/triangle, interpolated wavetables (smooth, no stair-steps), FM operators.
+- **Envelopes:** ADSR and stepped envelopes with the minimum 5 ms attack/release.
+- **Circular DSP:** tile-filter-extract helper, circular convolution, circular high/low-pass, circular echo/delay, and oversample-and-decimate resampling.
+- **Mixer and output:** panning, single global gain, soft limiter, LUFS measurement, TPDF dither, and 16/24-bit WAV writers.
+- **Checks:** every check in Section 0.1 (seam tests, click detector, aliasing, DC, peak, true-peak, spectrum, harshness, silent channels), each returning the measured value, the limit, and the pass/fail result so the report in Section 0.2 can be built.
+
+Engine unit tests (must pass before any music code is written):
+- A pure sine loop tiles with no seam and passes T2.
+- Filtering the tiled signal and keeping the middle copy matches circular convolution within 1e-9.
+- Band-limited oscillators pass the aliasing check (T6); a naive square wave fails it (proving the check works).
+- Loop math returns integer sample counts for all supported signatures, and nudges fractional tempos correctly.
+- The limiter, LUFS measurement, and dither behave as expected on test signals.
+- The click detector catches a deliberately inserted click, and does not flag normal note onsets.
+
+## 1. Tech and Output
+- Python 3, numpy + scipy (matplotlib only for the seam-test plot).
+- Output: 44.1 kHz stereo WAV. Write two files: `*_16bit.wav` (16-bit PCM with TPDF dither at +/-1 LSB, inaudible) and `*_24bit.wav` (24-bit PCM, no dither needed). Never MP3/OGG (encoder padding breaks loops).
+- All internal processing in float64.
+- Fully deterministic: fixed random seed at the top.
+- All tweakable settings are constants at the top of the file (see Section 9).
+- Comment the code and split it into small functions (oscillators, envelopes, channels, console profiles, mixing, loop handling, checks).
+
+## 2. Originality and Copyright Safety (critical)
+The goal is music that cannot reasonably be mistaken for, or traced back to, any existing work. Copyright protects specific melodies, basslines, rhythms, and recordings. It does not protect general style, instrumentation, or common chord progressions. So imitate the style, never the tunes.
+
+**Never do:**
+- Reproduce, transcribe, or "remix" any existing melody, bassline, riff, hook, or drum pattern, even partially, even changed in key or tempo.
+- Reuse any recognizable sequence of roughly 4 or more notes from a known song (melody plus rhythm together).
+- Copy from memory, or from MIDI, tabs, sheet music, or sample data of any existing game or song.
+- Use or embed any sampled audio. Every sound must be synthesized from scratch in code. This includes SNES-style and GBA-style "sample" instruments: build them from additive, FM, or physical-modeling synthesis.
+- Name, quote, or reference any specific song, game, composer, or franchise in code, comments, variable names, filenames, metadata, or WAV tags. Use neutral names (for example `original_loop_01.wav`).
+- Write "in the style of [specific game/composer]". Describe the sound only generically (for example "fast 8-bit action track"). Console names (NES, Game Boy, SNES, Genesis, etc.) may be used only as technical profile labels in code.
+
+**Always do:**
+- Generate the melody from original building blocks: choose a scale, build a fresh 2-bar motif from a seeded random rhythm and interval pattern, then develop it by transposition, inversion, rhythmic change, and sequence.
+- Use only common-property material as raw ingredients: standard scales and modes, and generic progressions (I-V-vi-IV, i-VI-III-VII, etc.). The melody on top must be original.
+- Avoid famous melodic shapes. If a generated motif starts to feel familiar, regenerate it with a different seed.
+- Make the lead, harmony, and bass lines distinct from each other and from common genre cliches, so no part is a stock riff.
+- Add a comment block at the top of the generated script: "All melodies, rhythms, and sounds in this file are original and synthesized from scratch. No samples or third-party material used."
+
+**Originality self-check (run and print):**
+- Print the lead melody as note names + durations and the motif's interval pattern for human review.
+- Confirm that no audio files are loaded (the script reads no input audio, only numpy/scipy synthesis).
+- In the final summary, remind the user: "Original by construction, but if this will be commercially released, check it with a melody-matching tool or a private upload to a service with copyright detection (e.g., YouTube Content ID) before publishing."
+
+**Also apply Section 15 (Stronger Copyright Protection)**: reference-motif screening, a complexity floor, and a provenance record.
+
+**Limits:** these rules greatly reduce infringement risk but cannot give a legal guarantee, since accidental similarity is always possible. Never claim legal clearance; recommend a human listen and, for commercial projects, a professional review.
+
+## 3. Console Profiles
+Select with the `CONSOLE` variable. Each profile defines which "channels" exist and what they do. Use only the sounds typical of the selected profile; do not mix profiles unless `MIX_CONSOLES = True`.
+
+Important: imitate each chip's TIMBRE and note behavior, never its analog or DAC artifacts (hiss, bit-crush, aliasing, stair-stepping). See Section 6.
+
+### CONSOLE = "NES"  (5-channel pulse/triangle/noise chip)
+- Pulse 1 = lead (duty 25% default). Pulse 2 = harmony / counter-melody / arpeggios (duty 50% default). Duty cycles: 12.5%, 25%, 50%.
+- Triangle = bass. Driving eighth-note patterns (root, octave, root, fifth). Amplitude quantization to 16 steps is optional and OFF by default (`QUANTIZE_AUTHENTIC = False`) because it adds gritty distortion.
+- Noise = drums (kick, snare, closed hi-hat), built per Section 6 rules.
+- Expression: stepped volume envelopes with fast decay, delayed vibrato on held notes, quick pitch slides, fast arpeggios for chords.
+- Skip the DPCM channel.
+
+### CONSOLE = "GAMEBOY"  (original Game Boy, Pocket, and Game Boy Color: same sound hardware)
+- Pulse 1 = lead (with optional pitch sweep). Pulse 2 = harmony. Duty cycles: 12.5%, 25%, 50%, 75%.
+- Wave channel = bass or soft lead/pad using a custom 32-step waveform. Smooth the waveform (periodic interpolation) so there is no stair-step noise. Coarse 4 level volume (100/50/25%).
+- Noise = short percussion (tonal-leaning kick/snare, very soft hat). Use the "metallic" short-pattern flavor for hats, filtered.
+- Per-channel stereo panning (gentle).
+- Character: bright, bouncy, compact, brisk tempos, lots of quick arpeggios and staccato leads.
+
+### CONSOLE = "GAMEBOY_ADVANCE"
+- Everything in "GAMEBOY" plus two extra sample-style channels, synthesized from scratch: pads, strings, electric piano, bells, bass, drum hits.
+- Richer, fuller arrangements than the original Game Boy; still compact and punchy.
+
+### CONSOLE = "SNES"  (8-voice sample-based chip with echo)
+- Up to 8 voices. Build instruments from scratch using additive, FM, or Karplus-Strong synthesis: strings, flute, brass, harp, bells, electric piano, slap/fretless bass, choir pad, orchestral hit, soft toms.
+- Smooth ADSR envelopes, vibrato, portamento, per-voice panning (wider stereo than NES).
+- Echo: a mild, short, low-passed feedback delay (the signature SNES echo). It must be circular (wrap around the loop), wet <= 20%, and decay below -80 dB before the loop end (see Section 5).
+- Character: lush, layered, cinematic, adventure/RPG feel. Rich harmony and countermelodies.
+
+### CONSOLE = "MASTER_SYSTEM"  (also Game Gear)
+- 3 square-wave channels (50% duty only) + 1 noise channel. No triangle, so bass is a low square (C1-C3).
+- 16 volume steps. Bright, buzzy-but-controlled character; use arpeggios heavily to imply chords.
+- For "GAME_GEAR", add per-channel stereo panning.
+
+### CONSOLE = "GENESIS"  (also Mega Drive; 6 FM channels + 4 PSG channels)
+- FM channels: 4-operator FM synthesis with selectable algorithms. Typical sounds: slap bass, punchy FM kick/snare/toms, electric piano, brass stabs, bells, synth lead, funky guitar-like tones.
+- PSG channels: 3 squares + noise for extra leads/arpeggios/hats (same cleanliness rules).
+- Keep FM modulation index and operator feedback moderate. Excess feedback creates harsh noise, which is forbidden (Section 6).
+- Per-channel panning. Character: edgier, driving, rock/funk/techno flavored, strong bass and punchy drums.
+
+## 4. Musical Structure
+- Default: 4/4 (other signatures per Section 18.5), 32 bars = A (8) + A' variation (8) + B contrasting (8) + build-up back to A (8). Adapt the length if the user requests it, but always a whole number of bars.
+- A section uses the main progression; B uses a contrasting progression (relative major, rising progression, etc.).
+- Melody: a catchy 2-bar motif that repeats with variation. Mostly stepwise motion with occasional leaps. Use call-and-response between lead and harmony voices.
+- Add a drum fill every 8th bar. Vary bass and drum patterns slightly between sections.
+- The last bar must lead naturally into bar 1 (end on a dominant or turnaround).
+- Stay diatonic to the chosen key; chromatic notes only as deliberate passing tones.
+- Arrangement density should fit the console: sparse and punchy for NES/Game Boy/Master System, layered for SNES/GBA/Genesis.
+
+### Musical Quality Rules (loop-safe, each behind a flag)
+**Phrase-based melody (`ENABLE_PHRASE_MELODY`)**
+- Build melodies in phrases: 2-bar question + 2-bar answer (antecedent/consequent), then a 4-bar phrase that develops it.
+- Give each phrase a contour (rise toward a peak around bar 3 of 4, then settle). Put chord tones on strong beats and passing tones on weak beats.
+- Leaps of a fourth or more are followed by a stepwise move in the opposite direction. Maximum leap: one octave.
+- Mix rhythms (long and short notes), include rests so the melody breathes, and end phrases on stable notes (root, third, or fifth), except the last phrase, which ends on a note that pulls into bar 1 (leading tone or dominant).
+- Reject and regenerate (with the next seed) any melody that is a plain scale run, a plain triad arpeggio, or has fewer than 3 distinct rhythm values.
+
+**Better drums (`ENABLE_SWING_AND_GHOST_NOTES`)**
+- Define patterns on a 16th-note grid per console. Kick on beats 1 and 3 (with variations), snare on 2 and 4, hats on 8ths or 16ths with accents.
+- Add quiet ghost notes (velocity 20-35%) and a different fill every 8th bar (rolls, snare flams, tom runs).
+- Optional swing (`SWING_AMOUNT`, 0 to 0.25) shifts off-beat 16ths/8ths later by a fixed fraction inside each beat. Because it only moves events inside their own beat, the loop length does not change.
+
+**Smooth voice leading (`ENABLE_SMART_VOICE_LEADING`)**
+- Voice chords so adjacent chords keep common tones and the other notes move by the smallest interval (steps of 1-2 semitones where possible).
+- Avoid parallel fifths and octaves between bass and lead.
+- Wrap-around check: the last chord's voicing must lead smoothly into the first chord's voicing (so the loop point sounds like a normal chord change).
+
+**Human feel without breaking the loop (`ENABLE_HUMANIZATION`)**
+- Add small seeded variations: velocity (+/- `HUMAN_VELOCITY`, default 8%) and timing (+/- `HUMAN_TIMING_MS`, default 8 ms, max 10 ms), never to the kick on beat 1 of bar 1.
+- Offsets are generated per bar from the seed, so the result is periodic and deterministic. Any event shifted past the loop end wraps to the start (circular). Total loop length must stay exactly the same.
+- Never use random tempo drift.
+
+## 5. Seamless Loop (critical)
+1. Loop length must be an exact whole number of bars AND an exact integer number of samples. `assert` this. If the tempo makes the sample count fractional, nudge the tempo slightly (e.g., 140 -> 139.97) and print the adjusted value.
+2. No fade-in or fade-out anywhere.
+3. Wrap-around tails: any note, drum, echo, or release that extends past the loop end must be mixed back onto the start (circular overlap-add). Never truncate tails.
+4. All filters, echo, resampling, and dither-free processing must be circular: filter a 3x tiled signal and keep the middle copy, or use circular convolution. Never filter a single loop in isolation.
+5. Loudness normalization and limiting use a single global gain. No per-chunk processing.
+6. Every note needs 5 ms minimum attack and release, including notes at the loop boundary.
+7. Seam test (must be implemented and run):
+   - Tile the final loop 3 times.
+   - Compare the sample-to-sample difference at each seam with the typical difference (99th percentile) across the track. The seam value must not exceed it.
+   - Save a waveform plot of +/-50 ms around the seam as `seam_check.png`.
+   - Print PASS/FAIL.
+
+## 6. Clean and Crisp Audio: ZERO static (critical)
+"Crisp" means clear, defined, and uncluttered. It does NOT mean bright or shrill (see Section 7).
+
+1. **No artifacts, ever.** No hiss, static, crackle, pops, buzz, rattle, aliasing whine, bit-crushing, sample-rate reduction, or lo-fi effects. Reproduce the console's character through timbre, rhythm, and arrangement only.
+2. **Oversample.** Synthesize everything at `OVERSAMPLE = 4` (176.4 kHz), then decimate to 44.1 kHz using a high-quality zero-phase anti-alias filter (for example `scipy.signal.resample_poly` with a Kaiser window, applied circularly per Section 5).
+3. **Band-limited oscillators.** Pulse, saw, and triangle waves use polyBLEP or additive synthesis. Never use naive `np.sign` squares or raw wavetable lookups without interpolation. Wave-channel waveforms are smoothed so there are no stair-steps.
+4. **Percussion without hiss.** Noise-based sounds must be short, band-pass or low-pass filtered, and decay to exact zero. Build drums from tone + filtered noise:
+   - Kick: pitch-dropping sine burst (about 150 -> 50 Hz) with a tiny click-free attack.
+   - Snare: short mid-band noise burst + a short tone (about 180-250 Hz).
+   - Hi-hat: very short, heavily filtered noise, quiet. No sustained fizz.
+   - Use deterministic seeded noise only.
+5. **True digital silence.** No DC offset. Apply a gentle circular high-pass at about 20 Hz. Channels that are silent must output exact zeros (no noise floor).
+6. **No clicks or pops.** Smooth envelopes (5 ms minimum), phase-continuous oscillators across pitch slides and legato notes, no abrupt phase resets that cause discontinuities, and no sudden voice drops.
+7. **No clipping or distortion.** Pre-limiter peak at most -3 dBFS. The soft limiter only catches rare peaks (under 1 dB of gain reduction, no audible pumping). True-peak (4x oversampled) at most -1 dBFS.
+8. **Clear mix (no mud, no masking).**
+   - Give each part its own register: bass below about 250 Hz, harmony about 250 Hz to 1 kHz, lead about 500 Hz to 2.5 kHz.
+   - High-pass non-bass channels at about 80-120 Hz (circular) to remove rumble.
+   - Limit simultaneous voices; avoid doubling the same pitch in several channels at the same volume (phase cancellation).
+   - A presence boost of at most +2 dB around 2-4 kHz is allowed; nothing sharper.
+   - Fast clean attacks (5-10 ms) on percussion and plucks for crispness.
+9. **Clean echo/reverb** (SNES, GBA, Genesis only, and only mild): circular, low-passed feedback, wet <= 20%, no metallic ringing, no noise-based tails, decays below -80 dB before wrapping.
+10. **Measurable checks (run and print each; handle failures per Section 0.2, limits per Section 0.1):**
+    - DC offset magnitude below 1e-4.
+    - Pre-limiter peak at most -3 dBFS; true-peak at most -1 dBFS.
+    - Aliasing test: render a reference at 2x higher oversampling; the difference signal must be at least 60 dB below the main signal.
+    - Click detector: compute the second difference of the signal; there must be no spikes above the threshold outside 10 ms windows after scheduled note/drum onsets. Print the count (must be 0).
+    - Silent-channel test: when a channel is not playing, its output is exactly zero.
+    - If any check fails, fix the cause in the generator. Do not loosen thresholds.
+
+## 7. No High-Pitched or Harsh Sounds
+- Note range: lead C3 to A5 maximum (nothing above ~900 Hz fundamental); harmony lower than or equal to the lead; bass C1 to C3.
+- Avoid shrill staccato leads, very high arpeggios, and harsh noise bursts.
+- Master low-pass is set by `TREBLE_CEILING` (soft 5 kHz, standard 6 kHz, open 7 kHz); see Section 0.1. Default is `standard`. This setting only changes how much "air" the sound has: the note-range limits above stay the same at every setting.
+- Spectrum check (T8): compute the FFT and check that energy above the ceiling's check frequency (Section 0.1) is at least 45 dB below the peak. Print the measured value.
+
+## 8. Mix
+- Balance: lead loudest, harmony next, bass solid, drums tucked underneath.
+- Stereo: NES and Master System are near-mono with a subtle spread (pulse 1 slightly left, pulse 2 slightly right, bass and kick centered). Game Boy, Game Gear, Genesis: gentle per-channel panning. SNES/GBA: wider stereo, still with a centered bass and kick.
+- Reverb/echo only where the profile allows it (Section 3), and only as defined in Section 6.9.
+- Normalize to about -3 dBFS peak using one global gain; apply a soft limiter (e.g., tanh) before conversion. Never hard clip.
+
+## 9. Editable Variables (top of file)
+```python
+SAMPLE_RATE = 44100
+OVERSAMPLE = 4
+CONSOLE = "NES"   # "NES", "GAMEBOY", "GAMEBOY_ADVANCE", "SNES", "MASTER_SYSTEM", "GAME_GEAR", "GENESIS"
+MIX_CONSOLES = True   # Wave Defence: blend all console profiles listed above
+KEY = "E minor"
+TEMPO_BPM = 140
+TIME_SIGNATURE = (4, 4)
+TOTAL_BARS = 32
+PROGRESSION_A = ["Em", "C", "D", "Bm"]
+PROGRESSION_B = ["G", "D", "Em", "C"]
+LEAD_DUTY, HARMONY_DUTY = 0.25, 0.50
+QUANTIZE_AUTHENTIC = False
+ECHO_WET = 0.15            # SNES/GBA/Genesis only, max 0.20
+TREBLE_CEILING = "standard"   # "soft", "standard", or "open" (Section 0.1)
+SEED = 1234
+OUTPUT_PREFIX = "original_loop_01"
+MOOD = "overworld"   # presets in Section 11; any variable set explicitly overrides the preset
+ENABLE_PHRASE_MELODY = True
+ENABLE_SWING_AND_GHOST_NOTES = True
+SWING_AMOUNT = 0.0           # 0 to 0.25
+ENABLE_SMART_VOICE_LEADING = True
+ENABLE_HUMANIZATION = True
+HUMAN_TIMING_MS = 8          # max 10
+HUMAN_VELOCITY = 0.08
+EXPORT_LAYERS = True         # Section 12
+EXPORT_SFX = False           # Section 13
+EXPORT_STINGERS = False      # Section 14
+TARGET_LUFS = -16            # Section 17
+USE_FAST_RENDER = True       # Section 17
+REFERENCE_MOTIF_DIR = "reference_motifs"   # Section 15
+SCALE_MODE = "mood"          # or "major", "natural_minor", "harmonic_minor", "dorian", "phrygian", "lydian", "mixolydian", "major_pentatonic", "minor_pentatonic"
+ENABLE_ARP_LIBRARY = True
+ENABLE_BASS_LIBRARY = True
+ENABLE_EXTENDED_CHORDS = True
+ENABLE_ORNAMENTS = True
+ENABLE_HARSHNESS_GUARD = True
+CANDIDATES = 8               # 1 to 32
+ENABLE_EAR_FATIGUE_LIMITS = True
+```
+Changing these should be enough to get a different mood: heroic/fast (140-160 BPM), mysterious/dungeon (minor, 90-110 BPM), cheerful/overworld (major, 120-140 BPM), tense/boss (minor, 150-170 BPM).
+
+## 10. Final Self-Checks (run automatically and print the report table from Section 0.2)
+Limits and fixes for every numbered check (T1-T16) are in Section 0.1. The list below is the human-readable summary.
+- [ ] Loop length is an integer number of samples and bars
+- [ ] Seam test PASS
+- [ ] DC offset below 1e-4
+- [ ] Pre-limiter peak at most -3 dBFS, true-peak at most -1 dBFS, no clipping
+- [ ] Aliasing test PASS (difference at least 60 dB down)
+- [ ] Click detector: 0 clicks
+- [ ] Silent channels output exact zeros
+- [ ] Energy above 8 kHz at least 45 dB below peak
+- [ ] All notes within allowed ranges
+- [ ] Deterministic: running twice gives identical output (compare hashes)
+- [ ] Smarter seam tests PASS (spectral, level, and waveform continuity); `seam_listen_test.wav` exported
+- [ ] Loudness at or near `TARGET_LUFS` with peak limits respected
+- [ ] If layers are exported: stems sum exactly to the full mix, and every subset is seamless
+- [ ] If SFX or stingers are exported: each starts and ends at exact zero and passes the Section 6 checks
+- [ ] All instrument presets passed their test-note checks
+- [ ] Fast render output identical to the simple path
+- [ ] Any feature that failed a check was auto-disabled and reported
+- [ ] Best-of-N score table printed and chosen seed recorded in `provenance.json`
+- [ ] Harshness guard: 0 flagged windows after fixes
+- [ ] Ear-fatigue limits and repetition balance (40-60%) satisfied
+- [ ] Non-4/4 signatures: total loop length is an integer number of samples
+- [ ] `python -m pytest` passes (golden tests included)
+- [ ] Engine unit tests (Section 0.4) pass
+- [ ] Final report table printed; exit code 0 (all pass), or 2 with clear warnings (never 1 on delivery)
+- [ ] Copyright: no samples or external audio loaded, no song/game/composer names anywhere, reference-motif screening done (if folder exists), `provenance.json` and `copyright_report.md` written, originality disclaimer included
+
+## 11. Mood Presets
+Select with `MOOD`. A preset only sets DEFAULTS (key/mode, tempo, progressions, density, console suggestion, duty cycles). Any variable set explicitly by the user overrides it. Every preset must still produce a whole number of bars and pass all Section 10 checks.
+
+| MOOD | Key / mode | BPM | Progression idea | Feel (suggested console) |
+|---|---|---|---|---|
+| `boss_fight` | minor | 150-170 | i-VI-VII-V or i-bII-i-V | Driving, dense drums, fast arps (NES, Genesis) |
+| `overworld` | major | 120-140 | I-V-vi-IV or I-IV-V-I | Cheerful, bouncy, singable (NES, Game Boy, SNES) |
+| `dungeon` | minor / phrygian | 90-110 | i-bII-i-bVII | Sparse, mysterious, low register (Game Boy, SNES) |
+| `victory` | major | 130-150 | I-IV-V-I | Triumphant, short and bold |
+| `game_over` | minor | 60-80 | i-iv-i-V | Slow, descending melody |
+| `shop` | mixolydian / major | 100-120 | I-bVII-IV-I or ii-V-I | Relaxed, light swing (`SWING_AMOUNT` 0.1) |
+| `title_screen` | major or minor | 100-120 | vi-IV-I-V | Memorable hook, spacious |
+| `underwater` | dorian / lydian | 80-100 | I-II-I-vi | Floaty, soft attacks, mild echo (SNES, GBA) |
+| `ice_level` | lydian / major | 90-110 | I-iii-IV-I | Sparse, glassy, twinkly but within the range limits |
+| `space` | minor / lydian | 100-120 | i-bVI-bIII-bVII | Wide, pad-like, slow arps (SNES, Genesis) |
+
+## 12. Adaptive Layers (loop-aligned stems)  (`EXPORT_LAYERS`)
+Goal: let the game fade parts in and out (calm to intense) with zero loop problems.
+- Render the track as separate stems: `base` (bass + harmony + soft percussion), `percussion`, `lead`, `arp`, and `intensity` (extra fills/countermelody).
+- Every stem has EXACTLY the same length in samples as the main loop and is itself seamless (it passes the Section 5 seam test on its own).
+- The sum of all stems must equal the full mix: verify (T12) that the maximum difference is below 1e-9 before conversion. To make that possible, the whole chain must be linear: use the same global gain for every stem and bypass the soft limiter (design levels so the full mix peaks at no more than -3 dBFS without limiting; limiter gain reduction must be 0).
+- Any subset of stems must also be seamless and clean (run the seam and click checks on every subset).
+- Export stems as 24-bit WAV with no dither, in a `layers/` folder, plus `layers.json` containing: loop length in samples, BPM, bars, bar length in samples, key, console, and each layer's name with a suggested intensity level (0-4).
+- Include a note in `layers.json`: layers should only fade in or out on bar boundaries.
+
+## 13. Sound Effects Generator  (`EXPORT_SFX`)
+- Provide `generate_sfx(name)` for: jump, land, coin_pickup, item_get, hit, hurt, explosion_soft, menu_move, menu_select, menu_back, power_up, error, door, step.
+- Use the same console profile, band-limited oscillators, and Section 6 cleanliness rules as the music.
+- Keep pitch low enough to follow Section 7: fundamentals below about 900 Hz and master low-pass applied. Make "coin" and "pickup" sounds with short rising pairs in the mid range, not shrill high pings.
+- Duration 0.05-2.0 s. Every effect starts and ends at exact digital zero, with 5 ms attack/release and no truncated tails. Peak at most -3 dBFS, but about 4-6 dB quieter than the music's loudness so effects sit on top of music without clashing.
+- No hiss: noise-based effects (explosion, hit) use filtered, decaying noise with tonal body.
+- Deterministic (seeded), neutral file names (`sfx_jump_01.wav`), exported to an `sfx/` folder. SFX run the same click, DC, and aliasing checks as the music.
+
+## 14. Stingers  (`EXPORT_STINGERS`)
+- Provide stingers for: victory, level_up, game_over, item_get, checkpoint, boss_intro. Length 1-6 seconds.
+- Match the track's key (or its relative major/minor) and tempo, and make their length a whole number of beats so they stay in time when triggered on a beat.
+- Stingers play once, so tails may ring naturally but must decay to digital silence (not be chopped). Start and end at exact zero, pass all Section 6 checks, and use original motifs only (Section 2 and 15).
+- Export to a `stingers/` folder with neutral names.
+
+## 15. Stronger Copyright Protection (the music is made for real use, so this is mandatory)
+1. **Reference-motif screening.** If the folder `REFERENCE_MOTIF_DIR` exists, load every MIDI file in it (these are songs the user wants to avoid resembling). Convert each to interval + rhythm sequences. Compare the generated melody, bassline, and drum pattern against them using n-gram matching: reject and regenerate (next seed) if any run of 5 or more consecutive notes matches in both intervals and relative rhythm, or if a longer fuzzy match (e.g., 70% similarity over 8 or more notes) is found. The script itself must never contain or download any copyrighted melody data.
+2. **Complexity floor.** Very simple motifs (stepwise scale runs, plain triads, repeated single notes) are most likely to collide with existing songs. Reject melodies that are not distinctive (fewer than 3 distinct intervals or fewer than 3 distinct rhythm values in the motif).
+3. **Self-similarity cap.** The A' and later sections may vary the motif, but must not be identical copies of the exact same melody for more than 4 bars in a row (also keeps the music interesting).
+4. **Provenance record.** Write `provenance.json` next to the output: the seed, console, mood, all settings, a SHA-256 hash of the generator script, a SHA-256 hash of each output file, and the generation timestamp. This documents that the music was generated from scratch.
+5. **Copyright report.** Write `copyright_report.md` containing the melody as note names, the motif intervals, screening results (matches found or "none"), confirmation that no audio files or samples were loaded, and the reminder: "No automated check can guarantee clearance. Before commercial release, listen carefully, upload privately to a service with copyright detection (e.g., YouTube Content ID), and consider a professional review."
+6. **Neutral outputs.** File names, metadata, comments, and variable names never reference songs, games, composers, or franchises.
+
+## 16. Instrument Preset Library
+- Keep instruments as data-only presets (a dictionary per console) holding parameters such as duty cycle, envelope, vibrato, FM algorithm and operator ratios, filter settings, and echo amount. Adding a preset must not require changing the loop engine.
+- Provide at least 6 original presets per console (for example lead, soft lead, bass, pad/arp, pluck, bell-like, kick, snare, hat), with neutral names (`lead_bright_01`, `bass_round_02`).
+- Every preset is rendered as a test note at start-up and must pass the Section 6 checks (no clicks, aliasing, DC, or clipping). Any preset that fails is excluded automatically and reported.
+- Every sound is synthesized from scratch; no samples (Section 2).
+
+## 17. Loudness, Smarter Seam Test, and Fast Rendering (safe by design)
+**Consistent loudness (`TARGET_LUFS`).**
+- Measure integrated loudness using an ITU-R BS.1770 style K-weighted measurement (implement it with scipy, or use `pyloudnorm` if installed).
+- Apply ONE global gain to hit `TARGET_LUFS` (default -16 LUFS). The peak limits in Section 6 win: if reaching the target would push the peak above -3 dBFS (or true-peak above -1 dBFS), use the lower level and print a warning. Never clip or add heavy limiting to reach the target.
+- Print the final LUFS value.
+
+**Smarter seam test (read-only diagnostics, never alters the audio).** In addition to the Section 5 test:
+- Compare the spectrum (short-time FFT) of the 100 ms before and after the seam with typical neighboring windows. The seam's spectral change must be within the normal range of the track.
+- Compare the RMS level in 20 ms windows before and after the seam; the jump must be within the track's normal variation.
+- Check phase/waveform continuity at the seam (no abrupt jump in the waveform or its slope).
+- Export `seam_listen_test.wav` (the loop repeated 6 times) so a human can listen for the seam.
+- Print PASS/FAIL for each test.
+
+**Fast rendering (`USE_FAST_RENDER`).**
+- Use vectorized numpy, cached instrument/note renders, and optional multiprocessing per channel.
+- Speed-ups must not change the result: the fast path must produce output identical to the simple path (max difference < 1e-9). Verify this once per run on a short test segment (or fully on request). If they differ, fall back to the simple path automatically and print a warning.
+
+## 18. Advanced Composition and Quality Features (all loop-safe, each behind a flag)
+These follow the loop-safety guardrail: if a feature breaks any Section 10 check, it is auto-disabled and reported.
+
+### 18.1 Scale and mode variety  (`SCALE_MODE`)
+- Supported: major, natural_minor, harmonic_minor, dorian, phrygian, lydian, mixolydian, major_pentatonic, minor_pentatonic. Default is taken from the mood preset (Section 11); an explicit `SCALE_MODE` overrides it.
+- Derive all chords, bass notes, arpeggios, and melody notes from the chosen mode so nothing clashes. Emphasize the mode's characteristic note (for example the raised 6th in dorian, the sharp 4th in lydian) once per phrase, not constantly.
+- Pentatonic scales are good for simple NES/Game Boy/Master System melodies, but must still satisfy the complexity floor (Section 15.2).
+
+### 18.2 Arpeggio pattern library  (`ENABLE_ARP_LIBRARY`)
+- Patterns: up, down, up_down, broken (1-3-2-4), skip (1-3-5-3), octave_jump, and repeated-note pulses.
+- Rates: 16th notes by default; 8th-note triplets allowed. Pick the pattern per section and mood (calm moods use slower, simpler arps).
+- Arps restart exactly on the beat or bar so they stay aligned across the loop, and stay inside the Section 7 note ranges.
+- Console rule: NES, Game Boy, and Master System use arps to imply chords (few voices). SNES, GBA, and Genesis use them sparingly as texture.
+- Do not use fast arps continuously (see 18.9).
+
+### 18.3 Bass pattern library  (`ENABLE_BASS_LIBRARY`)
+- Patterns: root_eighths, root_fifth, octave_pump, walking (4 quarter notes stepping toward the next root), syncopated, and pedal_tone.
+- Choose per section and mood (boss_fight: octave_pump or root_eighths, shop: walking, dungeon: pedal_tone). Vary the pattern slightly every 4 or 8 bars.
+- Use an approach note (one step above or below, or the fifth) into each new chord root. The last bar must approach bar 1's root so the loop connects smoothly.
+- Bass stays within C1-C3 and follows Section 6 cleanliness (no muddy overlaps with the harmony).
+
+### 18.4 Richer chords  (`ENABLE_EXTENDED_CHORDS`)
+- Allowed: triads, sus2, sus4, 6th, 7th, maj7, add9, and 9th chords.
+- Console limits: NES, Game Boy, Master System use triads and 7ths (via arps, and no more notes than the channels allow). SNES, GBA, and Genesis may use 9ths and add9.
+- Keep it clean: avoid sustained minor-second clashes between the lead and held chord tones (longer than 1 beat), and keep voicings smooth (Section 4 voice-leading rules still apply, including the wrap-around check).
+
+### 18.5 Other time signatures  (`TIME_SIGNATURE`)
+- Supported: (4,4) default, (3,4), (6,8), (7,8).
+- Compute samples per bar from the signature and tempo, then `assert` that the total loop length is an integer number of samples. If not, nudge the tempo slightly (as in Section 5) and print the adjusted value.
+- Drum patterns, bass patterns, arps, and accents must be re-defined for each signature (for example 3/4: kick on 1, snare on 3 or 2 and 3; 6/8: kick on 1 and 4 of the six eighths; 7/8: group as 2+2+3 or 3+2+2 and keep the grouping consistent).
+- Section length stays a whole number of bars. Every Section 5 and Section 6 check applies unchanged.
+
+### 18.6 Ornaments  (`ENABLE_ORNAMENTS`)
+- Allowed: grace notes, trills, mordents, and turns.
+- Only on held notes (quarter note or longer), at phrase peaks or phrase endings. Maximum one ornament per 2 bars.
+- Each ornament note lasts at least 30 ms with the 5 ms attack/release, so it never clicks. Ornaments stay in the mode and inside the Section 7 range, and are not placed on the exact loop seam unless the seam checks still pass.
+
+### 18.7 Harshness guard  (`ENABLE_HARSHNESS_GUARD`)
+- Measure the A-weighted energy in the 2-5 kHz band in 50 ms windows. Flag any window more than 6 dB above the track's median for that band.
+- Auto-fix, in this order, up to 3 attempts: (a) soften the offending instrument preset (lower the duty cycle contrast, reduce upper harmonics, lengthen the attack slightly); (b) apply a gentle global peaking cut of at most 3 dB around 3 kHz.
+- Any EQ is circular and linear, and applied identically to every stem (so Section 12 stems still sum exactly to the mix).
+- Print the number of flagged windows before and after. The final result must have 0 flagged windows.
+
+### 18.8 Best-of-N generation and scoring  (`CANDIDATES`)
+- Generate `CANDIDATES` melodies (default 8, max 32) using seeds `SEED`, `SEED+1`, and so on. Evaluate them at note-data level (before audio rendering) to save time.
+- First apply the hard filters (Section 15 screening, note ranges, the complexity floor). Then score the survivors (0-100): repetition balance 25%, contour variety 20%, range usage 15%, chord-tone ratio on strong beats 20%, rhythm variety 10%, ear-fatigue penalty 10%.
+- Render only the highest-scoring candidate, then run the full Section 10 checks on it. If it fails, try the next best.
+- Print a score table, record the chosen seed in `provenance.json`, and keep the process deterministic (same settings always choose the same winner).
+
+### 18.9 Repetition balance and ear-fatigue limits  (`ENABLE_EAR_FATIGUE_LIMITS`)
+- Repetition balance: 40-60% of melody bars should be exact or near repeats (same rhythm and similar interval contour) of earlier bars. Below 30% sounds random; above 70% sounds monotonous. The main motif should appear at least 3 times across the track, varied each time.
+- Maximum 8 consecutive bars of continuous 16th-note hi-hats.
+- The lead must rest for at least 1 beat in every 4 bars.
+- At least 25% of the bars must have reduced density (a layer drops out), and the planned loudness shape should rise and fall across sections (short-term loudness range of at least 2 LU).
+- No sustained dissonance, and no long stretches above the harshness threshold (18.7).
+
+### 18.10 Regression tests  (`tests/`)
+- Provide a `tests/` folder runnable with `python -m pytest` that finishes in under about 60 seconds (use short 8-bar tracks for speed).
+- Test every console with at least 2 moods: loop length is an integer number of samples, seam test passes, all Section 6 and 10 checks pass, results are deterministic, stems sum to the mix, and all instrument presets pass.
+- Keep a `golden/manifest.json` for fixed seeds and settings containing: loop length, bars, LUFS, peak, an 8-band spectrum summary, and a hash of the exact melody/bass/drum note data (this is platform-independent and must match exactly).
+- Audio comparisons to golden files use a tolerance (maximum absolute difference below 1e-6 or correlation above 0.9999), not byte-equality, because floating-point results can differ slightly across machines. SHA-256 of audio is recorded only as information.
+- If a change to the script or rules alters a golden result, the test fails. Update the golden files only deliberately with `--update-golden`, and state what changed and why.
+
+## 19. Workflow When Asked to Revise
+- Change only what the feedback targets (for example "hi-hat too loud" means adjust the hi-hat gain only).
+- Re-run all Section 10 checks after every change and report the results. If a change breaks a check, undo it (or auto-disable its feature flag) and say so.
+- Never trade away seamlessness, cleanliness, the high-frequency limits, or originality to satisfy a stylistic request. Explain the conflict and offer an alternative instead.

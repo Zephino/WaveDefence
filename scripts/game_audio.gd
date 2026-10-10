@@ -1,6 +1,6 @@
 extends Node
 
-## Original NES-style loops (audio/music/*.wav) plus synthesized SFX.
+## Original retro mixed-console loops (audio/music/*.wav) plus synthesized SFX.
 ## Loops are prebuilt so startup does not synthesize music.
 
 const _PA := preload("res://scripts/procedural_audio.gd")

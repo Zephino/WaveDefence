@@ -1082,7 +1082,6 @@ func _open_pause_menu() -> void:
 	_pause_menu.resume_requested.connect(_resume_from_pause)
 	_pause_menu.quit_to_menu_requested.connect(_quit_to_menu_from_pause)
 	_pause_menu.screenshot_requested.connect(_save_maze_screenshot)
-	_pause_menu.open_settings_requested.connect(_open_pause_settings_stub)
 
 
 func _resume_from_pause() -> void:
@@ -1099,10 +1098,6 @@ func _quit_to_menu_from_pause() -> void:
 	_resume_from_pause()
 	Session.tutorial_active = false
 	Session.go_menu()
-
-
-func _open_pause_settings_stub() -> void:
-	hud.set_status("Adjust settings from the main menu; pause keeps your run on screen.")
 
 
 func _save_maze_screenshot() -> void:

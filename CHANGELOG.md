@@ -1,4 +1,35 @@
-﻿## Version 00.02.23
+﻿## Version 00.02.26
+Date: 10/10/2026
+Time: 11:27 AM
+
+### Changes
+- Pause **Settings** now opens Master / Music / SFX volume sliders plus a **Mute music** toggle (same persisted settings as the main menu)
+
+### Reason
+Players needed to mute or change music volume during a run without quitting to the main menu.
+
+## Version 00.02.25
+Date: 10/10/2026
+Time: 11:23 AM
+
+### Changes
+- Music generator now sets `MIX_CONSOLES = True` and blends all console profiles (NES, Game Boy, GBA, SNES, Master System, Game Gear, Genesis)
+- Regenerated desktop `original_loop_*.wav` and web `web_loop_*.wav` beds with the mixed-console engine; previous WAVs remain in `audio/music/old_audio/`
+
+### Reason
+User requested every console profile and console mixing enabled for the remade retro music beds.
+
+## Version 00.02.24
+Date: 10/10/2026
+Time: 11:01 AM
+
+### Changes
+- Added project rule `.cursor/rules/retro-looping-music.mdc` for original seamless retro looping music generation
+
+### Reason
+No music rule was present in project or user rules; install the provided retro looping-music generator rule for audio/Python work.
+
+## Version 00.02.23
 Date: 10/10/2026
 Time: 10:59 AM
 
