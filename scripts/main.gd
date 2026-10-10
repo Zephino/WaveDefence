@@ -161,7 +161,6 @@ func _setup_ui() -> void:
 	hud.end_run_confirmed.connect(_on_end_run_confirmed)
 	game_state.game_over.connect(_on_game_over_to_leaderboard)
 	hud.pause_pressed.connect(_toggle_pause)
-	hud.copy_seed_pressed.connect(_copy_map_seed)
 	wave_manager.timer_updated.connect(hud.update_timer)
 	wave_manager.enemies_remaining_changed.connect(hud.update_enemies_remaining)
 	wave_manager.skip_unlock_changed.connect(func(_u: bool) -> void: hud.set_skip_hint_ready())
@@ -1075,10 +1074,11 @@ func _open_pause_menu() -> void:
 	_pause_menu = _PauseMenuOverlay.new()
 	_pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
 	var next_w := game_state.wave + 1 if wave_manager.phase != WaveManager.Phase.WAVE else game_state.wave
-	_pause_menu.set_timeline(
-		_WavePreview.timeline_text(next_w, 8, game_state.game_mode)
+	_pause_menu.setup(
+		_WavePreview.timeline_text(next_w, 8, game_state.game_mode),
+		_RunSummaryOverlay.seed_clipboard_text(game_state)
 	)
-	add_child(_pause_menu)
+	hud.attach_pause_menu(_pause_menu)
 	_pause_menu.resume_requested.connect(_resume_from_pause)
 	_pause_menu.quit_to_menu_requested.connect(_quit_to_menu_from_pause)
 	_pause_menu.screenshot_requested.connect(_save_maze_screenshot)
@@ -1103,15 +1103,6 @@ func _quit_to_menu_from_pause() -> void:
 
 func _open_pause_settings_stub() -> void:
 	hud.set_status("Adjust settings from the main menu; pause keeps your run on screen.")
-
-
-func _copy_map_seed() -> void:
-	var seed_val := game_state.current_map_seed
-	if seed_val < 0:
-		return
-	var text := str(seed_val)
-	DisplayServer.clipboard_set(text)
-	hud.set_status("Seed %s copied." % text)
 
 
 func _save_maze_screenshot() -> void:

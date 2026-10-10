@@ -47,6 +47,19 @@ func show_summary(state: GameState, coaching: Dictionary) -> void:
 		]
 	)
 	box.add_child(stats)
+	var seed_text := seed_clipboard_text(state)
+	if not seed_text.is_empty():
+		var seed_label := Label.new()
+		seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		seed_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		seed_label.custom_minimum_size = Vector2(420, 0)
+		seed_label.modulate = Color(0.72, 0.78, 0.85)
+		if seed_text.contains(","):
+			seed_label.text = "Map seeds: %s" % seed_text
+		else:
+			seed_label.text = "Map seed: %s" % seed_text
+		seed_label.tooltip_text = "Paste into Classic → Custom layout to replay this map."
+		box.add_child(seed_label)
 	if bool(coaching.get("new_best", false)):
 		var best := Label.new()
 		best.text = "New personal best!"
@@ -73,12 +86,34 @@ func show_summary(state: GameState, coaching: Dictionary) -> void:
 		queue_free()
 	)
 	row.add_child(cont)
+	if not seed_text.is_empty():
+		var copy_seed := Button.new()
+		copy_seed.text = "Copy seed"
+		copy_seed.custom_minimum_size = Vector2(130, 44)
+		copy_seed.pressed.connect(func() -> void:
+			DisplayServer.clipboard_set(seed_text)
+			copy_seed.text = "Copied!"
+			copy_seed.disabled = true
+		)
+		row.add_child(copy_seed)
 	if coaching.has("screenshot_cb"):
 		var shot := Button.new()
 		shot.text = "Save maze image"
 		shot.custom_minimum_size = Vector2(160, 44)
 		shot.pressed.connect(coaching["screenshot_cb"])
 		row.add_child(shot)
+
+
+static func seed_clipboard_text(state: GameState) -> String:
+	var seeds: Array = state.seeds_for_leaderboard()
+	if seeds.is_empty() and state.current_map_seed >= 0:
+		seeds = [state.current_map_seed]
+	if seeds.is_empty():
+		return ""
+	var parts: PackedStringArray = []
+	for s in seeds:
+		parts.append(str(int(s)))
+	return ", ".join(parts)
 
 
 static func build_coaching_text(state: GameState) -> String:

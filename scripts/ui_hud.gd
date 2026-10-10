@@ -13,7 +13,6 @@ signal tower_type_selected(tower_id: String)
 signal end_run_confirmed
 signal multi_select_changed(enabled: bool)
 signal pause_pressed
-signal copy_seed_pressed
 
 var game_state: GameState
 var multi_select_enabled: bool = false
@@ -50,7 +49,6 @@ var _actions_shell: PanelContainer
 var _top_bar: Control
 var boss_hp_label: Label
 var next_wave_brief_label: Label
-var copy_seed_button: Button
 
 
 func setup(p_state: GameState, version_text: String) -> void:
@@ -328,8 +326,20 @@ func set_run_summary_presented(on: bool) -> void:
 
 func attach_run_summary(overlay: Control) -> void:
 	set_run_summary_presented(true)
+	_attach_fullscreen_overlay(overlay, 400)
+
+
+func attach_pause_menu(overlay: Control) -> void:
+	_attach_fullscreen_overlay(overlay, 350)
+
+
+func _attach_fullscreen_overlay(overlay: Control, z: int) -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 400
+	overlay.offset_left = 0
+	overlay.offset_top = 0
+	overlay.offset_right = 0
+	overlay.offset_bottom = 0
+	overlay.z_index = z
 	add_child(overlay)
 
 
@@ -459,11 +469,6 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	var pause_btn := _sidebar_button("Pause", action_h)
 	pause_btn.pressed.connect(func() -> void: pause_pressed.emit())
 	sidebar.add_child(pause_btn)
-
-	copy_seed_button = _sidebar_button("Copy seed", GameLayout.button_height(26.0))
-	copy_seed_button.visible = false
-	copy_seed_button.pressed.connect(func() -> void: copy_seed_pressed.emit())
-	sidebar.add_child(copy_seed_button)
 
 	end_run_button = _sidebar_button("End Run", action_h)
 	end_run_button.tooltip_text = "End this run and check the leaderboard"
@@ -697,8 +702,6 @@ func refresh_run_labels() -> void:
 		return
 	if difficulty_label:
 		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
-	if copy_seed_button:
-		copy_seed_button.visible = game_state.current_map_seed >= 0
 	if mode_label:
 		if WaveScaler.is_random_mode(game_state.game_mode):
 			mode_label.text = "Map: Random M%d  Seed: %d" % [

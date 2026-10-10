@@ -89,7 +89,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 
 ### Audio
 
-All music and SFX are **procedurally generated in-engine** (no imported third-party recordings). Menu, Standard, and Siege use stereo groove loops (kick, hats, arps); music intensifies on boss waves and when creeps get close to the exit. The exit-leak cue is unchanged. Click any menu button once to unlock audio on web.
+Music is original 8-bit style loops in `audio/music/` (32 bars, seamless WAV) and starts on the main menu. Loops stay band-limited and soft-limited so they stay clear rather than crushed. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. Click any menu button once to unlock audio on web.
 
 When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard**. If your wave score ranks in the top 10 for that board, you can enter a name (letters, numbers, spaces; max 12). Older single-board saves migrate into Medium.
 
@@ -97,8 +97,8 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 
 ## How to play
 
-- **Pause** — **Esc** or the **Pause** button: resume, upcoming-wave timeline, save maze image, quit to menu (no mid-run save).
-- **Copy seed** — sidebar when a map seed is shown.
+- **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), save maze image, quit to menu (no mid-run save).
+- **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
 - Select a tower from the left shop, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
 - **Hold left-click and drag** to paint-place many walls/towers in a row.

@@ -2,6 +2,7 @@ class_name ProceduralAudio
 extends RefCounted
 
 const SAMPLE_RATE := 22050
+const _Music := preload("res://scripts/procedural_music.gd")
 
 
 static func make_tone(
@@ -95,154 +96,8 @@ static func make_unlock_fanfare() -> AudioStreamWAV:
 	return _mix_mono(parts, 0.06)
 
 
-static func make_loop(recipe: String, duration: float = 24.0) -> AudioStreamWAV:
-	var cfg := _loop_config(recipe)
-	var kick_amp: float = float(cfg["kick"])
-	var hat_amp: float = float(cfg["hat"])
-	var bass_amp: float = float(cfg["bass"])
-	var pad_amp: float = float(cfg["pad"])
-	var arp_amp: float = float(cfg["arp"])
-	var swish_amp: float = float(cfg["swish"])
-	var master_amp: float = float(cfg["master"])
-	var samples := int(duration * SAMPLE_RATE)
-	var data := PackedByteArray()
-	data.resize(samples * 4)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(cfg["seed"])
-	var bpm: float = float(cfg["bpm"])
-	var beat_len := 60.0 / bpm
-	var bar_len := beat_len * 4.0
-	var progression: PackedFloat32Array = cfg["roots"]
-	var intense: bool = bool(cfg["intense"])
-	var arp_rate: float = float(cfg["arp_div"])
-	for i in samples:
-		var t := float(i) / float(SAMPLE_RATE)
-		var bar_i := int(floor(t / bar_len)) % progression.size()
-		var root: float = progression[bar_i]
-		var kick := 0.0
-		if fmod(t, beat_len) < 0.055:
-			var kt := fmod(t, beat_len) / 0.055
-			kick = (1.0 - kt) * (1.0 - kt) * kick_amp
-		var hat := 0.0
-		if intense or recipe == "menu":
-			var eighth := beat_len * 0.5
-			if fmod(t + eighth * 0.25, eighth) < 0.018:
-				hat = rng.randf_range(-1.0, 1.0) * hat_amp * (0.6 + 0.4 * sin(t * 40.0))
-		var bass: float = sin(t * root * 0.5 * TAU) * bass_amp
-		bass += sin(t * root * 0.25 * TAU) * bass_amp * 0.35
-		var pad_l := 0.0
-		var pad_r := 0.0
-		for det in [-0.003, 0.0, 0.003]:
-			var wobble := sin(t * 0.35 + det * 20.0) * 0.015
-			pad_l += sin(t * root * TAU * (1.0 + wobble + det)) * pad_amp
-			pad_r += sin(t * root * 1.259 * TAU * (1.0 + wobble - det)) * pad_amp * 0.9
-			pad_l += sin(t * root * 1.498 * TAU * (1.0 + wobble)) * pad_amp * 0.55
-			pad_r += sin(t * root * 1.498 * TAU * (1.0 - wobble)) * pad_amp * 0.55
-		var arp := 0.0
-		var arp_step := int(floor(t / arp_rate)) % 8
-		var arp_deg: float = [0.0, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25][arp_step]
-		var arp_freq := root * pow(2.0, arp_deg + 1.0)
-		var arp_env := 0.5 + 0.5 * sin(t * TAU / arp_rate * PI)
-		arp = sin(t * arp_freq * TAU) * arp_amp * arp_env
-		if intense:
-			arp += sin(t * arp_freq * 2.0 * TAU) * arp_amp * 0.25 * arp_env
-		var swish: float = sin(t * 0.08 * TAU) * swish_amp
-		pad_l *= 1.0 + swish * 0.15
-		pad_r *= 1.0 - swish * 0.12
-		var sidechain := 1.0
-		if kick > 0.01:
-			sidechain = 0.72 + 0.28 * (1.0 - kick / maxf(kick_amp, 0.001))
-		var l: float = (bass + (pad_l + arp) * sidechain + kick) * master_amp
-		var r: float = (bass + (pad_r + arp * 0.92) * sidechain + kick) * master_amp
-		l = _soft_clip(l)
-		r = _soft_clip(r)
-		_push_stereo(data, i, l, r)
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = SAMPLE_RATE
-	stream.stereo = true
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.data = data
-	return stream
-
-
-static func _loop_config(recipe: String) -> Dictionary:
-	match recipe:
-		"menu":
-			return {
-				"seed": 11,
-				"bpm": 108.0,
-				"roots": PackedFloat32Array([146.83, 130.81, 174.61, 196.0]),
-				"intense": false,
-				"arp_div": 0.22,
-				"kick": 0.42,
-				"hat": 0.06,
-				"bass": 0.14,
-				"pad": 0.07,
-				"arp": 0.09,
-				"swish": 0.35,
-				"master": 0.48,
-			}
-		"siege_calm":
-			return {
-				"seed": 23,
-				"bpm": 92.0,
-				"roots": PackedFloat32Array([82.41, 73.42, 87.31, 98.0]),
-				"intense": false,
-				"arp_div": 0.28,
-				"kick": 0.38,
-				"hat": 0.04,
-				"bass": 0.16,
-				"pad": 0.08,
-				"arp": 0.06,
-				"swish": 0.25,
-				"master": 0.46,
-			}
-		"siege_intense":
-			return {
-				"seed": 29,
-				"bpm": 98.0,
-				"roots": PackedFloat32Array([82.41, 77.78, 92.5, 87.31]),
-				"intense": true,
-				"arp_div": 0.18,
-				"kick": 0.48,
-				"hat": 0.09,
-				"bass": 0.17,
-				"pad": 0.075,
-				"arp": 0.11,
-				"swish": 0.4,
-				"master": 0.5,
-			}
-		"game_intense":
-			return {
-				"seed": 37,
-				"bpm": 118.0,
-				"roots": PackedFloat32Array([110.0, 98.0, 123.47, 130.81]),
-				"intense": true,
-				"arp_div": 0.16,
-				"kick": 0.5,
-				"hat": 0.1,
-				"bass": 0.15,
-				"pad": 0.065,
-				"arp": 0.12,
-				"swish": 0.45,
-				"master": 0.5,
-			}
-		_:
-			return {
-				"seed": 17,
-				"bpm": 112.0,
-				"roots": PackedFloat32Array([123.47, 110.0, 146.83, 130.81]),
-				"intense": false,
-				"arp_div": 0.2,
-				"kick": 0.4,
-				"hat": 0.05,
-				"bass": 0.13,
-				"pad": 0.065,
-				"arp": 0.085,
-				"swish": 0.3,
-				"master": 0.47,
-			}
+static func make_loop(recipe: String, _duration: float = 24.0) -> AudioStreamWAV:
+	return _Music.make_track(recipe)
 
 
 static func _osc(wave: String, phase: float) -> float:
