@@ -134,6 +134,8 @@ func _find_next_chain(from_pos: Vector2, chain_range: float, exclude: Array[Enem
 
 
 func _spawn_bolt(from_pos: Vector2, to_pos: Vector2) -> void:
+	if not UserSettings.is_effects_enabled():
+		return
 	var bolt := LightningBolt.new()
 	bolt.setup(from_pos, to_pos)
 	enemy_container.get_parent().add_child(bolt)

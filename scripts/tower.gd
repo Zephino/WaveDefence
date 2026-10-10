@@ -1,6 +1,8 @@
 class_name Tower
 extends Node2D
 
+const _AttackFx := preload("res://scripts/attack_fx.gd")
+
 var tower_id: String = "gunner"
 var def: Dictionary = {}
 var fire_cooldown: float = 0.0
@@ -15,6 +17,8 @@ var gold_invested: int = 0
 var ability_cooldowns: Dictionary = {}
 var buff_fire_mult: float = 1.0
 var buff_time: float = 0.0
+## Aim direction for elemental tower “front” / nozzle drawing.
+var _aim_dir: Vector2 = Vector2.RIGHT
 const SELECT_COLOR := Color(0.35, 0.95, 0.45)
 const SELECT_COLOR_SOFT := Color(0.35, 0.95, 0.45, 0.35)
 
@@ -153,6 +157,10 @@ func _find_target() -> Enemy:
 func _fire_at(target: Enemy) -> void:
 	var proj := Projectile.new()
 	var effect: String = str(def.get("effect", "none"))
+	var to_pos := target.global_position
+	var aim := to_pos - global_position
+	if aim.length_squared() > 0.001:
+		_aim_dir = aim.normalized()
 	proj.setup(
 		target,
 		float(def.get("damage", 1.0)),
@@ -167,6 +175,14 @@ func _fire_at(target: Enemy) -> void:
 	projectile_container.add_child(proj)
 	if bool(def.get("melee", false)):
 		proj.impact_now()
+	if projectile_container != null:
+		_AttackFx.try_spawn(
+			effect,
+			global_position,
+			to_pos,
+			float(def.get("range", 100.0)),
+			projectile_container
+		)
 
 
 func set_selected(value: bool) -> void:
@@ -203,6 +219,12 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, 6.0, Color(0.9, 0.85, 0.35))
 		draw_line(Vector2(0, -11), Vector2(0, 11), Color(0.95, 0.9, 0.55), 2.0)
 		draw_line(Vector2(-11, 0), Vector2(11, 0), Color(0.95, 0.9, 0.55), 2.0)
+	elif tower_id == "burn" or tower_id == "freeze":
+		var nozzle := _aim_dir * 12.0
+		var side := Vector2(-_aim_dir.y, _aim_dir.x) * 3.5
+		var tip_color := Color(1.0, 0.55, 0.2) if tower_id == "burn" else Color(0.7, 0.9, 1.0)
+		draw_line(-side, nozzle, tip_color, 2.0)
+		draw_line(side, nozzle, tip_color, 2.0)
 	# Upgrade pips along the bottom edge (Command / walls skip).
 	if not bool(def.get("is_command", false)):
 		for i in TowerData.MAX_STAT_UPGRADES:

@@ -11,6 +11,7 @@ var monster_mode_buttons: Dictionary = {}
 var selected_mode: int = WaveScaler.GameMode.CLASSIC
 var selected_monster_mode: int = WaveScaler.MonsterMode.CLASSIC
 var _large_controls_check: CheckButton
+var _effects_check: CheckButton
 var _center: VBoxContainer
 var _touch_layout: bool = false
 var _map_setup_overlay: Control
@@ -183,6 +184,14 @@ func _build_settings(parent: VBoxContainer) -> void:
 	_large_controls_check.toggled.connect(_on_large_controls_toggled)
 	parent.add_child(_large_controls_check)
 
+	_effects_check = CheckButton.new()
+	_effects_check.text = "Effects"
+	_effects_check.button_pressed = UserSettings.is_effects_enabled()
+	_effects_check.focus_mode = Control.FOCUS_NONE
+	_effects_check.custom_minimum_size = _menu_button_size()
+	_effects_check.toggled.connect(_on_effects_toggled)
+	parent.add_child(_effects_check)
+
 	if OS.has_feature("web"):
 		parent.add_child(_menu_button("Fullscreen", _on_fullscreen))
 
@@ -305,6 +314,10 @@ func _on_large_controls_toggled(on: bool) -> void:
 	_build_ui()
 	if had_setup:
 		_show_map_setup(_setup_difficulty)
+
+
+func _on_effects_toggled(on: bool) -> void:
+	UserSettings.set_effects_enabled(on)
 
 
 func _start_difficulty(difficulty: int) -> void:

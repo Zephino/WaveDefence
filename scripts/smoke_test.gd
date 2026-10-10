@@ -52,6 +52,17 @@ func _run() -> void:
 	if settings_ver != "" and settings_ver != file_ver and file_ver != "":
 		errors.append("project config/version should match VERSION file")
 
+	# Effects preference defaults on; toggling must stick for this session.
+	UserSettings.ensure_loaded()
+	var prev_fx := UserSettings.is_effects_enabled()
+	UserSettings.set_effects_enabled(false)
+	if UserSettings.is_effects_enabled():
+		errors.append("effects should turn off")
+	UserSettings.set_effects_enabled(true)
+	if not UserSettings.is_effects_enabled():
+		errors.append("effects should turn on")
+	UserSettings.set_effects_enabled(prev_fx)
+
 	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
 	if state.gold != WaveScaler.STARTING_GOLD_MEDIUM:
 		errors.append("medium starting gold expected %d got %d" % [WaveScaler.STARTING_GOLD_MEDIUM, state.gold])

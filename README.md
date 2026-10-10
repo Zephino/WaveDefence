@@ -68,7 +68,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
-  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Drag (right/middle mouse, or from a blocked/occupied cell) to pan when the map is bigger than the view
+  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Pan with right/middle mouse, drag from rocks/spawn/exit, or drag after pressing a wall/tower (left-click still places towers on walls and selects)
 - **Monsters** — independent of map:
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
@@ -76,6 +76,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map** (left
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
 - **Settings**
   - **Large Controls** — shrinks the board tiles and enlarges buttons/sidebars for all map modes (persists in `user://settings.cfg`; toggle only here)
+  - **Effects** — tower attack visuals (Burn flame, Freeze ice, Poison cloud, Lightning flashes). Off keeps gameplay the same; persists in `user://settings.cfg`
   - **Fullscreen** (web) — same action as the yellow floating Fullscreen button (top-right); that yellow control stays available in-game
 - **Quit** — close the game. On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
 
@@ -119,10 +120,10 @@ When you lose all lives, you are sent to the **leaderboard** for that run’s di
 | Gunner | 40 | Basic single-target; slight air bonus (`air_damage_mult` 1.25) |
 | Rapid | 55 | Fast / low damage; strong vs air (1.6×) |
 | Cannon | 75 | Boss hunter (2.4× bosses, prioritizes them); splash; weak vs air |
-| Burn | 50 | Ignite DoT; weak vs air (0.7×) |
-| Freeze | 60 | Slow; good vs air (1.4×) |
-| Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×) |
-| Lightning | 80 | Chain damage; strong vs air (2.0×) |
+| Burn | 50 | Ignite DoT; weak vs air (0.7×). Flame jet VFX toward the target (≤ range) when Effects is on |
+| Freeze | 60 | Slow; good vs air (1.4×). Ice shard burst VFX (≤ range) when Effects is on |
+| Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×). Green cloud VFX (≤ range) when Effects is on |
+| Lightning | 80 | Chain damage; strong vs air (2.0×). Bolt flashes when Effects is on |
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |
 | Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |

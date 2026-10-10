@@ -1,4 +1,26 @@
-﻿## Version 00.01.90
+﻿## Version 00.01.92
+Date: 10/10/2026
+Time: 1:14 AM
+
+### Changes
+- Burn / Freeze / Poison towers show short attack VFX (flame jet, ice shards, green cloud) capped at tower range
+- Lightning bolt flashes and those VFX respect a new **Effects** Settings toggle (default on, saved in `user://settings.cfg`)
+
+### Reason
+Players wanted clearer elemental attack feedback, with an option to turn cosmetics off.
+
+## Version 00.01.91
+Date: 10/10/2026
+Time: 1:05 AM
+
+### Changes
+- On large/Siege maps, left-click no longer starts pan on walls/towers, so towers can be built over walls again
+- Dragging after pressing a wall/tower still pans; rocks/spawn/exit still pan on press
+
+### Reason
+Siege pan was stealing every click on occupied cells, which blocked the intended tower-on-wall placement.
+
+## Version 00.01.90
 Date: 10/10/2026
 Time: 12:57 AM
 

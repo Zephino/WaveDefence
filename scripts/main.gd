@@ -208,6 +208,9 @@ func _process(delta: float) -> void:
 		_press_hold_time += delta
 		if mouse.distance_to(_press_start_pos) > TAP_MOVE_PX:
 			_awaiting_tower_tap = false
+			# Drag on a wall/tower pans large maps instead of eating the press.
+			if _map_needs_pan():
+				_begin_pan(mouse)
 		elif _press_hold_time >= LONG_PRESS_SEC:
 			_long_press_triggered = true
 			_awaiting_tower_tap = false
@@ -425,6 +428,8 @@ func _map_needs_pan() -> bool:
 
 
 func _can_start_pan_at(local_map: Vector2) -> bool:
+	## Immediate left-press pan only from non-buildable chrome (rocks / spawn / exit / off-map).
+	## Walls and towers must not steal the press — place-over-wall and select need the click.
 	if not _is_on_map(local_map):
 		return true
 	var cell := grid.world_to_cell(local_map)
@@ -433,8 +438,6 @@ func _can_start_pan_at(local_map: Vector2) -> bool:
 	if cell == grid.spawn_cell or cell == grid.exit_cell:
 		return true
 	if grid.get_tile(cell) == GameGrid.Tile.BLOCKED:
-		return true
-	if grid.get_tower_at(cell) != null:
 		return true
 	return false
 
