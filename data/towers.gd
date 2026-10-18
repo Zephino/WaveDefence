@@ -177,7 +177,7 @@ const TYPES := {
 	},
 	"vortex": {
 		"display_name": "Vortex",
-		"blurb": "No damage. Occupies a 3×3 footprint (cannot sit in a map corner). No other tower may be placed next to it. Pulls ground enemies along the orbit ring for one lap, then releases them. Unlocks at wave 12.",
+		"blurb": "No damage. The tower sits on 1 cell but locks a 3×3 zone (cannot sit in a map corner). Pulls ground enemies along the orbit ring for one lap, then releases them. Unlocks at wave 12.",
 		"cost": 90,
 		"damage": 0.0,
 		"range": 120.0,
@@ -187,7 +187,6 @@ const TYPES := {
 		"effect": "orbit",
 		"is_aura": true,
 		"footprint": 3,
-		"blocks_adjacent": true,
 		"orbit_radius": 88.0,
 		"orbit_laps": 1.0,
 		"orbit_immune": 1.5,
@@ -234,13 +233,6 @@ static func is_aura(tower_id: String) -> bool:
 ## Odd cell count for multi-tile towers (1 = single cell). Center is the click cell.
 static func footprint_size(tower_id: String) -> int:
 	return maxi(int(get_def(tower_id).get("footprint", 1)), 1)
-
-
-## True when other towers cannot be placed on cells adjacent to this tower's footprint.
-static func blocks_adjacent_placement(tower_id: String) -> bool:
-	if bool(get_def(tower_id).get("blocks_adjacent", false)):
-		return true
-	return footprint_size(tower_id) > 1
 
 
 ## All grid cells occupied when placing `tower_id` (or an explicit size) centered on `center`.
@@ -487,7 +479,7 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 	if bool(def.get("is_aura", false)) or str(def.get("effect", "none")) == "orbit":
 		var fp := footprint_size(tower_id)
 		if fp > 1:
-			lines.append("Footprint %d×%d (%d cells)  |  No adjacent towers  |  Not in corners" % [fp, fp, fp * fp])
+			lines.append("1-cell tower  |  Locks %d×%d zone (%d tiles)  |  Not in corners" % [fp, fp, fp * fp])
 		lines.append("No damage  |  Pull range %.0f  |  Orbit radius %.0f" % [
 			float(def.get("range", 0.0)),
 			float(def.get("orbit_radius", 0.0)),

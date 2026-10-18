@@ -361,32 +361,47 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, 20.0, 0.0, TAU, 40, SELECT_COLOR, 2.0)
 
 
-## 3×3 body plus the orbit path ring enemies walk while grabbed.
+## One-cell tower body; faint 3×3 lockdown tint + orbit path ring.
 func _draw_vortex() -> void:
 	var color: Color = def.get("color", Color(0.55, 0.35, 0.85))
 	var ts := 40.0
 	if get_parent() is GameGrid:
 		ts = float((get_parent() as GameGrid).tile_px())
-	var half := ts * 1.5
-	draw_rect(Rect2(-half, -half, half * 2.0, half * 2.0), Color(color.r, color.g, color.b, 0.35))
-	draw_rect(Rect2(-half, -half, half * 2.0, half * 2.0), Color(0.2, 0.12, 0.35), false, 2.0)
+	var zone_half := ts * 1.5
+	# Locked zone (path-block / no build) — soft tint only, not a giant tower body.
+	draw_rect(
+		Rect2(-zone_half, -zone_half, zone_half * 2.0, zone_half * 2.0),
+		Color(color.r, color.g, color.b, 0.18)
+	)
+	draw_rect(
+		Rect2(-zone_half, -zone_half, zone_half * 2.0, zone_half * 2.0),
+		Color(0.55, 0.35, 0.85, 0.45),
+		false,
+		1.5
+	)
+	# Same physical size as other towers (1 slot).
 	draw_rect(Rect2(-14, -14, 28, 28), color)
 	draw_rect(Rect2(-14, -14, 28, 28), Color(0.05, 0.05, 0.05), false, 2.0)
 	draw_arc(Vector2.ZERO, 10.0, 0.2, TAU * 0.85, 24, Color(0.75, 0.55, 1.0), 2.2)
 	draw_arc(Vector2.ZERO, 6.0, TAU * 0.35, TAU * 1.1, 20, Color(0.45, 0.85, 0.95), 1.8)
 	draw_circle(Vector2.ZERO, 2.5, Color(0.9, 0.75, 1.0))
 	var orbit_r := float(def.get("orbit_radius", 88.0))
-	# Pathing ring — dashed feel via two arcs with a soft outer guide.
 	draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, Color(0.65, 0.45, 0.95, 0.55), 2.0)
 	draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, Color(0.85, 0.7, 1.0, 0.9), 1.2)
 	for i in TowerData.MAX_STAT_UPGRADES:
 		var pip_color := Color(0.95, 0.85, 0.35) if i < upgrade_level else Color(0.2, 0.2, 0.22)
-		draw_rect(Rect2(-12 + i * 9, half - 6.0, 7, 3), pip_color)
+		draw_rect(Rect2(-12 + i * 9, 10, 7, 3), pip_color)
 	if final_element != "":
 		var accent := TowerData.final_element_color(final_element)
-		draw_circle(Vector2(half - 8.0, -half + 8.0), 3.5, accent)
-		draw_circle(Vector2(half - 8.0, -half + 8.0), 3.5, Color(0.05, 0.05, 0.05), false, 1.0)
+		draw_circle(Vector2(11, -11), 3.5, accent)
+		draw_circle(Vector2(11, -11), 3.5, Color(0.05, 0.05, 0.05), false, 1.0)
 	if selected:
 		draw_arc(Vector2.ZERO, float(def.get("range", 120.0)), 0.0, TAU, 48, SELECT_COLOR_SOFT, 1.5)
-		draw_rect(Rect2(-half - 2.0, -half - 2.0, half * 2.0 + 4.0, half * 2.0 + 4.0), SELECT_COLOR, false, 2.0)
+		draw_rect(
+			Rect2(-zone_half - 2.0, -zone_half - 2.0, zone_half * 2.0 + 4.0, zone_half * 2.0 + 4.0),
+			SELECT_COLOR,
+			false,
+			2.0
+		)
+		draw_rect(Rect2(-16, -16, 32, 32), SELECT_COLOR, false, 2.0)
 		draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, SELECT_COLOR, 2.0)

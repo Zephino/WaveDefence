@@ -335,8 +335,6 @@ func _best_wall_to_overbuild(lane: int, path_cells: Array[Vector2i]) -> Vector2i
 			continue
 		if not TowerData.is_wall(tower.tower_id):
 			continue
-		if grid.cell_adjacent_to_blocking_tower(cell):
-			continue
 		var adj := 0
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if path_set.has(cell + d):
@@ -398,14 +396,10 @@ func _can_bot_place(cell: Vector2i, tower_id: String, spawn: Vector2i, exit_c: V
 				return false
 			if not grid.is_buildable(c):
 				return false
-		if grid.has_adjacent_tower_outside_footprint(cell, footprint):
-			return false
 		return not pathfinder.would_block_path_between_cells(
 			spawn, exit_c, TowerData.footprint_cells(cell, footprint)
 		)
 	if not grid.is_buildable(cell):
-		return false
-	if grid.cell_adjacent_to_blocking_tower(cell):
 		return false
 	return not pathfinder.would_block_path_between(spawn, exit_c, cell)
 

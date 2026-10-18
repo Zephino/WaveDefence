@@ -1,4 +1,16 @@
-﻿## Version 00.02.66
+﻿## Version 00.02.67
+Date: 10/18/2026
+Time: 2:40 AM
+
+### Changes
+- Vortex is a **1-cell** tower that only **locks** a 3×3 zone (path + no build on those tiles)
+- Other towers may sit flush against the lockdown edge; adjacency outside the zone is allowed
+- Vortex draw uses a normal-size body with a faint zone outline and orbit ring
+
+### Reason
+Placement was rejecting valid spots where neighbors touched the 3×3 edge; the tower should look like one slot while still locking nine tiles.
+
+## Version 00.02.66
 Date: 10/18/2026
 Time: 2:33 AM
 

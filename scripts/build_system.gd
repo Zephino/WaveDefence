@@ -119,8 +119,6 @@ func can_place_at(cell: Vector2i) -> bool:
 
 	if not grid.is_buildable(cell):
 		return false
-	if grid.cell_adjacent_to_blocking_tower(cell):
-		return false
 	if _is_clash():
 		var spawn := grid.get_lane_spawn(human_lane)
 		var exit_c := grid.get_lane_exit(human_lane)
@@ -134,7 +132,7 @@ func can_place_at(cell: Vector2i) -> bool:
 func _can_place_footprint_at(cell: Vector2i, footprint: int) -> bool:
 	if not grid.footprint_in_bounds(cell, footprint):
 		return false
-	# 3×3 (and larger) towers cannot nest into map corners.
+	# Lockdown zone cannot nest into map corners.
 	if grid.footprint_touches_map_corner(cell, footprint):
 		return false
 	for c in TowerData.footprint_cells(cell, footprint):
@@ -142,9 +140,8 @@ func _can_place_footprint_at(cell: Vector2i, footprint: int) -> bool:
 			return false
 		if not _cell_in_human_lane(c):
 			return false
+	# Only the locked cells must be empty — towers may sit flush against the zone edge.
 	if not grid.is_footprint_buildable(cell, footprint):
-		return false
-	if grid.has_adjacent_tower_outside_footprint(cell, footprint):
 		return false
 	var cells := TowerData.footprint_cells(cell, footprint)
 	if _is_clash():

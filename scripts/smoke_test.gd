@@ -840,9 +840,7 @@ func _run() -> void:
 	if TowerData.target_filter(vortex_def) != "ground":
 		errors.append("vortex should be ground-only")
 	if TowerData.footprint_size("vortex") != 3:
-		errors.append("vortex should occupy a 3x3 footprint")
-	if not TowerData.blocks_adjacent_placement("vortex"):
-		errors.append("vortex should block adjacent tower placement")
+		errors.append("vortex should lock a 3x3 zone")
 	if TowerData.unlock_wave("vortex") != 12:
 		errors.append("vortex should unlock at wave 12")
 	if TowerData.is_unlocked("vortex", 11):
@@ -902,10 +900,23 @@ func _run() -> void:
 					fp_cells += 1
 			if fp_cells != 9:
 				errors.append("vortex should occupy all 9 footprint cells")
+			# Towers may sit flush against the lockdown edge (outside the 3×3).
 			build.select_tower_type("gunner")
 			var adj := vortex_cell + Vector2i(2, 0)
-			if build.can_place_at(adj):
-				errors.append("gunner should not place adjacent to vortex")
+			state_add_gold(build, 100)
+			if not build.can_place_at(adj):
+				errors.append("gunner should place flush against vortex lockdown edge")
+			elif not build.try_place_at(grid.cell_to_world_center(adj)):
+				errors.append("gunner place on vortex edge failed")
+			else:
+				var edge_gun := grid.get_tower_at(adj)
+				if edge_gun != null:
+					grid.remove_tower_at(adj)
+					edge_gun.queue_free()
+			# Locked cells themselves stay unbuildable.
+			var locked := vortex_cell + Vector2i(1, 0)
+			if build.can_place_at(locked):
+				errors.append("gunner should not place inside vortex lockdown zone")
 			grid.remove_tower_at(vortex_cell)
 			if is_instance_valid(vx):
 				vx.queue_free()

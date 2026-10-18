@@ -568,37 +568,6 @@ func is_footprint_buildable(center: Vector2i, size: int) -> bool:
 	return true
 
 
-## Any tower on a cell bordering the footprint (not counting the footprint itself).
-func has_adjacent_tower_outside_footprint(center: Vector2i, size: int) -> bool:
-	var cells := TowerData.footprint_cells(center, size)
-	var inside: Dictionary = {}
-	for c in cells:
-		inside[c] = true
-	for c in cells:
-		for dx in range(-1, 2):
-			for dy in range(-1, 2):
-				if dx == 0 and dy == 0:
-					continue
-				var n := c + Vector2i(dx, dy)
-				if inside.has(n):
-					continue
-				if towers.has(n):
-					return true
-	return false
-
-
-## True if `cell` shares an edge/corner with a tower that forbids neighbors.
-func cell_adjacent_to_blocking_tower(cell: Vector2i) -> bool:
-	for dx in range(-1, 2):
-		for dy in range(-1, 2):
-			if dx == 0 and dy == 0:
-				continue
-			var node := get_tower_at(cell + Vector2i(dx, dy))
-			if node is Tower and TowerData.blocks_adjacent_placement((node as Tower).tower_id):
-				return true
-	return false
-
-
 func place_tower(cell: Vector2i, tower: Node) -> void:
 	var footprint := 1
 	if tower is Tower:
