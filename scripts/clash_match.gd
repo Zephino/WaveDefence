@@ -93,13 +93,28 @@ func next_living_after_lane(lane: int) -> ClashPlayerState:
 	return null
 
 
-func award_round_income() -> void:
+## Pay each living player their income_per_round. Returns gold paid to the human.
+func award_round_income() -> int:
+	# GameState is the human's live wallet (kills/builds). Pull it before awarding so
+	# sync_to cannot wipe bounty gold with a stale ClashPlayerState balance.
+	if human() != null and game_state != null:
+		human().gold = game_state.gold
+	var paid := 0
 	for p in players:
 		var cp := p as ClashPlayerState
-		if cp != null and cp.alive:
-			cp.award_income()
-	sync_human_to_game_state()
+		if cp == null or not cp.alive:
+			continue
+		var amount := cp.income_per_round
+		if amount <= 0:
+			continue
+		if cp.is_human and game_state != null:
+			game_state.add_gold(amount)
+			cp.gold = game_state.gold
+			paid = amount
+		else:
+			cp.add_gold(amount)
 	players_changed.emit()
+	return paid
 
 
 ## Cheater bots slowly restore lives after dipping to the heal trigger.

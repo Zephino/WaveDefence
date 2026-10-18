@@ -1,4 +1,27 @@
-﻿## Version 00.02.56
+﻿## Version 00.02.58
+Date: 10/18/2026
+Time: 1:57 AM
+
+### Changes
+- New **Vortex** tower (90 gold, unlocks wave 12): no damage; pulls ground enemies into a one-lap orbit, then releases them onto the path
+- Upgrades grow pull range / orbit radius; max stats add a second lap; flyers and snakes are ignored
+
+### Reason
+Players wanted a control tower that stalls enemies by walking them in a circle without dealing damage.
+
+## Version 00.02.57
+Date: 10/18/2026
+Time: 1:37 AM
+
+### Changes
+- Clash round income now syncs from spendable GameState gold before paying, then credits income through GameState (no stale wipe)
+- Wave-clear status shows the exact income amount paid (+X income, Y/rnd)
+- Empty-board re-checks no longer re-pay income; debug gold/lives stay mirrored in Clash
+
+### Reason
+Players were not receiving bonus gold per round when ClashPlayerState gold lagged behind kill/build gold on GameState.
+
+## Version 00.02.56
 Date: 10/18/2026
 Time: 1:19 AM
 

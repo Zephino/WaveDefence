@@ -171,10 +171,10 @@ func _setup_clash_match() -> void:
 		var bot := ClashBotAI.new()
 		bot.setup(clash_match, grid, pathfinder, enemies, projectiles, cp.player_id)
 		_clash_bots.append(bot)
-	# Apply clash start gold to GameState after match sync.
+	# GameState is the human wallet during play — seed it, then mirror into ClashPlayerState.
 	game_state.gold = WaveScaler.clash_starting_gold()
 	game_state.lives = WaveScaler.CLASH_STARTING_LIVES
-	clash_match.sync_human_to_game_state()
+	clash_match.sync_human_gold_from_game_state()
 
 
 func _setup_ui() -> void:
@@ -999,7 +999,16 @@ func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
 		if clash_match != null and clash_match.finished:
 			return
 		_run_clash_bots()
-		hud.set_status("Wave %d cleared — income paid. Build, send, then Start Round." % wave)
+		var rate := 0
+		if clash_match != null and clash_match.human() != null:
+			rate = clash_match.human().income_per_round
+		if bonus_gold > 0:
+			hud.set_status(
+				"Wave %d cleared — +%d income (%d/rnd). Build, send, then Start Round."
+				% [wave, bonus_gold, rate]
+			)
+		else:
+			hud.set_status("Wave %d cleared — build, send, then Start Round." % wave)
 		hud.refresh_clash_panel()
 		return
 	if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
@@ -1116,12 +1125,19 @@ func _mark_debug_used() -> void:
 func _debug_add_gold(amount: int) -> void:
 	_mark_debug_used()
 	game_state.add_gold(amount)
+	if clash_match != null:
+		clash_match.sync_human_gold_from_game_state()
 
 
 func _debug_add_lives(amount: int) -> void:
 	_mark_debug_used()
 	game_state.lives += amount
 	game_state.lives_changed.emit(game_state.lives)
+	if clash_match != null:
+		var h := clash_match.human()
+		if h != null:
+			h.lives = game_state.lives
+			clash_match.players_changed.emit()
 
 
 func _debug_set_wave(wave_number: int) -> void:

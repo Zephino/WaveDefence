@@ -41,6 +41,16 @@ var slow_factor: float = 1.0
 var mark_time: float = 0.0
 var mark_damage_mult: float = 1.0
 
+## Vortex aura: temporary circular detour around a tower.
+var orbit_active: bool = false
+var orbit_center: Vector2 = Vector2.ZERO
+var orbit_radius: float = 48.0
+var orbit_angle: float = 0.0
+var orbit_laps: float = 1.0
+var orbit_angle_traveled: float = 0.0
+var orbit_immune_time: float = 0.0
+var _orbit_immune_after: float = 1.5
+
 var _radius: float = 10.0
 var _base_color: Color = Color(0.85, 0.35, 0.35)
 
@@ -144,9 +154,72 @@ func _tick_statuses(delta: float) -> void:
 		if mark_time <= 0.0:
 			mark_time = 0.0
 			mark_damage_mult = 1.0
+	if orbit_immune_time > 0.0:
+		orbit_immune_time = maxf(orbit_immune_time - delta, 0.0)
+
+
+func try_begin_orbit(center: Vector2, radius: float, laps: float, immune_after: float = 1.5) -> bool:
+	if not alive or is_flying or is_snake or orbit_active:
+		return false
+	if orbit_immune_time > 0.0:
+		return false
+	orbit_active = true
+	orbit_center = center
+	orbit_radius = maxf(radius, 16.0)
+	orbit_laps = maxf(laps, 0.25)
+	orbit_angle_traveled = 0.0
+	_orbit_immune_after = maxf(immune_after, 0.0)
+	var offset := position - center
+	if offset.length_squared() < 1.0:
+		orbit_angle = 0.0
+	else:
+		orbit_angle = offset.angle()
+	position = center + Vector2(cos(orbit_angle), sin(orbit_angle)) * orbit_radius
+	queue_redraw()
+	return true
+
+
+func _end_orbit() -> void:
+	if not orbit_active:
+		return
+	orbit_active = false
+	orbit_immune_time = _orbit_immune_after
+	orbit_angle_traveled = 0.0
+	_snap_to_nearest_path()
+	queue_redraw()
+
+
+func _snap_to_nearest_path() -> void:
+	if path.is_empty():
+		return
+	if is_snake:
+		path_dist = _closest_path_dist(position)
+		position = _position_at_path_dist(path_dist)
+		return
+	var best_i := 0
+	var best_d := INF
+	for i in path.size():
+		var d := position.distance_squared_to(path[i])
+		if d < best_d:
+			best_d = d
+			best_i = i
+	path_index = mini(best_i + 1, path.size() - 1)
+
+
+func _move_orbit(delta: float) -> void:
+	var ang_speed := (speed * slow_factor) / maxf(orbit_radius, 1.0)
+	var step := ang_speed * delta
+	orbit_angle += step
+	orbit_angle_traveled += step
+	position = orbit_center + Vector2(cos(orbit_angle), sin(orbit_angle)) * orbit_radius
+	if orbit_angle_traveled >= TAU * orbit_laps:
+		_end_orbit()
 
 
 func _move_along_path(delta: float) -> void:
+	if orbit_active:
+		_move_orbit(delta)
+		return
 	if is_snake:
 		_move_snake(delta)
 		return
@@ -346,6 +419,8 @@ func _draw() -> void:
 		color = color.lerp(Color(0.4, 0.8, 1.0), 0.4)
 	if mark_time > 0.0:
 		color = color.lerp(Color(1.0, 0.95, 0.35), 0.45)
+	if orbit_active:
+		color = color.lerp(Color(0.65, 0.4, 0.95), 0.5)
 	if is_flying:
 		var wing := PackedVector2Array([
 			Vector2(-_radius - 6.0, 0.0),

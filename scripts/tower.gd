@@ -87,6 +87,10 @@ func _process(delta: float) -> void:
 		_tick_ability_cooldowns(delta)
 		queue_redraw()
 		return
+	if bool(def.get("is_aura", false)) or str(def.get("effect", "")) == "orbit":
+		_tick_orbit_aura()
+		queue_redraw()
+		return
 	if buff_time > 0.0:
 		buff_time -= delta
 		if buff_time <= 0.0:
@@ -100,6 +104,37 @@ func _process(delta: float) -> void:
 			var rate := maxf(float(def.get("fire_rate", 1.0)) * maxf(buff_fire_mult, 0.05), 0.05)
 			fire_cooldown = 1.0 / rate
 	queue_redraw()
+
+
+func _tick_orbit_aura() -> void:
+	if enemy_container == null:
+		return
+	var range_px := _engage_range()
+	var radius := float(def.get("orbit_radius", 48.0))
+	var laps := float(def.get("orbit_laps", 1.0))
+	var immune := float(def.get("orbit_immune", 1.5))
+	# Towers live on GameGrid; enemies share the same map transform — use map-local pos.
+	var center := position
+	for child in enemy_container.get_children():
+		if not (child is Enemy):
+			continue
+		var e := child as Enemy
+		if not _can_engage(e):
+			continue
+		if not _in_fire_range(e, range_px):
+			continue
+		if e.try_begin_orbit(center, radius, laps, immune):
+			# Ice final (or native freeze buff keys) can mild-slow while grabbing.
+			if def.has("bonus_slow_factor"):
+				e.apply_slow(
+					float(def.get("bonus_slow_factor", 0.7)),
+					float(def.get("bonus_slow_duration", 1.5))
+				)
+			elif def.has("slow_factor"):
+				e.apply_slow(
+					float(def.get("slow_factor", 0.7)),
+					float(def.get("slow_duration", 1.5))
+				)
 
 
 func _tick_ability_cooldowns(delta: float) -> void:
@@ -124,6 +159,8 @@ func start_ability_cooldown(ability_id: String, seconds: float) -> void:
 
 func apply_fire_buff(mult: float, duration: float) -> void:
 	if bool(def.get("is_wall", false)) or bool(def.get("is_command", false)):
+		return
+	if bool(def.get("is_aura", false)):
 		return
 	buff_fire_mult = maxf(buff_fire_mult, mult)
 	buff_time = maxf(buff_time, duration)
@@ -298,6 +335,10 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, 6.0, Color(0.9, 0.85, 0.35))
 		draw_line(Vector2(0, -11), Vector2(0, 11), Color(0.95, 0.9, 0.55), 2.0)
 		draw_line(Vector2(-11, 0), Vector2(11, 0), Color(0.95, 0.9, 0.55), 2.0)
+	elif tower_id == "vortex":
+		draw_arc(Vector2.ZERO, 10.0, 0.2, TAU * 0.85, 24, Color(0.75, 0.55, 1.0), 2.2)
+		draw_arc(Vector2.ZERO, 6.0, TAU * 0.35, TAU * 1.1, 20, Color(0.45, 0.85, 0.95), 1.8)
+		draw_circle(Vector2.ZERO, 2.5, Color(0.9, 0.75, 1.0))
 	elif tower_id == "burn" or tower_id == "freeze":
 		var nozzle := _aim_dir * 12.0
 		var side := Vector2(-_aim_dir.y, _aim_dir.x) * 3.5

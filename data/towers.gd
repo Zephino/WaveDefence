@@ -175,6 +175,25 @@ const TYPES := {
 		"air_damage_mult": 1.2,
 		"unlock_wave": 30,
 	},
+	"vortex": {
+		"display_name": "Vortex",
+		"blurb": "No damage. Pulls ground enemies into a circle around itself for one lap, then releases them onto the path. Unlocks at wave 12.",
+		"cost": 90,
+		"damage": 0.0,
+		"range": 100.0,
+		"fire_rate": 0.0,
+		"splash_radius": 0.0,
+		"color": Color(0.55, 0.35, 0.85),
+		"effect": "orbit",
+		"is_aura": true,
+		"orbit_radius": 48.0,
+		"orbit_laps": 1.0,
+		"orbit_immune": 1.5,
+		"target_filter": "ground",
+		"air_damage_mult": 0.0,
+		"ground_damage_mult": 1.0,
+		"unlock_wave": 12,
+	},
 	"command": {
 		"display_name": "Command",
 		"blurb": "Support hub. Does not shoot. Click it, then buy an ability each time you want to use it (Air Strike, Supply Drop, Barricade, Flare).",
@@ -191,7 +210,7 @@ const TYPES := {
 
 
 static func get_ids() -> Array:
-	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair", "gatling", "command"]
+	return ["wall", "gunner", "rapid", "cannon", "burn", "freeze", "poison", "lightning", "spike", "antiair", "vortex", "gatling", "command"]
 
 
 static func get_def(tower_id: String) -> Dictionary:
@@ -204,6 +223,10 @@ static func is_wall(tower_id: String) -> bool:
 
 static func is_command(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_command", false))
+
+
+static func is_aura(tower_id: String) -> bool:
+	return bool(get_def(tower_id).get("is_aura", false))
 
 
 ## Wave number when the shop unlocks this tower (0 / missing = always available).
@@ -274,6 +297,15 @@ static func combat_def(tower_id: String, upgrade_level: int, final_element: Stri
 	if bool(d.get("is_wall", false)) or bool(d.get("is_command", false)):
 		return d
 	var level := clampi(upgrade_level, 0, MAX_STAT_UPGRADES)
+	if bool(d.get("is_aura", false)):
+		for _i in level:
+			d["range"] = float(d.get("range", 0.0)) * 1.06
+			d["orbit_radius"] = float(d.get("orbit_radius", 48.0)) * 1.05
+		if level >= MAX_STAT_UPGRADES:
+			d["orbit_laps"] = float(d.get("orbit_laps", 1.0)) + 1.0
+		if final_element != "" and is_final_element(final_element):
+			_apply_final_element(d, final_element)
+		return d
 	for _i in level:
 		d["damage"] = float(d.get("damage", 0.0)) * 1.18
 		d["range"] = float(d.get("range", 0.0)) * 1.06
@@ -427,11 +459,21 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 		return "\n".join(lines)
 
 	lines.append("Upgrades: %d/%d stat + final elemental buff" % [upgrade_level, MAX_STAT_UPGRADES])
-	lines.append("Damage %.0f  |  Range %.0f  |  Rate %.1f/s" % [
-		float(def.get("damage", 0.0)),
-		float(def.get("range", 0.0)),
-		float(def.get("fire_rate", 0.0)),
-	])
+	if bool(def.get("is_aura", false)) or str(def.get("effect", "none")) == "orbit":
+		lines.append("No damage  |  Pull range %.0f  |  Orbit radius %.0f" % [
+			float(def.get("range", 0.0)),
+			float(def.get("orbit_radius", 0.0)),
+		])
+		lines.append("Orbit laps %.1f  |  Re-grab immune %.1fs" % [
+			float(def.get("orbit_laps", 1.0)),
+			float(def.get("orbit_immune", 1.5)),
+		])
+	else:
+		lines.append("Damage %.0f  |  Range %.0f  |  Rate %.1f/s" % [
+			float(def.get("damage", 0.0)),
+			float(def.get("range", 0.0)),
+			float(def.get("fire_rate", 0.0)),
+		])
 	var splash := float(def.get("splash_radius", 0.0))
 	if splash > 0.0:
 		lines.append("Splash radius %.0f" % splash)
@@ -465,6 +507,8 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 				float(def.get("chain_range", 0.0)),
 				float(def.get("chain_falloff", 1.0)) * 100.0,
 			])
+		"orbit":
+			lines.append("Forces ground enemies to circle this tower, then resume the path")
 
 	_append_final_buff_lines(lines, def)
 

@@ -255,6 +255,19 @@ func _run() -> void:
 		errors.append("clash human send brute should succeed with topped-up gold")
 	elif clash_match.human().income_per_round != income1 + WaveScaler.clash_send_income_bump("brute"):
 		errors.append("brute send should bump income by its own higher amount")
+	# Round income must land on GameState even if ClashPlayerState gold is stale.
+	var rate := clash_match.human().income_per_round
+	state.gold = 500
+	clash_match.human().gold = 100  # intentional desync (kills/builds live on GameState)
+	var paid := clash_match.award_round_income()
+	if paid != rate:
+		errors.append("award_round_income should return human rate %d (got %d)" % [rate, paid])
+	if state.gold != 500 + rate:
+		errors.append(
+			"round income should add onto GameState gold (want %d got %d)" % [500 + rate, state.gold]
+		)
+	if clash_match.human().gold != state.gold:
+		errors.append("human Clash gold should match GameState after income")
 	var opp := clash_match.living_opponents_of(1)
 	if opp.size() != 2:
 		errors.append("bot living opponents should include human and other bot")
@@ -795,6 +808,50 @@ func _run() -> void:
 		errors.append("ability tooltip should include name and gold")
 	if ability_tip.find("Trap") < 0:
 		errors.append("trap ability tooltip should mention Trap")
+
+	# Vortex: no-damage aura; ground orbit for one lap (unlock wave 12).
+	var vortex_def := TowerData.get_def("vortex")
+	if "vortex" not in TowerData.get_ids():
+		errors.append("vortex should be in tower id list")
+	if not bool(vortex_def.get("is_aura", false)):
+		errors.append("vortex should be an aura tower")
+	if float(vortex_def.get("damage", 1.0)) != 0.0:
+		errors.append("vortex should deal no damage")
+	if TowerData.target_filter(vortex_def) != "ground":
+		errors.append("vortex should be ground-only")
+	if TowerData.unlock_wave("vortex") != 12:
+		errors.append("vortex should unlock at wave 12")
+	if TowerData.is_unlocked("vortex", 11):
+		errors.append("vortex should be locked before wave 12")
+	if not TowerData.is_unlocked("vortex", 12):
+		errors.append("vortex should unlock at wave 12+")
+	var orbit_path := PackedVector2Array([Vector2(0, 0), Vector2(200, 0), Vector2(200, 100)])
+	var orbit_enemy := Enemy.new()
+	orbit_enemy.setup(orbit_path, 50.0, 80.0, 5, false, false)
+	orbit_enemy.position = Vector2(40, 0)
+	main.add_child(orbit_enemy)
+	if not orbit_enemy.try_begin_orbit(Vector2(40, 40), 40.0, 1.0, 1.5):
+		errors.append("ground enemy should begin vortex orbit")
+	elif not orbit_enemy.orbit_active:
+		errors.append("orbit_active should be true after grab")
+	else:
+		var need := TAU * 1.05
+		var guard := 0
+		while orbit_enemy.orbit_active and orbit_enemy.orbit_angle_traveled < need and guard < 400:
+			orbit_enemy._move_orbit(0.05)
+			guard += 1
+		if orbit_enemy.orbit_active:
+			errors.append("orbit should finish after one lap")
+		elif orbit_enemy.orbit_immune_time <= 0.0:
+			errors.append("orbit release should set re-grab immune timer")
+	var flyer_orbit := Enemy.new()
+	flyer_orbit.setup(orbit_path, 50.0, 80.0, 5, false, true)
+	flyer_orbit.position = Vector2(40, 0)
+	main.add_child(flyer_orbit)
+	if flyer_orbit.try_begin_orbit(Vector2(40, 40), 40.0, 1.0, 1.5):
+		errors.append("flying enemy should refuse vortex orbit")
+	orbit_enemy.queue_free()
+	flyer_orbit.queue_free()
 
 	# Gatling: wave-30 unlock, expensive ultra-fast special.
 	var gatling_def := TowerData.get_def("gatling")

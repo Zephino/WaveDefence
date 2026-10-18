@@ -698,6 +698,9 @@ func _update_skip_unlock() -> void:
 func _check_wave_clear() -> void:
 	if spawning:
 		return
+	# Only clear once per wave — empty-board re-checks must not re-pay income/bonus.
+	if not wave_active:
+		return
 	if enemies_alive <= 0 and spawn_queue.is_empty():
 		wave_active = false
 		var wave := game_state.wave
@@ -710,7 +713,7 @@ func _check_wave_clear() -> void:
 		_record_wave_milestones(wave)
 		# Clash income must land before wave_cleared so bots spend the new gold.
 		if _is_clash() and clash_match != null and not clash_match.finished:
-			clash_match.award_round_income()
+			bonus = clash_match.award_round_income()
 		wave_cleared.emit(wave, kills, bonus)
 		_emit_enemies_remaining()
 		if game_state.is_game_over or (_is_clash() and clash_match.finished):
