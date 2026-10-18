@@ -65,7 +65,15 @@ static func _cell_has_trap(trap_container: Node, cell: Vector2i) -> bool:
 
 
 static func _is_path_cell(pathfinder: Pathfinder, cell: Vector2i) -> bool:
-	if pathfinder == null:
+	if pathfinder == null or pathfinder.grid == null:
+		return false
+	var g: GameGrid = pathfinder.grid
+	# Clash: each lane has its own spawn→exit path (classic helpers only track lane 0).
+	if g.is_clash_layout:
+		for lane in g.clash_lane_count():
+			for c in pathfinder.get_cell_path_between(g.get_lane_spawn(lane), g.get_lane_exit(lane)):
+				if c == cell:
+					return true
 		return false
 	for c in pathfinder.get_cell_path():
 		if c == cell:

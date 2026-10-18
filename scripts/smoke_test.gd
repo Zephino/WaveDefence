@@ -304,7 +304,7 @@ func _run() -> void:
 	if opp.size() != 2:
 		errors.append("bot living opponents should include human and other bot")
 	var bot_ai := ClashBotAI.new()
-	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, 2)
+	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, main.traps, 2)
 	# Force a reference one-tile maze template.
 	# Strategies must be uniform-random (not memory-locked to one style).
 	var seen_styles: Dictionary = {}
@@ -318,8 +318,12 @@ func _run() -> void:
 	var bot_pool := bot_ai._combat_tower_pool()
 	if not bot_pool.has("burn") or not bot_pool.has("vortex") or not bot_pool.has("spike"):
 		errors.append("clash bot combat pool should include burn/vortex/spike")
-	if bot_pool.has("wall") or bot_pool.has("command"):
-		errors.append("clash bot combat pool should exclude wall/command")
+	if bot_pool.has("wall"):
+		errors.append("clash bot combat pool should exclude wall")
+	if not bot_pool.has("command"):
+		errors.append("clash bot combat pool should include command")
+	if not TowerData.is_melee("spike"):
+		errors.append("spike should be flagged melee for bot placement")
 	var pick_seen: Dictionary = {}
 	for _j in 30:
 		var pick := bot_ai._pick_affordable_tower_id(1, WaveScaler.Difficulty.EASY, 200)
@@ -329,6 +333,24 @@ func _run() -> void:
 		errors.append("clash bot tower picks should vary among affordable types (got %d)" % pick_seen.size())
 	if bot_ai._pick_affordable_tower_id(1, WaveScaler.Difficulty.EASY, 3) != "":
 		errors.append("clash bot should not pick combat towers it cannot afford")
+	# Melee only places on path-adjacent candidates (no buried fallback).
+	var lane2_spawn := grid.get_lane_spawn(2)
+	var lane2_exit := grid.get_lane_exit(2)
+	var lane2_path := build.pathfinder.get_cell_path_between(lane2_spawn, lane2_exit)
+	var melee_cands := bot_ai._build_combat_candidates(2, lane2_path)
+	if not melee_cands.is_empty():
+		var melee_cell := bot_ai._next_place_cell_for("spike", melee_cands, lane2_spawn, lane2_exit)
+		if melee_cell.x >= 0:
+			var path_set_m: Dictionary = {}
+			for pc in lane2_path:
+				path_set_m[pc] = true
+			var touches := false
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if path_set_m.has(melee_cell + d):
+					touches = true
+					break
+			if not touches:
+				errors.append("bot melee place cell should touch the path")
 	# Match-long plan: force maze so path-length smoke stays deterministic.
 	bot_ai._build_plan = ClashBotAI.BuildPlan.MAZE
 	bot_ai._maze_strategy = "switchback"
@@ -364,6 +386,22 @@ func _run() -> void:
 					tid, str(dist.get(goal, -1)), tpath.size()
 				])
 	var bot_p := clash_match.get_player(2)
+	# Final upgrade: bot spends on finals after max stats.
+	var fin_tower := Tower.new()
+	fin_tower.setup("gunner", main.enemies, main.projectiles)
+	fin_tower.upgrade_level = TowerData.MAX_STAT_UPGRADES
+	fin_tower.set_meta("clash_owner", 2)
+	var fin_cell := Vector2i(int(grid.lane_col_ranges[2].x), 3)
+	if bot_p != null and grid.is_buildable(fin_cell):
+		grid.place_tower(fin_cell, fin_tower)
+		bot_p.gold = maxi(bot_p.gold, fin_tower.final_upgrade_cost() + 50)
+		bot_ai._upgrade_owned_towers(bot_p, true)
+		if fin_tower.final_element == "":
+			errors.append("clash bot should apply final elemental upgrade when ready")
+		grid.remove_tower_at(fin_cell)
+		fin_tower.queue_free()
+	else:
+		fin_tower.queue_free()
 	var path_before := build.pathfinder.get_cell_path_between(
 		grid.get_lane_spawn(2), grid.get_lane_exit(2)
 	).size()

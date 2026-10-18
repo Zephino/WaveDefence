@@ -11,6 +11,7 @@ var grid: GameGrid
 var pathfinder: Pathfinder
 var enemy_container: Node
 var projectile_container: Node
+var trap_container: Node
 var player_id: int = 1
 var _rng := RandomNumberGenerator.new()
 ## Maze style for this match (maze/hybrid plans). Locked after setup.
@@ -25,6 +26,7 @@ func setup(
 	p_pathfinder: Pathfinder,
 	p_enemies: Node,
 	p_projectiles: Node,
+	p_traps: Node,
 	p_player_id: int
 ) -> void:
 	clash_match = p_match
@@ -32,6 +34,7 @@ func setup(
 	pathfinder = p_pathfinder
 	enemy_container = p_enemies
 	projectile_container = p_projectiles
+	trap_container = p_traps
 	player_id = p_player_id
 	# Unique stream per bot so simultaneous setups don't share the same sequence.
 	_rng.seed = hash([Time.get_ticks_usec(), player_id, randi()])
@@ -92,6 +95,7 @@ func _prep_maze_focus(p: ClashPlayerState, wave: int) -> void:
 	_replace_walls_with_towers(p, wave)
 	_place_combat_towers(p, wave, 10)
 	_upgrade_owned_towers(p, false)
+	_use_command_abilities(p, false)
 
 
 func _prep_dps_focus(p: ClashPlayerState, wave: int) -> void:
@@ -101,6 +105,7 @@ func _prep_dps_focus(p: ClashPlayerState, wave: int) -> void:
 	_upgrade_owned_towers(p, true)
 	_place_combat_towers(p, wave, 16)
 	_upgrade_owned_towers(p, false)
+	_use_command_abilities(p, false)
 
 
 func _prep_hybrid_focus(p: ClashPlayerState, wave: int) -> void:
@@ -112,6 +117,7 @@ func _prep_hybrid_focus(p: ClashPlayerState, wave: int) -> void:
 	_upgrade_owned_towers(p, true)
 	_place_combat_towers(p, wave, 12)
 	_upgrade_owned_towers(p, false)
+	_use_command_abilities(p, false)
 
 
 func run_send_turn(wave: int) -> void:
@@ -121,6 +127,7 @@ func run_send_turn(wave: int) -> void:
 	if p == null or not p.alive or p.is_human:
 		return
 	_try_sends(p, wave, true)
+	_use_command_abilities(p, true)
 
 
 func _cheapest_send_cost() -> int:
@@ -260,9 +267,10 @@ func _place_combat_towers(p: ClashPlayerState, wave: int, max_place: int = 20) -
 			break
 		var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
 		var candidates := _build_combat_candidates(p.lane_index, path_cells)
+		var melee := TowerData.is_melee(tower_id)
 		var cell := _next_place_cell_for(tower_id, candidates, spawn, exit_c)
-		# Path-adjacent full after early rounds — keep spending on any empty lane cell.
-		if cell.x < 0:
+		# Melee must stay path-adjacent; ranged may fill any empty lane cell later.
+		if cell.x < 0 and not melee:
 			cell = _next_open_lane_cell_for(tower_id, p.lane_index, spawn, exit_c)
 		if cell.x < 0:
 			continue
@@ -301,7 +309,10 @@ func _replace_walls_with_towers(p: ClashPlayerState, wave: int) -> void:
 		if TowerData.footprint_size(tower_id) > 1:
 			continue
 		var cost: int = int(TowerData.get_def(tower_id)["cost"])
-		var wall_cell := _best_wall_to_overbuild(p.lane_index, path_cells)
+		# Melee only overbuilds walls that actually touch the path.
+		var wall_cell := _best_wall_to_overbuild(
+			p.lane_index, path_cells, TowerData.is_melee(tower_id)
+		)
 		if wall_cell.x < 0:
 			break
 		if not p.spend_gold(cost):
@@ -318,7 +329,10 @@ func _replace_walls_with_towers(p: ClashPlayerState, wave: int) -> void:
 
 
 ## Highest-value owned wall: more orthogonal path neighbors = better overbuild target.
-func _best_wall_to_overbuild(lane: int, path_cells: Array[Vector2i]) -> Vector2i:
+## When require_path_touch is true (melee), walls with 0 path neighbors are ignored.
+func _best_wall_to_overbuild(
+	lane: int, path_cells: Array[Vector2i], require_path_touch: bool = false
+) -> Vector2i:
 	var path_set: Dictionary = {}
 	for c in path_cells:
 		path_set[c] = true
@@ -339,6 +353,8 @@ func _best_wall_to_overbuild(lane: int, path_cells: Array[Vector2i]) -> Vector2i
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if path_set.has(cell + d):
 				adj += 1
+		if require_path_touch and adj < 1:
+			continue
 		# Corners (2+) beat single-edge walls; slight bias toward mid-lane.
 		var score := adj * 30 + (grid.rows - absi(cell.y - grid.rows / 2))
 		if score > best_score:
@@ -500,25 +516,59 @@ func _upgrade_owned_towers(p: ClashPlayerState, force: bool = false) -> void:
 	while p.gold > reserve and upgraded < max_upgrades:
 		var best: Tower = null
 		var best_cost := 1 << 30
+		var want_final := false
 		for tower in towers:
 			if tower == null or not is_instance_valid(tower):
 				continue
-			if TowerData.is_wall(tower.tower_id):
+			if TowerData.is_wall(tower.tower_id) or TowerData.is_command(tower.tower_id):
 				continue
-			if not tower.can_stat_upgrade():
-				continue
-			var cost := tower.next_stat_upgrade_cost()
-			if cost <= 0 or cost > p.gold - reserve:
-				continue
-			if cost < best_cost:
-				best_cost = cost
-				best = tower
+			if tower.can_stat_upgrade():
+				var cost := tower.next_stat_upgrade_cost()
+				if cost <= 0 or cost > p.gold - reserve:
+					continue
+				if cost < best_cost:
+					best_cost = cost
+					best = tower
+					want_final = false
+			elif tower.can_final_upgrade():
+				var fcost := tower.final_upgrade_cost()
+				if fcost <= 0 or fcost > p.gold - reserve:
+					continue
+				# Prefer finishing a tower once stats are done (slight priority over cheaper stats).
+				var score := fcost - 5
+				if score < best_cost:
+					best_cost = score
+					best = tower
+					want_final = true
 		if best == null:
 			break
-		if not p.spend_gold(best_cost):
-			break
-		best.apply_stat_upgrade()
+		if want_final:
+			var element := _pick_final_element(best)
+			var fpay := best.final_upgrade_cost()
+			if not p.spend_gold(fpay):
+				break
+			best.apply_final_element(element)
+		else:
+			if not p.spend_gold(best_cost):
+				break
+			best.apply_stat_upgrade()
 		upgraded += 1
+
+
+func _pick_final_element(tower: Tower) -> String:
+	# Match native element when the tower already is one; otherwise pick any final.
+	match tower.tower_id:
+		"burn":
+			return "burn"
+		"freeze":
+			return "freeze"
+		"poison":
+			return "poison"
+		"lightning":
+			return "lightning"
+		_:
+			var opts: Array = TowerData.FINAL_ELEMENTS
+			return str(opts[_rng.randi_range(0, opts.size() - 1)])
 
 
 func _owned_towers_in_lane(lane: int) -> Array[Tower]:
@@ -538,10 +588,25 @@ func _owned_towers_in_lane(lane: int) -> Array[Tower]:
 	return out
 
 
+func _owned_command_tower(lane: int) -> Tower:
+	for tower in _owned_towers_in_lane(lane):
+		if TowerData.is_command(tower.tower_id):
+			return tower
+	return null
+
+
 ## Any combat tower the bot can afford right now (no wave/difficulty unlock gates).
 func _pick_affordable_tower_id(_wave: int, _difficulty: int, gold: int) -> String:
 	var affordable: Array[String] = []
+	var lane := -1
+	if clash_match != null:
+		var cp := clash_match.get_player(player_id)
+		if cp != null:
+			lane = cp.lane_index
+	var has_command := lane >= 0 and _owned_command_tower(lane) != null
 	for id in _combat_tower_pool():
+		if TowerData.is_command(id) and has_command:
+			continue
 		var cost: int = int(TowerData.get_def(id)["cost"])
 		if cost > 0 and cost <= gold:
 			affordable.append(id)
@@ -551,14 +616,120 @@ func _pick_affordable_tower_id(_wave: int, _difficulty: int, gold: int) -> Strin
 	return affordable[_rng.randi_range(0, affordable.size() - 1)]
 
 
-## Full combat shop for Clash bots. Walls are maze-only; Command needs player abilities.
+## Full combat shop for Clash bots. Walls stay maze-only; Command is allowed (one per lane).
 func _combat_tower_pool() -> Array[String]:
 	var pool: Array[String] = []
 	for id in TowerData.get_ids():
-		if TowerData.is_wall(id) or TowerData.is_command(id):
+		if TowerData.is_wall(id):
 			continue
 		pool.append(id)
 	return pool
+
+
+## Fire Command abilities from an owned Command hub (prep or mid-wave).
+func _use_command_abilities(p: ClashPlayerState, during_wave: bool) -> void:
+	var cmd := _owned_command_tower(p.lane_index)
+	if cmd == null or trap_container == null:
+		return
+	var chance := 0.45
+	var max_casts := 1
+	match p.bot_difficulty:
+		WaveScaler.Difficulty.EASY:
+			chance = 0.25
+			max_casts = 1
+		WaveScaler.Difficulty.HARD:
+			chance = 0.7
+			max_casts = 2
+		WaveScaler.Difficulty.CHEATER:
+			chance = 0.85
+			max_casts = 3
+		_:
+			chance = 0.5
+			max_casts = 1
+	if during_wave:
+		chance = minf(chance + 0.15, 0.95)
+		max_casts += 1
+	if _rng.randf() > chance:
+		return
+	var reserve := _gold_reserve(p)
+	var casts := 0
+	while casts < max_casts and p.gold > reserve:
+		var ability_id := _pick_command_ability(cmd, p.gold - reserve)
+		if ability_id == "":
+			break
+		var cell := _command_aim_cell(ability_id, p.lane_index)
+		if cell.x < 0:
+			break
+		var cost := CommandAbilities.cost(ability_id)
+		if cost > p.gold - reserve:
+			break
+		var result := CommandCaster.place(
+			ability_id, cell, grid, pathfinder, enemy_container, trap_container
+		)
+		if not bool(result.get("ok", false)):
+			break
+		if not p.spend_gold(cost):
+			break
+		cmd.start_ability_cooldown(ability_id, CommandAbilities.cooldown(ability_id))
+		casts += 1
+
+
+func _pick_command_ability(cmd: Tower, budget: int) -> String:
+	var options: Array[String] = []
+	for id in CommandAbilities.get_ids():
+		if cmd.ability_cooldown_left(str(id)) > 0.05:
+			continue
+		if CommandAbilities.cost(str(id)) > budget:
+			continue
+		options.append(str(id))
+	if options.is_empty():
+		return ""
+	# Prefer damaging/slow traps during fights; still allow supply.
+	if options.has("airstrike") and _rng.randf() < 0.4:
+		return "airstrike"
+	if options.has("barricade") and _rng.randf() < 0.35:
+		return "barricade"
+	return options[_rng.randi_range(0, options.size() - 1)]
+
+
+func _command_aim_cell(ability_id: String, lane: int) -> Vector2i:
+	var spawn := grid.get_lane_spawn(lane)
+	var exit_c := grid.get_lane_exit(lane)
+	if CommandAbilities.aim_mode(ability_id) == "path":
+		var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
+		if path_cells.size() < 3:
+			return Vector2i(-1, -1)
+		# Aim mid-path so traps trigger before the exit.
+		var mid := path_cells[path_cells.size() / 2]
+		var check := CommandCaster.validate_aim(ability_id, mid, grid, pathfinder)
+		if bool(check.get("ok", false)):
+			return mid
+		# Fallback: try a few random path tiles.
+		for _i in 6:
+			var cell: Vector2i = path_cells[_rng.randi_range(1, path_cells.size() - 2)]
+			var ok := CommandCaster.validate_aim(ability_id, cell, grid, pathfinder)
+			if bool(ok.get("ok", false)):
+				return cell
+		return Vector2i(-1, -1)
+	# Supply Drop: aim at a dense owned combat cluster.
+	var towers := _owned_towers_in_lane(lane)
+	var best := Vector2i(-1, -1)
+	var best_n := 0
+	for tower in towers:
+		if TowerData.is_wall(tower.tower_id) or TowerData.is_command(tower.tower_id):
+			continue
+		var anchor: Vector2i = tower.get_meta("anchor_cell", grid.world_to_cell(tower.position))
+		var n := 0
+		for other in towers:
+			if TowerData.is_wall(other.tower_id) or TowerData.is_command(other.tower_id):
+				continue
+			var oc: Vector2i = other.get_meta("anchor_cell", grid.world_to_cell(other.position))
+			if absi(oc.x - anchor.x) + absi(oc.y - anchor.y) <= 2:
+				n += 1
+		if n > best_n:
+			best_n = n
+			best = anchor
+	return best
 
 
 func _build_combat_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i]:

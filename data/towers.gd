@@ -224,6 +224,10 @@ static func is_wall(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_wall", false))
 
 
+static func is_melee(tower_id: String) -> bool:
+	return bool(get_def(tower_id).get("melee", false))
+
+
 static func is_command(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_command", false))
 

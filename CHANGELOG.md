@@ -1,4 +1,17 @@
-﻿## Version 00.02.73
+﻿## Version 00.02.74
+Date: 10/18/2026
+Time: 12:15 PM
+
+### Changes
+- Clash bots keep **melee** towers on path-adjacent tiles (no buried fills)
+- Bots apply the **final elemental** upgrade after three stats
+- Bots may buy **Command** and cast abilities (path traps / Supply Drop)
+- Command path-aim validation works on every Clash lane, not only lane 0
+
+### Reason
+Bots were placing spikes poorly, skipping finals, and ignoring Command support tools the player can use.
+
+## Version 00.02.73
 Date: 10/18/2026
 Time: 12:05 PM
 

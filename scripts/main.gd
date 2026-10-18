@@ -169,7 +169,7 @@ func _setup_clash_match() -> void:
 		if cp == null or cp.is_human:
 			continue
 		var bot := ClashBotAI.new()
-		bot.setup(clash_match, grid, pathfinder, enemies, projectiles, cp.player_id)
+		bot.setup(clash_match, grid, pathfinder, enemies, projectiles, traps, cp.player_id)
 		_clash_bots.append(bot)
 	# GameState is the human wallet during play — seed it, then mirror into ClashPlayerState.
 	game_state.gold = WaveScaler.clash_starting_gold()
