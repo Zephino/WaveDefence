@@ -1,4 +1,15 @@
-﻿## Version 00.02.70
+﻿## Version 00.02.71
+Date: 10/18/2026
+Time: 2:58 AM
+
+### Changes
+- Debug panel (F1 / ~): **Spawn 5 on Self**, **Spawn Flyer on Self**, **Spawn Boss on Self**
+- Spawns use current-wave stats on your path (Clash: human lane); does not count toward wave-clear tracking
+
+### Reason
+Playtesters needed a way to drop enemies onto their own defenses without starting a full wave.
+
+## Version 00.02.70
 Date: 10/18/2026
 Time: 2:52 AM
 

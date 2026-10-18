@@ -1034,6 +1034,18 @@ func _run() -> void:
 			if not fire_tower.def.has("bonus_slow_factor"):
 				errors.append("ice final should add a slow buff")
 
+	# Debug: spawn mobs onto the player's own path.
+	grid.reset(true)
+	build.pathfinder.rebuild()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	waves.clear_enemies()
+	var dbg_n := waves.debug_spawn_on_self(3, false, false)
+	if dbg_n != 3:
+		errors.append("debug_spawn_on_self should spawn 3 creeps, got %d" % dbg_n)
+	elif waves.enemies_alive < 3:
+		errors.append("debug spawn should increase enemies_alive")
+	waves.clear_enemies()
+
 	# Portal slides: same-row ±X after wave 10, 200 gold (grid path rules).
 	if WaveScaler.PORTAL_SLIDE_COST != 200:
 		errors.append("portal slide should cost 200")

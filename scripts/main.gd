@@ -217,6 +217,7 @@ func _setup_ui() -> void:
 	debug_panel.set_wave_requested.connect(_debug_set_wave)
 	debug_panel.send_wave_requested.connect(_debug_force_next_wave)
 	debug_panel.clear_enemies_requested.connect(_debug_clear_enemies)
+	debug_panel.spawn_on_self_requested.connect(_debug_spawn_on_self)
 	debug_panel.god_mode_toggled.connect(_debug_god_mode)
 	debug_panel.restart_requested.connect(restart_run)
 
@@ -1258,6 +1259,16 @@ func _debug_clear_enemies() -> void:
 	hud.set_banner("")
 	wave_manager.force_intermission(WaveScaler.INTERMISSION_TIME, true)
 	hud.set_status("Enemies cleared — intermission started. Debug run: no leaderboard.")
+
+
+func _debug_spawn_on_self(count: int, flying: bool, boss: bool) -> void:
+	_mark_debug_used()
+	var n := wave_manager.debug_spawn_on_self(count, flying, boss)
+	if n <= 0:
+		hud.set_status("Debug: couldn't spawn on self — keep a path open.")
+		return
+	var kind := "boss" if boss else ("flyer" if flying else "creep")
+	hud.set_status("Debug: spawned %d %s on your path (no leaderboard)." % [n, kind])
 
 
 func _debug_god_mode(enabled: bool) -> void:

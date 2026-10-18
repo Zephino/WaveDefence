@@ -6,6 +6,7 @@ signal add_lives_requested(amount: int)
 signal set_wave_requested(wave: int)
 signal send_wave_requested
 signal clear_enemies_requested
+signal spawn_on_self_requested(count: int, flying: bool, boss: bool)
 signal god_mode_toggled(enabled: bool)
 signal restart_requested
 signal debug_opened
@@ -63,6 +64,9 @@ func _build() -> void:
 	_add_button(box, "Jump Wave 15", func() -> void: set_wave_requested.emit(15))
 	_add_button(box, "Jump Wave 50", func() -> void: set_wave_requested.emit(50))
 	_add_button(box, "Force Next Wave", func() -> void: send_wave_requested.emit())
+	_add_button(box, "Spawn 5 on Self", func() -> void: spawn_on_self_requested.emit(5, false, false))
+	_add_button(box, "Spawn Flyer on Self", func() -> void: spawn_on_self_requested.emit(1, true, false))
+	_add_button(box, "Spawn Boss on Self", func() -> void: spawn_on_self_requested.emit(1, false, true))
 	_add_button(box, "Clear Enemies", func() -> void: clear_enemies_requested.emit())
 	_add_button(box, "Restart Run", func() -> void: restart_requested.emit())
 
@@ -73,7 +77,7 @@ func _build() -> void:
 	box.add_child(god_check)
 
 	var tip := Label.new()
-	tip.text = "G gold  L lives\nN force  U upgrade\nK clear  R restart\nDebug = no leaderboard"
+	tip.text = "G gold  L lives\nN force  U upgrade\nK clear  R restart\nSpawn on Self = your path\nDebug = no leaderboard"
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.modulate = Color(0.75, 0.78, 0.82)
 	box.add_child(tip)

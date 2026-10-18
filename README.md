@@ -163,7 +163,7 @@ Toggle panel with **F1** or **~**. Opening the debug menu or using debug hotkeys
 | K | Clear enemies |
 | R | Restart run |
 
-Panel also: **Force Next Wave**, jump to wave 10/15/50, god mode, restart.
+Panel also: **Force Next Wave**, **Spawn 5 / Flyer / Boss on Self** (your path or Clash human lane), jump to wave 10/15/50, god mode, restart.
 
 Tune balance in:
 

@@ -760,6 +760,60 @@ func clear_enemies() -> void:
 	_emit_enemies_remaining()
 
 
+## Debug: spawn enemies on the player's own path (Clash: human lane). Returns how many spawned.
+func debug_spawn_on_self(count: int = 5, flying: bool = false, boss: bool = false) -> int:
+	if game_state == null or game_state.is_game_over:
+		return 0
+	if grid == null or enemy_container == null:
+		return 0
+	var wave := maxi(game_state.wave, 1)
+	var lane_id := -1
+	var defender_id := -1
+	if _is_clash() and clash_match != null and clash_match.human() != null:
+		lane_id = clash_match.human().lane_index
+		defender_id = clash_match.human_id
+		if not has_path_between_ok(lane_id) and not flying:
+			return 0
+	elif not flying and not has_open_path():
+		return 0
+	var spawned := 0
+	for _i in maxi(count, 1):
+		var hp: float
+		var speed: float
+		var bounty: int
+		if boss and flying:
+			hp = WaveScaler.flying_boss_hp(wave)
+			speed = WaveScaler.flying_boss_speed(wave)
+			bounty = WaveScaler.flying_boss_bounty(wave)
+		elif boss:
+			hp = WaveScaler.boss_hp(wave)
+			speed = WaveScaler.boss_speed(wave)
+			bounty = WaveScaler.boss_bounty(wave)
+		elif flying:
+			hp = WaveScaler.flying_creep_hp(wave)
+			speed = WaveScaler.flying_creep_speed(wave)
+			bounty = WaveScaler.flying_creep_bounty(wave)
+		else:
+			hp = WaveScaler.creep_hp(wave)
+			speed = WaveScaler.creep_speed(wave)
+			bounty = WaveScaler.creep_bounty(wave)
+		var spec := _make_spawn_spec(wave, hp, speed, bounty, boss, flying)
+		# Debug spawns shouldn't advance wave-clear / early-send kill tracking.
+		spec["wave"] = -1
+		spec["counts_kill"] = false
+		spec["lane_id"] = lane_id
+		spec["defender_id"] = defender_id
+		if _spawn_enemy(spec):
+			spawned += 1
+	return spawned
+
+
+func has_path_between_ok(lane: int) -> bool:
+	if not _is_clash() or lane < 0:
+		return has_open_path()
+	return _ensure_lane_ground_path(lane).size() >= 2
+
+
 func jump_to_wave(wave_number: int) -> void:
 	clear_enemies()
 	game_state.set_wave(maxi(wave_number - 1, 0))
