@@ -1,4 +1,15 @@
-﻿## Version 00.02.47
+﻿## Version 00.02.48
+Date: 10/18/2026
+Time: 12:08 AM
+
+### Changes
+- Clash bot mazes are bought pieces only: prefer combat towers on the path, with walls as limited cheap fillers
+- Confirmed Clash lanes stay fully buildable (no environmental rock handicap inside a lane)
+
+### Reason
+Wall-heavy mazes looked like map rocks and used up cells that should be shooting towers.
+
+## Version 00.02.47
 Date: 10/18/2026
 Time: 12:01 AM
 

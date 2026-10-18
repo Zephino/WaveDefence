@@ -229,19 +229,27 @@ func _run() -> void:
 		grid.get_lane_spawn(2), grid.get_lane_exit(2)
 	).size()
 	var owned := 0
-	var walls := 0
+	var combat := 0
+	var blocked_in_lane := 0
+	var r2: Vector2i = grid.lane_col_ranges[2]
+	for y in grid.rows:
+		for x in range(r2.x, r2.y + 1):
+			if grid.get_tile(Vector2i(x, y)) == GameGrid.Tile.BLOCKED:
+				blocked_in_lane += 1
+	if blocked_in_lane > 0:
+		errors.append("clash lanes must not get environmental blocked tiles")
 	for cell in grid.towers.keys():
 		if grid.lane_index_for_cell(cell) != 2:
 			continue
 		var t: Node = grid.towers[cell]
 		if t is Tower and t.has_meta("clash_owner") and int(t.get_meta("clash_owner")) == 2:
 			owned += 1
-			if TowerData.is_wall((t as Tower).tower_id):
-				walls += 1
+			if not TowerData.is_wall((t as Tower).tower_id):
+				combat += 1
 	if owned < 2:
-		errors.append("clash bot should place walls/towers in its lane")
-	if walls < 1:
-		errors.append("clash bot should build maze walls, not only combat towers")
+		errors.append("clash bot should buy and place maze/combat pieces in its lane")
+	if combat < 1:
+		errors.append("clash bot maze should prefer bought combat towers, not only walls")
 	if path_after <= path_before:
 		errors.append("clash bot maze should lengthen its lane path")
 	if bot_p != null and bot_p.gold >= gold_before:

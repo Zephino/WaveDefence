@@ -76,21 +76,28 @@ func _gold_reserve(p: ClashPlayerState) -> int:
 	return maxi(int(float(p.gold) * ratio), _cheapest_send_cost())
 
 
-## Force a longer snake with walls (and occasional cheap path towers).
+## Buy path pieces that snake the lane. Prefer combat towers (maze + DPS); walls only as cheap fillers.
+## Lanes start empty — nothing is pre-blocked inside a lane.
 func _build_maze(p: ClashPlayerState, wave: int) -> void:
 	var reserve := _gold_reserve(p)
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var wall_cost: int = int(TowerData.get_def("wall")["cost"])
+	var gunner_cost: int = int(TowerData.get_def("gunner")["cost"])
 	var max_pieces := 10
+	var max_walls := 3
 	match p.bot_difficulty:
 		WaveScaler.Difficulty.EASY:
 			max_pieces = 6
+			max_walls = 2
 		WaveScaler.Difficulty.HARD:
-			max_pieces = 16
+			max_pieces = 14
+			max_walls = 4
 		_:
-			max_pieces = 12
+			max_pieces = 10
+			max_walls = 3
 	var placed := 0
+	var walls_placed := 0
 	while p.gold > reserve and placed < max_pieces:
 		var spendable := p.gold - reserve
 		if spendable < wall_cost:
@@ -98,18 +105,22 @@ func _build_maze(p: ClashPlayerState, wave: int) -> void:
 		var cell := _best_maze_cell(spawn, exit_c, p.lane_index)
 		if cell.x < 0:
 			break
-		# Mostly walls; sometimes a combat tower on the path as a maze piece.
-		var piece_id := "wall"
-		if spendable >= int(TowerData.get_def("gunner")["cost"]) and _rng.randf() < 0.22:
+		# Prefer a bought combat tower on the path so the maze cell still shoots.
+		var piece_id := ""
+		if spendable >= gunner_cost:
 			piece_id = _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
-			if piece_id == "":
-				piece_id = "wall"
+		if piece_id == "" or TowerData.is_wall(piece_id):
+			if walls_placed >= max_walls:
+				break
+			piece_id = "wall"
 		var cost: int = int(TowerData.get_def(piece_id)["cost"])
 		if cost > spendable or not p.spend_gold(cost):
 			break
 		_place_owned(cell, piece_id)
 		pathfinder.rebuild()
 		placed += 1
+		if TowerData.is_wall(piece_id):
+			walls_placed += 1
 
 
 func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
