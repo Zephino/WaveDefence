@@ -1,4 +1,15 @@
-﻿## Version 00.02.58
+﻿## Version 00.02.59
+Date: 10/18/2026
+Time: 2:00 AM
+
+### Changes
+- Re-exported a complete web build (previous push left raw `$GODOT_*` HTML placeholders)
+- `export_builds.ps1` now fails if `docs/index.html` still contains unsubstituted Godot template tokens
+
+### Reason
+GitHub Pages showed a black screen with `$GODOT_HEAD_INCLUDE` because the export script shipped a partial HTML template.
+
+## Version 00.02.58
 Date: 10/18/2026
 Time: 1:57 AM
 

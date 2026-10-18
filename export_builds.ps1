@@ -122,9 +122,6 @@ if ($doWeb) {
     if (-not (Test-Path "docs\index.html")) {
         throw "Web export did not create docs/index.html (exit $godotExit)"
     }
-    if ($godotExit -ne 0) {
-        Write-Host "Godot reported exit $godotExit but web export output exists (continuing)." -ForegroundColor Yellow
-    }
     # WinGet shim can return before the pack is fully flushed; wait for a fresh, stable .pck.
     $prevSize = -1
     $stable = 0
@@ -150,6 +147,14 @@ if ($doWeb) {
     }
     if (-not (Test-Path $pckPath) -or $prevSize -le 0) {
         throw "Web export did not finish writing docs/index.pck"
+    }
+    # Reject raw Godot HTML templates (placeholders mean the export did not finish substituting).
+    $htmlCheck = Get-Content (Join-Path $ProjectRoot "docs\index.html") -Raw
+    if ($htmlCheck -match '\$GODOT_') {
+        throw "Web export left unsubstituted `$GODOT_*` placeholders in docs/index.html (exit $godotExit). Do not ship."
+    }
+    if ($godotExit -ne 0) {
+        Write-Host "Godot reported exit $godotExit but docs HTML/pck look complete (continuing)." -ForegroundColor Yellow
     }
     # GitHub Pages: skip Jekyll so wasm/pck paths work.
     Set-Content -Path (Join-Path $ProjectRoot "docs\.nojekyll") -Value "" -NoNewline
