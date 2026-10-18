@@ -3,6 +3,9 @@ extends RefCounted
 
 ## Places a maze, upgrades sometimes, and queues sends for one Clash bot.
 
+## Match-long intent: picked once in setup and kept for the whole game.
+enum BuildPlan { MAZE, DPS, HYBRID }
+
 var clash_match: ClashMatch
 var grid: GameGrid
 var pathfinder: Pathfinder
@@ -10,8 +13,10 @@ var enemy_container: Node
 var projectile_container: Node
 var player_id: int = 1
 var _rng := RandomNumberGenerator.new()
-## Maze style chosen for this match (varies; bias from ClashBotMemory).
+## Maze style for this match (maze/hybrid plans). Locked after setup.
 var _maze_strategy: String = ""
+## Economy / build intent for this match.
+var _build_plan: int = BuildPlan.HYBRID
 
 
 func setup(
@@ -28,8 +33,26 @@ func setup(
 	enemy_container = p_enemies
 	projectile_container = p_projectiles
 	player_id = p_player_id
-	_rng.randomize()
-	_maze_strategy = ClashBotMemory.pick_strategy(_rng)
+	# Unique stream per bot so simultaneous setups don't share the same sequence.
+	_rng.seed = hash([Time.get_ticks_usec(), player_id, randi()])
+	_build_plan = _pick_build_plan()
+	_maze_strategy = _pick_maze_for_plan(_build_plan)
+
+
+func _pick_build_plan() -> int:
+	var roll := _rng.randf()
+	if roll < 0.34:
+		return BuildPlan.MAZE
+	if roll < 0.67:
+		return BuildPlan.DPS
+	return BuildPlan.HYBRID
+
+
+func _pick_maze_for_plan(plan: int) -> String:
+	# DPS bots skip sheet templates — they buy damage, not corridors.
+	if plan == BuildPlan.DPS:
+		return "scatter" if _rng.randf() < 0.5 else "greedy"
+	return ClashBotMemory.pick_strategy(_rng)
 
 
 func run_prep_turn(wave: int) -> void:
@@ -38,26 +61,57 @@ func run_prep_turn(wave: int) -> void:
 	var p := clash_match.get_player(player_id)
 	if p == null or not p.alive or p.is_human:
 		return
+	# Keep the match plan — do not re-roll style or intent each round.
 	if _maze_strategy == "":
-		_maze_strategy = ClashBotMemory.pick_strategy(_rng)
+		_maze_strategy = _pick_maze_for_plan(_build_plan)
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var len_before := pathfinder.get_cell_path_between(spawn, exit_c).size()
-	# Serpentine maze (walls) → build combat ON walls (same cell) → leftover empties → send.
-	_build_maze(p, wave)
-	_replace_walls_with_towers(p, wave)
-	_place_combat_towers(p, wave)
-	_try_sends(p, wave, false)
-	_upgrade_owned_towers(p, true)
-	_build_maze(p, wave)
-	_replace_walls_with_towers(p, wave)
-	_place_combat_towers(p, wave)
-	_upgrade_owned_towers(p, false)
+	match _build_plan:
+		BuildPlan.MAZE:
+			_prep_maze_focus(p, wave)
+		BuildPlan.DPS:
+			_prep_dps_focus(p, wave)
+		_:
+			_prep_hybrid_focus(p, wave)
 	var len_after := pathfinder.get_cell_path_between(spawn, exit_c).size()
-	if len_after > len_before:
+	if len_after > len_before and _build_plan != BuildPlan.DPS:
 		ClashBotMemory.record_result(_maze_strategy, len_after)
 	if clash_match != null:
 		clash_match.players_changed.emit()
+
+
+func _prep_maze_focus(p: ClashPlayerState, wave: int) -> void:
+	# Long corridor first, then overbuild walls into DPS, then fills/sends.
+	_build_maze(p, wave, 1.0)
+	_replace_walls_with_towers(p, wave)
+	_place_combat_towers(p, wave, 16)
+	_try_sends(p, wave, false)
+	_upgrade_owned_towers(p, true)
+	_build_maze(p, wave, 0.45)
+	_replace_walls_with_towers(p, wave)
+	_place_combat_towers(p, wave, 10)
+	_upgrade_owned_towers(p, false)
+
+
+func _prep_dps_focus(p: ClashPlayerState, wave: int) -> void:
+	# Skip wall mazes — spend on combat towers and upgrades.
+	_place_combat_towers(p, wave, 28)
+	_try_sends(p, wave, false)
+	_upgrade_owned_towers(p, true)
+	_place_combat_towers(p, wave, 16)
+	_upgrade_owned_towers(p, false)
+
+
+func _prep_hybrid_focus(p: ClashPlayerState, wave: int) -> void:
+	# Short maze sketch, then prioritize DPS over finishing every wall.
+	_build_maze(p, wave, 0.4)
+	_replace_walls_with_towers(p, wave)
+	_place_combat_towers(p, wave, 20)
+	_try_sends(p, wave, false)
+	_upgrade_owned_towers(p, true)
+	_place_combat_towers(p, wave, 12)
+	_upgrade_owned_towers(p, false)
 
 
 func run_send_turn(wave: int) -> void:
@@ -93,25 +147,29 @@ func _gold_reserve(p: ClashPlayerState) -> int:
 
 
 ## Buy a one-tile maze from the reference templates (or greedy/scatter). Walls sketch it; later → towers.
-func _build_maze(p: ClashPlayerState, wave: int) -> void:
+## budget_scale 0..1 limits how much of this prep goes into walls vs saving for DPS.
+func _build_maze(p: ClashPlayerState, wave: int, budget_scale: float = 1.0) -> void:
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var wall_cost: int = int(TowerData.get_def("wall")["cost"])
 	var gunner_cost: int = int(TowerData.get_def("gunner")["cost"])
 	var use_template := ClashMazeTemplates.is_template(_maze_strategy)
-	# Templates need the full complement of walls or empty slots become shortcuts.
-	var max_pieces := 98 if use_template else 48
+	var scale := clampf(budget_scale, 0.15, 1.0)
+	# Templates need many walls, but hybrid/partial budgets stop early for DPS gold.
+	var max_pieces := int(round(float(98 if use_template else 48) * scale))
 	if not use_template:
 		match p.bot_difficulty:
 			WaveScaler.Difficulty.EASY:
-				max_pieces = 32
+				max_pieces = int(round(32.0 * scale))
 			WaveScaler.Difficulty.HARD:
-				max_pieces = 56
+				max_pieces = int(round(56.0 * scale))
 			_:
-				max_pieces = 48
+				max_pieces = int(round(48.0 * scale))
+	max_pieces = maxi(max_pieces, 4)
 	var blueprint := _maze_blueprint(p.lane_index, _maze_strategy)
-	# Finish the snake before holding send gold back.
-	var reserve := 0 if use_template else _gold_reserve(p)
+	# Always keep gold for combat — denser maze plans reserve less, DPS-friendly more.
+	var combat_floor := gunner_cost * (3 if _build_plan == BuildPlan.MAZE else 6)
+	var reserve := maxi(_gold_reserve(p), combat_floor)
 	var placed := 0
 	for cell in blueprint:
 		if placed >= max_pieces:
@@ -123,9 +181,9 @@ func _build_maze(p: ClashPlayerState, wave: int) -> void:
 			continue
 		if not use_template and pathfinder.would_block_path_between(spawn, exit_c, cell):
 			continue
-		# Templates: walls only so gold covers the full corridor lock-in.
+		# Templates stick to walls; non-templates may drop early combat pieces.
 		var piece_id := "wall"
-		if not use_template and spendable >= gunner_cost and _rng.randf() < 0.12:
+		if not use_template and spendable >= gunner_cost and _rng.randf() < 0.18:
 			var tid := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
 			if tid != "" and not TowerData.is_wall(tid):
 				piece_id = tid
@@ -139,8 +197,8 @@ func _build_maze(p: ClashPlayerState, wave: int) -> void:
 	if placed > 0:
 		pathfinder.rebuild()
 	# Non-template / leftover: greedy lengthening (capped — rebuilds are expensive).
-	var greedy_left := 0 if use_template else 8
-	reserve = _gold_reserve(p)
+	var greedy_left := 0 if use_template else int(round(8.0 * scale))
+	reserve = maxi(_gold_reserve(p), combat_floor)
 	while greedy_left > 0 and p.gold > reserve and placed < max_pieces:
 		greedy_left -= 1
 		var spendable2 := p.gold - reserve
@@ -150,7 +208,7 @@ func _build_maze(p: ClashPlayerState, wave: int) -> void:
 		if cell2.x < 0:
 			break
 		var piece2 := "wall"
-		if spendable2 >= gunner_cost and _rng.randf() < 0.3:
+		if spendable2 >= gunner_cost and _rng.randf() < 0.35:
 			var tid2 := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable2)
 			if tid2 != "" and not TowerData.is_wall(tid2):
 				piece2 = tid2
@@ -187,12 +245,13 @@ func _maze_blueprint(lane: int, strategy: String) -> Array[Vector2i]:
 	return out
 
 
-func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
+func _place_combat_towers(p: ClashPlayerState, wave: int, max_place: int = 20) -> void:
 	var reserve := _gold_reserve(p)
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var placed := 0
-	while p.gold > reserve and placed < 20:
+	var cap := maxi(max_place, 1)
+	while p.gold > reserve and placed < cap:
 		var spendable := p.gold - reserve
 		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
 		if tower_id == "" or TowerData.is_wall(tower_id):
@@ -437,42 +496,26 @@ func _owned_towers_in_lane(lane: int) -> Array[Tower]:
 	return out
 
 
-func _pick_affordable_tower_id(wave: int, difficulty: int, gold: int) -> String:
-	var pool := _tower_pool(wave, difficulty)
+## Any combat tower the bot can afford right now (no wave/difficulty unlock gates).
+func _pick_affordable_tower_id(_wave: int, _difficulty: int, gold: int) -> String:
 	var affordable: Array[String] = []
-	for id in pool:
+	for id in _combat_tower_pool():
 		var cost: int = int(TowerData.get_def(id)["cost"])
-		if cost > 0 and cost <= gold and TowerData.is_unlocked(id, wave):
+		if cost > 0 and cost <= gold:
 			affordable.append(id)
 	if affordable.is_empty():
-		var gunner_cost: int = int(TowerData.get_def("gunner")["cost"])
-		if gunner_cost <= gold:
-			return "gunner"
 		return ""
-	if gold >= 80 and affordable.size() > 1 and _rng.randf() < 0.65:
-		return affordable[_rng.randi_range(0, affordable.size() - 1)]
-	var cheapest := affordable[0]
-	var cheapest_cost: int = int(TowerData.get_def(cheapest)["cost"])
-	for id in affordable:
-		var cost: int = int(TowerData.get_def(id)["cost"])
-		if cost < cheapest_cost:
-			cheapest = id
-			cheapest_cost = cost
-	return cheapest
+	# Uniform among affordable — money is the only gate.
+	return affordable[_rng.randi_range(0, affordable.size() - 1)]
 
 
-func _tower_pool(wave: int, difficulty: int) -> Array[String]:
-	var pool: Array[String] = ["gunner"]
-	if wave >= 3:
-		pool.append("rapid")
-	if wave >= 5 and difficulty >= WaveScaler.Difficulty.MEDIUM:
-		pool.append("cannon")
-	if wave >= 8 and difficulty >= WaveScaler.Difficulty.MEDIUM:
-		pool.append("freeze")
-	if wave >= 10 and difficulty >= WaveScaler.Difficulty.HARD:
-		pool.append("lightning")
-	if wave >= 8:
-		pool.append("antiair")
+## Full combat shop for Clash bots. Walls are maze-only; Command needs player abilities.
+func _combat_tower_pool() -> Array[String]:
+	var pool: Array[String] = []
+	for id in TowerData.get_ids():
+		if TowerData.is_wall(id) or TowerData.is_command(id):
+			continue
+		pool.append(id)
 	return pool
 
 

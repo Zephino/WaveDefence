@@ -1,4 +1,49 @@
-﻿## Version 00.02.59
+﻿## Version 00.02.63
+Date: 10/18/2026
+Time: 2:10 AM
+
+### Changes
+- Clash bots pick a match-long build plan (maze / DPS / hybrid) and keep it every prep
+- DPS bots skip wall mazes and spend on combat towers; maze/hybrid leave combat gold instead of wall-dumping
+
+### Reason
+Bots were re-rolling and spending all gold on walls when buying DPS towers would have been smarter, and plans did not stay consistent through the match.
+
+## Version 00.02.62
+Date: 10/18/2026
+Time: 2:08 AM
+
+### Changes
+- Locked shop towers show gold cost and unlock wave (e.g. Vortex (90) · W12, Gatling (25000) · W30)
+- Reaching that wave enables the button and status announces unlock with the price
+
+### Reason
+Players need to see what Vortex/Gatling cost before and when they unlock at wave 12 / 30.
+
+## Version 00.02.61
+Date: 10/18/2026
+Time: 2:05 AM
+
+### Changes
+- Clash bots can buy any combat tower they can afford (no wave/difficulty unlock gates)
+- Bot tower choice is a random pick among affordable types instead of always cheapest Gunner
+- Template mazes leave a combat gold reserve so bots still overbuild walls into real towers
+
+### Reason
+Bots were locked to a tiny early-wave pool and spammed one tower type even when they had gold for others.
+
+## Version 00.02.60
+Date: 10/18/2026
+Time: 2:04 AM
+
+### Changes
+- Clash bots re-roll a random maze style every prep (each bot independently)
+- Maze picking is uniform random — on-device memory no longer biases toward the same styles
+
+### Reason
+Bots were locking one maze for the whole match and converging on the same patterns every round.
+
+## Version 00.02.59
 Date: 10/18/2026
 Time: 2:00 AM
 

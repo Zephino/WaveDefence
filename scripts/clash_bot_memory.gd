@@ -55,23 +55,10 @@ static func _save() -> void:
 	cfg.save(SAVE_PATH)
 
 
-## Softmax / epsilon mix: usually prefer high avg path length, sometimes explore.
+## Uniform random maze style (per bot / per prep). Memory scores are recorded but do not bias picks.
 static func pick_strategy(rng: RandomNumberGenerator) -> String:
 	ensure_loaded()
-	# Explore sheets often; still leave room for greedy "own pathing".
-	if rng.randf() < 0.28:
-		return STRATEGIES[rng.randi_range(0, STRATEGIES.size() - 1)]
-	var best_id := STRATEGIES[0]
-	var best_score := -INF
-	for id in STRATEGIES:
-		var s: Dictionary = _scores[id]
-		var avg := float(s.get("avg", 36.0))
-		var n := int(s.get("n", 0))
-		var score := avg + 8.0 / float(n + 1) + rng.randf() * 2.0
-		if score > best_score:
-			best_score = score
-			best_id = id
-	return best_id
+	return STRATEGIES[rng.randi_range(0, STRATEGIES.size() - 1)]
 
 
 static func record_result(strategy_id: String, path_length: int) -> void:

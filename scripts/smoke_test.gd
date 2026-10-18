@@ -274,7 +274,34 @@ func _run() -> void:
 	var bot_ai := ClashBotAI.new()
 	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, 2)
 	# Force a reference one-tile maze template.
+	# Strategies must be uniform-random (not memory-locked to one style).
+	var seen_styles: Dictionary = {}
+	var style_rng := RandomNumberGenerator.new()
+	style_rng.seed = 42
+	for _i in 40:
+		seen_styles[ClashBotMemory.pick_strategy(style_rng)] = true
+	if seen_styles.size() < 5:
+		errors.append("clash maze pick_strategy should vary across draws (got %d unique)" % seen_styles.size())
+	# Bots ignore shop unlock waves — any affordable combat tower is fair game.
+	var bot_pool := bot_ai._combat_tower_pool()
+	if not bot_pool.has("burn") or not bot_pool.has("vortex") or not bot_pool.has("spike"):
+		errors.append("clash bot combat pool should include burn/vortex/spike")
+	if bot_pool.has("wall") or bot_pool.has("command"):
+		errors.append("clash bot combat pool should exclude wall/command")
+	var pick_seen: Dictionary = {}
+	for _j in 30:
+		var pick := bot_ai._pick_affordable_tower_id(1, WaveScaler.Difficulty.EASY, 200)
+		if pick != "":
+			pick_seen[pick] = true
+	if pick_seen.size() < 3:
+		errors.append("clash bot tower picks should vary among affordable types (got %d)" % pick_seen.size())
+	if bot_ai._pick_affordable_tower_id(1, WaveScaler.Difficulty.EASY, 3) != "":
+		errors.append("clash bot should not pick combat towers it cannot afford")
+	# Match-long plan: force maze so path-length smoke stays deterministic.
+	bot_ai._build_plan = ClashBotAI.BuildPlan.MAZE
 	bot_ai._maze_strategy = "switchback"
+	var plan_locked := bot_ai._build_plan
+	var style_locked := bot_ai._maze_strategy
 	for tid in ClashMazeTemplates.TEMPLATE_IDS:
 		var tpath := ClashMazeTemplates.path_cells(tid)
 		if tpath.is_empty() or tpath[0] != Vector2i(ClashMazeTemplates.MID, 0):
@@ -312,6 +339,8 @@ func _run() -> void:
 	bot_ai.run_prep_turn(1)
 	if bot_ai._maze_strategy == "":
 		errors.append("clash bot should pick a maze strategy")
+	if bot_ai._build_plan != plan_locked or bot_ai._maze_strategy != style_locked:
+		errors.append("clash bot should keep its build plan and maze style across prep")
 	if GameGrid.CLASH_LANE_COLS < 7:
 		errors.append("clash lanes should be wide enough for serpentine mazes")
 	var path_after := build.pathfinder.get_cell_path_between(
@@ -348,6 +377,8 @@ func _run() -> void:
 	var gold_mid := bot_p.gold
 	var combat_mid := combat
 	bot_ai.run_prep_turn(2)
+	if bot_ai._build_plan != plan_locked or bot_ai._maze_strategy != style_locked:
+		errors.append("clash bot should still follow the same plan on later prep")
 	var combat_later := 0
 	for cell2 in grid.towers.keys():
 		if grid.lane_index_for_cell(cell2) != 2:

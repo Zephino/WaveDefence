@@ -54,6 +54,8 @@ var _tooltip_hide_at_msec: int = 0
 var _command_tower: Tower = null
 var _ability_was_on_cd: Dictionary = {}
 var _shop_shell: PanelContainer
+## Last wave the shop refreshed unlock announcements for (-1 = not yet).
+var _last_shop_wave: int = -1
 var _actions_shell: PanelContainer
 var _top_bar: Control
 var boss_hp_label: Label
@@ -676,7 +678,16 @@ func _clear_gui_focus() -> void:
 
 func _on_tower_button(tower_id: String) -> void:
 	if game_state != null and not TowerData.is_unlocked(tower_id, game_state.wave):
-		set_status("Unlocks at wave %d" % TowerData.unlock_wave(tower_id))
+		var def := TowerData.get_def(tower_id)
+		var cost := int(def.get("cost", 0))
+		var need := TowerData.unlock_wave(tower_id)
+		set_status(
+			"%s unlocks at wave %d — %d gold" % [
+				str(def.get("display_name", tower_id)),
+				need,
+				cost,
+			]
+		)
 		return
 	highlight_tower(tower_id)
 	tower_type_selected.emit(tower_id)
@@ -698,6 +709,7 @@ func _refresh_shop_buttons() -> void:
 		var unlocked := TowerData.is_unlocked(tower_id, wave)
 		var cost := int(def.get("cost", 0))
 		var name := str(def.get("display_name", tower_id))
+		# Always show gold cost; locked towers also show which wave opens them.
 		if unlocked:
 			btn.text = "%s (%d)" % [name, cost]
 			btn.disabled = false
@@ -705,9 +717,13 @@ func _refresh_shop_buttons() -> void:
 			btn.modulate = Color(1.2, 1.15, 0.7) if tower_id == selected_id else Color.WHITE
 		else:
 			var need := TowerData.unlock_wave(tower_id)
-			btn.text = "%s (W%d)" % [name, need]
+			btn.text = "%s (%d) · W%d" % [name, cost, need]
 			btn.disabled = true
-			btn.tooltip_text = "%s\nLocked — reach wave %d" % [TowerData.tooltip_for(tower_id), need]
+			btn.tooltip_text = "%s\nLocked — reach wave %d (%d gold)" % [
+				TowerData.tooltip_for(tower_id),
+				need,
+				cost,
+			]
 			btn.modulate = Color(0.55, 0.55, 0.55)
 
 
@@ -938,3 +954,19 @@ func _on_lives_changed(lives: int) -> void:
 func _on_wave_changed(wave: int) -> void:
 	wave_label.text = "Wave: %d" % wave
 	_refresh_shop_buttons()
+	# Announce towers that just became available (Vortex @ 12, Gatling @ 30, …).
+	var prev := _last_shop_wave
+	_last_shop_wave = wave
+	if prev < 0:
+		return
+	var unlocked_now: PackedStringArray = PackedStringArray()
+	for tower_id in TowerData.get_ids():
+		var need := TowerData.unlock_wave(tower_id)
+		if need <= 0 or wave < need or prev >= need:
+			continue
+		var def := TowerData.get_def(tower_id)
+		unlocked_now.append(
+			"%s (%d gold)" % [str(def.get("display_name", tower_id)), int(def.get("cost", 0))]
+		)
+	if unlocked_now.size() > 0:
+		set_status("Unlocked: %s" % ", ".join(unlocked_now))
