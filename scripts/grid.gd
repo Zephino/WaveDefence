@@ -537,9 +537,14 @@ func is_blocked_for_path(cell: Vector2i) -> bool:
 		return true
 	if get_tile(cell) == Tile.BLOCKED:
 		return true
-	if towers.has(cell):
-		return true
-	return false
+	if not towers.has(cell):
+		return false
+	var node: Node = towers[cell]
+	# Vortex-style lockdown: only the center blocks path; the 8 ring tiles stay walkable.
+	if node is Tower and TowerData.path_blocks_center_only((node as Tower).tower_id):
+		var anchor: Vector2i = node.get_meta("anchor_cell", world_to_cell(node.position))
+		return cell == anchor
+	return true
 
 
 func is_map_corner_cell(cell: Vector2i) -> bool:

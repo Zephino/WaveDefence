@@ -143,13 +143,14 @@ func _can_place_footprint_at(cell: Vector2i, footprint: int) -> bool:
 	# Only the locked cells must be empty — towers may sit flush against the zone edge.
 	if not grid.is_footprint_buildable(cell, footprint):
 		return false
-	var cells := TowerData.footprint_cells(cell, footprint)
+	# Path check uses solid cells only (Vortex: center). Ring tiles stay walkable.
+	var block_cells := TowerData.path_block_cells(cell, selected_tower_id)
 	if _is_clash():
 		var spawn := grid.get_lane_spawn(human_lane)
 		var exit_c := grid.get_lane_exit(human_lane)
-		if pathfinder.would_block_path_between_cells(spawn, exit_c, cells):
+		if pathfinder.would_block_path_between_cells(spawn, exit_c, block_cells):
 			return false
-	elif pathfinder.would_block_path_cells(cells):
+	elif pathfinder.would_block_path_cells(block_cells):
 		return false
 	return true
 

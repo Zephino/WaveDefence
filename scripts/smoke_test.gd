@@ -841,6 +841,10 @@ func _run() -> void:
 		errors.append("vortex should be ground-only")
 	if TowerData.footprint_size("vortex") != 3:
 		errors.append("vortex should lock a 3x3 zone")
+	if not TowerData.path_blocks_center_only("vortex"):
+		errors.append("vortex should path-block only its center")
+	if TowerData.path_block_cells(Vector2i(5, 5), "vortex") != [Vector2i(5, 5)]:
+		errors.append("vortex path_block_cells should be center only")
 	if TowerData.unlock_wave("vortex") != 12:
 		errors.append("vortex should unlock at wave 12")
 	if TowerData.is_unlocked("vortex", 11):
@@ -900,6 +904,12 @@ func _run() -> void:
 					fp_cells += 1
 			if fp_cells != 9:
 				errors.append("vortex should occupy all 9 footprint cells")
+			build.pathfinder.rebuild()
+			if not build.pathfinder.astar.is_point_solid(vortex_cell):
+				errors.append("vortex center should block path")
+			var ring := vortex_cell + Vector2i(1, 0)
+			if build.pathfinder.astar.is_point_solid(ring):
+				errors.append("vortex ring tile should stay walkable for path")
 			# Towers may sit flush against the lockdown edge (outside the 3×3).
 			build.select_tower_type("gunner")
 			var adj := vortex_cell + Vector2i(2, 0)
@@ -913,9 +923,8 @@ func _run() -> void:
 				if edge_gun != null:
 					grid.remove_tower_at(adj)
 					edge_gun.queue_free()
-			# Locked cells themselves stay unbuildable.
-			var locked := vortex_cell + Vector2i(1, 0)
-			if build.can_place_at(locked):
+			# Locked ring cells stay unbuildable even though path can walk them.
+			if build.can_place_at(ring):
 				errors.append("gunner should not place inside vortex lockdown zone")
 			grid.remove_tower_at(vortex_cell)
 			if is_instance_valid(vx):

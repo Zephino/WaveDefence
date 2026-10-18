@@ -177,7 +177,7 @@ const TYPES := {
 	},
 	"vortex": {
 		"display_name": "Vortex",
-		"blurb": "No damage. The tower sits on 1 cell but locks a 3×3 zone (cannot sit in a map corner). Pulls ground enemies along the orbit ring for one lap, then releases them. Unlocks at wave 12.",
+		"blurb": "No damage. The tower sits on 1 cell but locks a 3×3 build zone (cannot sit in a map corner). Ground path walks the 8 tiles around the center; grabbed enemies spin the orbit ring, then release. Unlocks at wave 12.",
 		"cost": 90,
 		"damage": 0.0,
 		"range": 120.0,
@@ -187,6 +187,7 @@ const TYPES := {
 		"effect": "orbit",
 		"is_aura": true,
 		"footprint": 3,
+		"path_block_center_only": true,
 		"orbit_radius": 88.0,
 		"orbit_laps": 1.0,
 		"orbit_immune": 1.5,
@@ -244,6 +245,19 @@ static func footprint_cells(center: Vector2i, size: int = 1) -> Array[Vector2i]:
 		for dx in range(-half, half + 1):
 			cells.append(center + Vector2i(dx, dy))
 	return cells
+
+
+## True when only the anchor cell blocks ground path (ring cells stay walkable).
+static func path_blocks_center_only(tower_id: String) -> bool:
+	return bool(get_def(tower_id).get("path_block_center_only", false))
+
+
+## Cells that become solid for A* when this tower is placed at `center`.
+static func path_block_cells(center: Vector2i, tower_id: String) -> Array[Vector2i]:
+	if path_blocks_center_only(tower_id):
+		var only: Array[Vector2i] = [center]
+		return only
+	return footprint_cells(center, footprint_size(tower_id))
 
 
 ## Wave number when the shop unlocks this tower (0 / missing = always available).
@@ -479,7 +493,13 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 	if bool(def.get("is_aura", false)) or str(def.get("effect", "none")) == "orbit":
 		var fp := footprint_size(tower_id)
 		if fp > 1:
-			lines.append("1-cell tower  |  Locks %d×%d zone (%d tiles)  |  Not in corners" % [fp, fp, fp * fp])
+			if path_blocks_center_only(tower_id):
+				lines.append(
+					"1-cell tower  |  Locks %d×%d build zone  |  Path walks the ring  |  Not in corners"
+					% [fp, fp]
+				)
+			else:
+				lines.append("1-cell tower  |  Locks %d×%d zone (%d tiles)  |  Not in corners" % [fp, fp, fp * fp])
 		lines.append("No damage  |  Pull range %.0f  |  Orbit radius %.0f" % [
 			float(def.get("range", 0.0)),
 			float(def.get("orbit_radius", 0.0)),

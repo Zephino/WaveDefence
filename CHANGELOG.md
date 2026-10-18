@@ -1,4 +1,16 @@
-﻿## Version 00.02.67
+﻿## Version 00.02.68
+Date: 10/18/2026
+Time: 2:46 AM
+
+### Changes
+- Vortex pathfinding blocks **only the center** cell; the 8 ring tiles stay walkable
+- Green spawn→exit preview routes around the center through the ring
+- Build lockdown still covers all 9 tiles; placement path checks match center-only blocking
+
+### Reason
+The whole 3×3 was treated like a wall, so the path line could not walk around the Vortex the way mobs should.
+
+## Version 00.02.67
 Date: 10/18/2026
 Time: 2:40 AM
 

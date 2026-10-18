@@ -397,7 +397,7 @@ func _can_bot_place(cell: Vector2i, tower_id: String, spawn: Vector2i, exit_c: V
 			if not grid.is_buildable(c):
 				return false
 		return not pathfinder.would_block_path_between_cells(
-			spawn, exit_c, TowerData.footprint_cells(cell, footprint)
+			spawn, exit_c, TowerData.path_block_cells(cell, tower_id)
 		)
 	if not grid.is_buildable(cell):
 		return false
