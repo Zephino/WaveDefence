@@ -12,9 +12,11 @@ var speed: float = 60.0
 var bounty: int = 5
 var is_boss: bool = false
 var is_flying: bool = false
-## Clash send: destroys defender towers/walls on path cells it enters.
+## Clash send: hunts and destroys defender towers/walls, then walks to exit.
 var is_wrecker: bool = false
 var _wreck_grid: GameGrid = null
+var _wreck_pathfinder: Pathfinder = null
+var _wreck_hunting: bool = false
 ## Wave this enemy belongs to (used so early-send leftovers don't inflate the new wave's kill % ).
 var wave_index: int = 0
 ## Clash: defending player / lane (-1 = classic single board).
@@ -103,13 +105,186 @@ func setup(
 	queue_redraw()
 
 
-## Enable wrecker smash on path cells (Clash send pack).
-func configure_wrecker(p_grid: GameGrid) -> void:
+## Enable wrecker hunt (Clash send pack): smash lane structures, then exit.
+func configure_wrecker(p_grid: GameGrid, p_pathfinder: Pathfinder = null) -> void:
 	is_wrecker = true
 	_wreck_grid = p_grid
+	_wreck_pathfinder = p_pathfinder
+	_wreck_hunting = true
 	_radius = 14.0
 	_base_color = Color(0.95, 0.45, 0.12)
 	queue_redraw()
+	refresh_wrecker_hunt()
+
+
+## Re-aim at the nearest lane structure, or the exit when the lane is clear.
+func refresh_wrecker_hunt() -> void:
+	if not is_wrecker or not alive or _wreck_grid == null:
+		return
+	if _smash_adjacent_structures():
+		# Pathfinder/towers changed; aim again next tick.
+		return
+	var target := _nearest_smashable_cell()
+	if target.x < 0:
+		_wreck_hunting = false
+		_path_wrecker_to_exit()
+		return
+	_wreck_hunting = true
+	if _is_adjacent_to_cell(target) or _wreck_grid.world_to_cell(position) == target:
+		_smash_adjacent_structures()
+		return
+	var approach := _best_approach_cell(target)
+	if approach.x < 0:
+		_wreck_hunting = false
+		_path_wrecker_to_exit()
+		return
+	_path_wrecker_to_cell(approach)
+
+
+func _wrecker_tick() -> void:
+	if _smash_adjacent_structures():
+		refresh_wrecker_hunt()
+		return
+	if _wreck_hunting and (path.is_empty() or path_index >= path.size()):
+		refresh_wrecker_hunt()
+	elif not _wreck_hunting and (path.is_empty() or path_index >= path.size()):
+		_path_wrecker_to_exit()
+
+
+func _path_wrecker_to_exit() -> void:
+	if _wreck_grid == null or _wreck_pathfinder == null or lane_id < 0:
+		return
+	_path_wrecker_to_cell(_wreck_grid.get_lane_exit(lane_id))
+
+
+func _path_wrecker_to_cell(goal: Vector2i) -> void:
+	if _wreck_grid == null or _wreck_pathfinder == null:
+		return
+	var from := _wreck_grid.world_to_cell(position)
+	if from == goal:
+		path = PackedVector2Array([_wreck_grid.cell_to_world_center(goal)])
+		path_index = 0
+		return
+	_wreck_pathfinder.rebuild()
+	var world := _wreck_pathfinder.get_world_path_between(from, goal)
+	if world.size() < 2:
+		# Stand next to goal if blocked; smash tick will clear.
+		path = PackedVector2Array([
+			position,
+			_wreck_grid.cell_to_world_center(goal),
+		])
+		path_index = 1
+		return
+	path = world
+	path_index = 1 if path.size() > 1 else 0
+
+
+func _nearest_smashable_cell() -> Vector2i:
+	if _wreck_grid == null or lane_id < 0:
+		return Vector2i(-1, -1)
+	var here := _wreck_grid.world_to_cell(position)
+	var best := Vector2i(-1, -1)
+	var best_d := 1 << 30
+	var seen: Dictionary = {}
+	for cell in _wreck_grid.towers.keys():
+		if _wreck_grid.lane_index_for_cell(cell) != lane_id:
+			continue
+		var node: Node = _wreck_grid.towers[cell]
+		if node == null or not is_instance_valid(node) or not (node is Tower):
+			continue
+		if seen.has(node):
+			continue
+		seen[node] = true
+		var anchor: Vector2i = node.get_meta("anchor_cell", cell)
+		if not _cell_is_smashable(anchor):
+			continue
+		var d := absi(anchor.x - here.x) + absi(anchor.y - here.y)
+		if d < best_d:
+			best_d = d
+			best = anchor
+	return best
+
+
+func _best_approach_cell(target: Vector2i) -> Vector2i:
+	if _wreck_grid == null or _wreck_pathfinder == null:
+		return Vector2i(-1, -1)
+	var here := _wreck_grid.world_to_cell(position)
+	var best := Vector2i(-1, -1)
+	var best_d := 1 << 30
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	]
+	for d in dirs:
+		var adj: Vector2i = target + d
+		if not _wreck_grid.in_bounds(adj):
+			continue
+		if _wreck_grid.get_tower_at(adj) != null:
+			continue
+		var tile := _wreck_grid.get_tile(adj)
+		if tile == GameGrid.Tile.BLOCKED:
+			continue
+		_wreck_pathfinder.rebuild()
+		var probe := _wreck_pathfinder.get_cell_path_between(here, adj)
+		if probe.is_empty() and here != adj:
+			continue
+		var dist := probe.size() if not probe.is_empty() else 0
+		if here == adj:
+			dist = 0
+		if dist < best_d:
+			best_d = dist
+			best = adj
+	return best
+
+
+func _is_adjacent_to_cell(cell: Vector2i) -> bool:
+	if _wreck_grid == null:
+		return false
+	var here := _wreck_grid.world_to_cell(position)
+	return maxi(absi(here.x - cell.x), absi(here.y - cell.y)) == 1 and (
+		here.x == cell.x or here.y == cell.y
+	)
+
+
+func _cell_is_smashable(cell: Vector2i) -> bool:
+	if _wreck_grid == null or not _wreck_grid.in_bounds(cell):
+		return false
+	var tile := _wreck_grid.get_tile(cell)
+	if tile == GameGrid.Tile.SPAWN or tile == GameGrid.Tile.EXIT or tile == GameGrid.Tile.BLOCKED:
+		return false
+	var tower: Node = _wreck_grid.get_tower_at(cell)
+	if tower == null or not (tower is Tower):
+		return false
+	var t := tower as Tower
+	if lane_id >= 0 and t.lane_id >= 0 and t.lane_id != lane_id:
+		return false
+	return true
+
+
+## Smash every smashable structure on/adjacent to the current cell. Returns true if any fell.
+func _smash_adjacent_structures() -> bool:
+	if not is_wrecker or _wreck_grid == null or not alive:
+		return false
+	var here := _wreck_grid.world_to_cell(position)
+	var any := false
+	var smash_dirs: Array[Vector2i] = [
+		Vector2i.ZERO, Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	]
+	for d in smash_dirs:
+		if _try_smash_cell(here + d):
+			any = true
+	return any
+
+
+func _try_smash_cell(cell: Vector2i) -> bool:
+	if not _cell_is_smashable(cell):
+		return false
+	var removed := _wreck_grid.remove_tower_at(cell)
+	if removed == null:
+		return false
+	if is_instance_valid(removed):
+		removed.queue_free()
+	wrecked_at.emit(cell)
+	return true
 
 
 ## Wire this enemy into a snake chain (call after setup).
@@ -147,6 +322,8 @@ func _process(delta: float) -> void:
 	if not alive:
 		return
 	_tick_statuses(delta)
+	if is_wrecker:
+		_wrecker_tick()
 	_move_along_path(delta)
 	queue_redraw()
 
@@ -176,7 +353,7 @@ func _tick_statuses(delta: float) -> void:
 
 
 func try_begin_orbit(center: Vector2, radius: float, laps: float, immune_after: float = 1.5) -> bool:
-	if not alive or is_flying or is_snake or orbit_active:
+	if not alive or is_flying or is_snake or is_wrecker or orbit_active:
 		return false
 	if orbit_immune_time > 0.0:
 		return false
@@ -250,37 +427,16 @@ func _move_along_path(delta: float) -> void:
 	var dist := to_target.length()
 	if dist <= step:
 		position = target
-		_try_wreck_current_cell()
+		if is_wrecker:
+			_smash_adjacent_structures()
 		path_index += 1
 		if path_index >= path.size():
-			_leak()
+			if is_wrecker and _wreck_hunting:
+				refresh_wrecker_hunt()
+			else:
+				_leak()
 	else:
 		position += to_target.normalized() * step
-
-
-## Smash defender towers/walls on the cell this wrecker just entered.
-func _try_wreck_current_cell() -> void:
-	if not is_wrecker or _wreck_grid == null or not alive:
-		return
-	var cell := _wreck_grid.world_to_cell(position)
-	if not _wreck_grid.in_bounds(cell):
-		return
-	var tile := _wreck_grid.get_tile(cell)
-	if tile == GameGrid.Tile.SPAWN or tile == GameGrid.Tile.EXIT or tile == GameGrid.Tile.BLOCKED:
-		return
-	var tower: Node = _wreck_grid.get_tower_at(cell)
-	if tower == null:
-		return
-	if tower is Tower:
-		var t := tower as Tower
-		if lane_id >= 0 and t.lane_id >= 0 and t.lane_id != lane_id:
-			return
-	var removed := _wreck_grid.remove_tower_at(cell)
-	if removed == null:
-		return
-	if is_instance_valid(removed):
-		removed.queue_free()
-	wrecked_at.emit(cell)
 
 
 func _move_snake(delta: float) -> void:

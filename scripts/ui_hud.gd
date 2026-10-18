@@ -265,10 +265,9 @@ func _rebuild_clash_send_box() -> void:
 		_clash_send_box.remove_child(c)
 		c.queue_free()
 
-	var human := clash_match.human()
-	var shop_lv := human.send_shop_level if human else 1
+	var shop_lv := clash_match.send_shop_level
 	var lv_label := Label.new()
-	lv_label.text = "Send shop Lv%d / %d" % [shop_lv, WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL]
+	lv_label.text = "Send shop Lv%d / %d (shared)" % [shop_lv, WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL]
 	lv_label.modulate = Color(0.85, 0.9, 0.55)
 	lv_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_clash_send_box.add_child(lv_label)

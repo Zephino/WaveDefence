@@ -12,8 +12,6 @@ var gold: int = WaveScaler.CLASH_STARTING_GOLD
 var lives: int = WaveScaler.CLASH_STARTING_LIVES
 var income_per_round: int = WaveScaler.CLASH_BASE_INCOME
 var alive: bool = true
-## Human send-shop unlock tier (1–4). Bots ignore this and may buy any pack.
-var send_shop_level: int = 1
 ## Queued send packs for the next wave aimed at this player: Array of {pack_id, from_id}.
 var incoming_sends: Array = []
 ## Cheater heal: after dipping to ≤ trigger, regenerate toward target.
@@ -26,7 +24,6 @@ func reset_economy() -> void:
 	lives = WaveScaler.CLASH_STARTING_LIVES
 	income_per_round = WaveScaler.CLASH_BASE_INCOME
 	alive = true
-	send_shop_level = 1
 	incoming_sends.clear()
 	cheater_healing = false
 	cheater_heal_timer = 0.0

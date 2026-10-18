@@ -255,14 +255,14 @@ func _run() -> void:
 		errors.append("clash human send brute should succeed with topped-up gold")
 	elif clash_match.human().income_per_round != income1 + WaveScaler.clash_send_income_bump("brute"):
 		errors.append("brute send should bump income by its own higher amount")
-	# Send-shop levels: humans start at 1; higher packs need upgrades.
-	if clash_match.human().send_shop_level != 1:
-		errors.append("human send shop should start at level 1")
+	# Send-shop levels are match-wide: one upgrade unlocks packs for everyone.
+	if clash_match.send_shop_level != 1:
+		errors.append("match send shop should start at level 1")
 	var lv1_packs: Array = WaveScaler.clash_send_packs_for_level(1)
 	if not lv1_packs.has("scout") or lv1_packs.has("raid") or lv1_packs.has("wrecker"):
 		errors.append("level-1 send packs should be starter trio only")
 	if clash_match.try_send_pack(0, 1, "raid"):
-		errors.append("human should not buy level-2 pack before shop upgrade")
+		errors.append("should not buy level-2 pack before shop upgrade")
 	if WaveScaler.clash_send_shop_upgrade_cost(1) != 1500:
 		errors.append("send shop 1→2 should cost 1500")
 	if WaveScaler.clash_send_shop_upgrade_cost(2) != 5000:
@@ -273,16 +273,19 @@ func _run() -> void:
 	clash_match.sync_human_gold_from_game_state()
 	if not clash_match.try_upgrade_send_shop(0):
 		errors.append("human should upgrade send shop 1→2 with 2000 gold")
-	elif clash_match.human().send_shop_level != 2:
-		errors.append("send shop should be level 2 after upgrade")
+	elif clash_match.send_shop_level != 2:
+		errors.append("match send shop should be level 2 after upgrade")
 	elif not WaveScaler.clash_send_packs_for_level(2).has("raid"):
 		errors.append("level-2 packs should include raid")
-	# Bots ignore shop level and may buy high-tier packs.
+	# Shared unlock: bots also use the match tier (wrecker needs Lv4).
 	var bot_sender := clash_match.get_player(1)
 	if bot_sender:
 		bot_sender.gold = 5000
+		if clash_match.try_send_pack(1, 0, "wrecker"):
+			errors.append("bot should not buy wrecker before match shop Lv4")
+		clash_match.send_shop_level = 4
 		if not clash_match.try_send_pack(1, 0, "wrecker"):
-			errors.append("bot should buy wrecker without send-shop level")
+			errors.append("bot should buy wrecker once match shop is Lv4")
 	if WaveScaler.clash_send_income_bump("wrecker") <= WaveScaler.clash_send_income_bump("brute"):
 		errors.append("wrecker income bump should exceed starter packs")
 	if WaveScaler.clash_send_income_bump("war_council") <= WaveScaler.clash_send_income_bump("raid"):
@@ -504,29 +507,30 @@ func _run() -> void:
 	else:
 		lane_tower.queue_free()
 		errors.append("clash smoke could not place a lane-0 tower for targeting check")
-	# Wrecker destroys a defender wall on the path cell it steps onto.
-	var wreck_cell := Vector2i(int(grid.lane_col_ranges[0].x) + 1, 5)
-	if not grid.is_buildable(wreck_cell):
-		wreck_cell = Vector2i(int(grid.lane_col_ranges[0].y), 5)
+	# Wrecker hunts structures beside the path (not only cells it walks onto).
+	var wreck_wall_cell := Vector2i(int(grid.lane_col_ranges[0].x) + 1, 5)
+	if not grid.is_buildable(wreck_wall_cell):
+		wreck_wall_cell = Vector2i(int(grid.lane_col_ranges[0].y), 5)
+	var wreck_stand := wreck_wall_cell + Vector2i(1, 0)
+	if not grid.in_bounds(wreck_stand) or grid.lane_index_for_cell(wreck_stand) != 0:
+		wreck_stand = wreck_wall_cell + Vector2i(-1, 0)
 	var wreck_wall := Tower.new()
 	wreck_wall.setup("wall", main.enemies, main.projectiles)
-	if grid.is_buildable(wreck_cell):
-		grid.place_tower(wreck_cell, wreck_wall)
+	if grid.is_buildable(wreck_wall_cell) and grid.in_bounds(wreck_stand):
+		grid.place_tower(wreck_wall_cell, wreck_wall)
 		var wrecker := Enemy.new()
 		main.enemies.add_child(wrecker)
-		var wpath := PackedVector2Array([
-			grid.cell_to_world_center(wreck_cell),
-			grid.cell_to_world_center(wreck_cell + Vector2i(0, 1)),
-		])
-		wrecker.setup(wpath, 50.0, 200.0, 1, false, false)
+		var stand_pos := grid.cell_to_world_center(wreck_stand)
+		wrecker.setup(PackedVector2Array([stand_pos]), 50.0, 200.0, 1, false, false)
 		wrecker.lane_id = 0
-		wrecker.configure_wrecker(grid)
-		# Arrive at first waypoint (wall cell) then advance.
-		wrecker.position = wpath[0]
-		wrecker.path_index = 0
-		wrecker._try_wreck_current_cell()
-		if grid.get_tower_at(wreck_cell) != null:
-			errors.append("wrecker should remove defender tower/wall on entered cell")
+		wrecker.position = stand_pos
+		wrecker.configure_wrecker(grid, build.pathfinder)
+		wrecker.refresh_wrecker_hunt()
+		if grid.get_tower_at(wreck_wall_cell) != null:
+			# Adjacent smash should clear immediately when already next to the wall.
+			wrecker._smash_adjacent_structures()
+		if grid.get_tower_at(wreck_wall_cell) != null:
+			errors.append("wrecker should smash adjacent defender tower/wall")
 		if wrecker.get_parent() != null:
 			wrecker.get_parent().remove_child(wrecker)
 		wrecker.free()
@@ -1076,7 +1080,7 @@ func _run() -> void:
 				errors.append("vortex ring tile should stay walkable for path")
 			# Towers may sit flush against the lockdown edge (outside the 3×3).
 			build.select_tower_type("gunner")
-			var adj := vortex_cell + Vector2i(2, 0)
+			var adj: Vector2i = vortex_cell + Vector2i(2, 0)
 			state_add_gold(build, 100)
 			if not build.can_place_at(adj):
 				errors.append("gunner should place flush against vortex lockdown edge")

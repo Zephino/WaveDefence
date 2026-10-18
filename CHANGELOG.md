@@ -1,4 +1,15 @@
-﻿## Version 00.02.75
+﻿## Version 00.02.76
+Date: 10/18/2026
+Time: 12:45 PM
+
+### Changes
+- **Wrecker** hunts nearest lane towers/walls (smashes adjacent), then walks to exit
+- Clash **send-shop upgrades are match-wide** — one unlock opens packs for everyone
+
+### Reason
+Wreckers only checked the empty path cell underfoot so they never destroyed mazes; shop unlocks should benefit the whole match.
+
+## Version 00.02.75
 Date: 10/18/2026
 Time: 12:30 PM
 

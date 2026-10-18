@@ -12,6 +12,8 @@ var players: Array = [] ## ClashPlayerState
 var human_id: int = 0
 var finished: bool = false
 var _place_counter: int = 0
+## Match-wide Clash send-shop unlock tier (1–4). One player's upgrade unlocks packs for everyone.
+var send_shop_level: int = 1
 
 
 func setup(p_state: GameState, player_count: int, bot_difficulties: Array) -> void:
@@ -19,6 +21,7 @@ func setup(p_state: GameState, player_count: int, bot_difficulties: Array) -> vo
 	players.clear()
 	finished = false
 	_place_counter = 0
+	send_shop_level = 1
 	var count := clampi(player_count, WaveScaler.CLASH_MIN_PLAYERS, WaveScaler.CLASH_MAX_PLAYERS)
 	for i in count:
 		var p := ClashPlayerState.new()
@@ -133,7 +136,7 @@ func tick_cheater_heals(delta: float) -> void:
 
 
 ## Buy a send pack aimed at target. Returns false if invalid/unaffordable.
-## Humans must meet pack min_shop_level; bots may buy any pack.
+## Packs are gated by the match-wide send_shop_level (shared unlocks).
 func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 	if finished:
 		return false
@@ -146,7 +149,7 @@ func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 	if not WaveScaler.CLASH_SEND_PACKS.has(pack_id):
 		return false
 	var pack := WaveScaler.clash_send_pack(pack_id)
-	if from_p.is_human and from_p.send_shop_level < int(pack.get("min_shop_level", 1)):
+	if send_shop_level < int(pack.get("min_shop_level", 1)):
 		return false
 	if from_p.is_human and game_state != null:
 		from_p.gold = game_state.gold
@@ -161,23 +164,23 @@ func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 	return true
 
 
-## Spend gold to raise human send-shop level by 1. Returns false if maxed/unaffordable.
+## Spend that player's gold to raise the match-wide send-shop level by 1.
 func try_upgrade_send_shop(player_id: int) -> bool:
 	if finished:
 		return false
 	var p := get_player(player_id)
 	if p == null or not p.alive:
 		return false
-	if p.send_shop_level >= WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL:
+	if send_shop_level >= WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL:
 		return false
-	var cost := WaveScaler.clash_send_shop_upgrade_cost(p.send_shop_level)
+	var cost := WaveScaler.clash_send_shop_upgrade_cost(send_shop_level)
 	if cost <= 0:
 		return false
 	if p.is_human and game_state != null:
 		p.gold = game_state.gold
 	if not p.spend_gold(cost):
 		return false
-	p.send_shop_level += 1
+	send_shop_level += 1
 	if p.is_human:
 		sync_human_to_game_state()
 	players_changed.emit()

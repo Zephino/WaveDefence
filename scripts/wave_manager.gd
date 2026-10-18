@@ -606,7 +606,7 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 	enemy.lane_id = lane_id
 	enemy.defender_id = defender_id
 	if bool(spec.get("wrecker", false)):
-		enemy.configure_wrecker(grid)
+		enemy.configure_wrecker(grid, pathfinder)
 		enemy.wrecked_at.connect(_on_wrecker_wrecked)
 	if bool(spec.get("snake", false)):
 		var prev: Enemy = _snake_tail
@@ -627,6 +627,7 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 
 
 func _on_wrecker_wrecked(_cell: Vector2i) -> void:
+	invalidate_ground_path()
 	repath_living_enemies()
 
 
@@ -881,10 +882,17 @@ func repath_living_enemies() -> void:
 				var e := child as Enemy
 				if e.is_flying:
 					continue
+				if e.is_wrecker:
+					e.refresh_wrecker_hunt()
+					continue
 				if e.lane_id >= 0:
 					e.set_path(_ensure_lane_ground_path(e.lane_id))
 		return
 	var world_path := _ensure_ground_path()
 	for child in enemy_container.get_children():
 		if child is Enemy:
-			(child as Enemy).set_path(world_path)
+			var e2 := child as Enemy
+			if e2.is_wrecker:
+				e2.refresh_wrecker_hunt()
+			else:
+				e2.set_path(world_path)

@@ -314,10 +314,10 @@ func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 func _on_clash_send_shop_upgrade_requested() -> void:
 	if clash_match == null or clash_match.finished:
 		return
-	var before := clash_match.human().send_shop_level
+	var before := clash_match.send_shop_level
 	if clash_match.try_upgrade_send_shop(clash_match.human_id):
-		var lv := clash_match.human().send_shop_level
-		hud.set_status("Send shop upgraded to Lv%d (new packs unlock)." % lv)
+		var lv := clash_match.send_shop_level
+		hud.set_status("Send shop upgraded to Lv%d for everyone." % lv)
 		hud.refresh_clash_panel()
 	else:
 		var cost := WaveScaler.clash_send_shop_upgrade_cost(before)
