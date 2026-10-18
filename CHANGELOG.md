@@ -1,4 +1,27 @@
-﻿## Version 00.02.48
+﻿## Version 00.02.50
+Date: 10/18/2026
+Time: 12:20 AM
+
+### Changes
+- Clash bots build varied serpentine mazes (horizontal weave, vertical corridors, greedy/scatter) instead of one path-adjacent dump
+- Wider Clash lanes (7 cols) so snakes have room; walls sketch the maze then upgrade into combat towers
+- Lightweight on-device maze memory biases styles that produce longer paths (explore/exploit, not a neural net)
+
+### Reason
+Bots should make weave mazes like the player examples, with variety, and a simple way to “learn” what works on this device.
+
+## Version 00.02.49
+Date: 10/18/2026
+Time: 12:13 AM
+
+### Changes
+- Clash round income is paid before bots act so they spend each prep, not only the opening build
+- Bots keep placing on later rounds: fill leftover empty cells, turn walls into combat towers, and upgrade leftovers
+
+### Reason
+Bots looked done after round 1 because income arrived after their prep pass and filled lanes blocked further path-adjacent builds.
+
+## Version 00.02.48
 Date: 10/18/2026
 Time: 12:08 AM
 

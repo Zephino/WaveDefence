@@ -219,12 +219,18 @@ func _run() -> void:
 		errors.append("bot living opponents should include human and other bot")
 	var bot_ai := ClashBotAI.new()
 	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, 2)
+	# Force a serpentine style so smoke covers weave mazes.
+	bot_ai._maze_strategy = "serp_h"
 	var bot_p := clash_match.get_player(2)
 	var path_before := build.pathfinder.get_cell_path_between(
 		grid.get_lane_spawn(2), grid.get_lane_exit(2)
 	).size()
 	var gold_before := bot_p.gold if bot_p else 0
 	bot_ai.run_prep_turn(1)
+	if bot_ai._maze_strategy == "":
+		errors.append("clash bot should pick a maze strategy")
+	if GameGrid.CLASH_LANE_COLS < 7:
+		errors.append("clash lanes should be wide enough for serpentine mazes")
 	var path_after := build.pathfinder.get_cell_path_between(
 		grid.get_lane_spawn(2), grid.get_lane_exit(2)
 	).size()
@@ -254,6 +260,23 @@ func _run() -> void:
 		errors.append("clash bot maze should lengthen its lane path")
 	if bot_p != null and bot_p.gold >= gold_before:
 		errors.append("clash bot should spend gold on maze/defense/sends")
+	# Second prep after income must keep spending (not only round 1).
+	bot_p.add_gold(WaveScaler.CLASH_BASE_INCOME + 80)
+	var gold_mid := bot_p.gold
+	var combat_mid := combat
+	bot_ai.run_prep_turn(2)
+	var combat_later := 0
+	for cell2 in grid.towers.keys():
+		if grid.lane_index_for_cell(cell2) != 2:
+			continue
+		var t2: Node = grid.towers[cell2]
+		if t2 is Tower and t2.has_meta("clash_owner") and int(t2.get_meta("clash_owner")) == 2:
+			if not TowerData.is_wall((t2 as Tower).tower_id):
+				combat_later += 1
+	if bot_p.gold >= gold_mid:
+		errors.append("clash bot should keep spending on later prep turns")
+	if combat_later < combat_mid:
+		errors.append("clash bot should not lose combat towers on later prep")
 	var nxt := clash_match.next_living_after_lane(0)
 	if nxt == null or nxt.lane_index != 1:
 		errors.append("clash overflow should wrap to the next living lane")

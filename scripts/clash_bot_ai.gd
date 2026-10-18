@@ -10,6 +10,8 @@ var enemy_container: Node
 var projectile_container: Node
 var player_id: int = 1
 var _rng := RandomNumberGenerator.new()
+## Maze style chosen for this match (varies; bias from ClashBotMemory).
+var _maze_strategy: String = ""
 
 
 func setup(
@@ -27,6 +29,7 @@ func setup(
 	projectile_container = p_projectiles
 	player_id = p_player_id
 	_rng.randomize()
+	_maze_strategy = ClashBotMemory.pick_strategy(_rng)
 
 
 func run_prep_turn(wave: int) -> void:
@@ -35,15 +38,24 @@ func run_prep_turn(wave: int) -> void:
 	var p := clash_match.get_player(player_id)
 	if p == null or not p.alive or p.is_human:
 		return
-	# Maze first so the lane snakes, then combat cover, sends, upgrades.
+	if _maze_strategy == "":
+		_maze_strategy = ClashBotMemory.pick_strategy(_rng)
+	var spawn := grid.get_lane_spawn(p.lane_index)
+	var exit_c := grid.get_lane_exit(p.lane_index)
+	var len_before := pathfinder.get_cell_path_between(spawn, exit_c).size()
+	# Serpentine maze → combat cover → walls become towers → send → upgrades.
 	_build_maze(p, wave)
 	_place_combat_towers(p, wave)
+	_replace_walls_with_towers(p, wave)
 	_try_sends(p, wave, false)
-	_upgrade_owned_towers(p)
-	# Leftover gold still goes into maze / defense.
+	_upgrade_owned_towers(p, true)
 	_build_maze(p, wave)
 	_place_combat_towers(p, wave)
-	_upgrade_owned_towers(p)
+	_replace_walls_with_towers(p, wave)
+	_upgrade_owned_towers(p, false)
+	var len_after := pathfinder.get_cell_path_between(spawn, exit_c).size()
+	if len_after > len_before:
+		ClashBotMemory.record_result(_maze_strategy, len_after)
 	if clash_match != null:
 		clash_match.players_changed.emit()
 
@@ -72,55 +84,158 @@ func _gold_reserve(p: ClashPlayerState) -> int:
 			ratio = 0.08
 		_:
 			ratio = 0.12
-	# Keep enough for at least one send pack; spend the rest on the lane.
-	return maxi(int(float(p.gold) * ratio), _cheapest_send_cost())
+	var send := _cheapest_send_cost()
+	var soft := int(float(p.gold) * ratio)
+	# Keep a send reserve when flush, but never lock almost all income away from building.
+	if p.gold >= send + 40:
+		return maxi(soft, send)
+	return mini(soft, maxi(p.gold / 3, 0))
 
 
-## Buy path pieces that snake the lane. Prefer combat towers (maze + DPS); walls only as cheap fillers.
-## Lanes start empty — nothing is pre-blocked inside a lane.
+## Buy a serpentine maze (style varies). Walls sketch the snake cheaply; later passes turn them into towers.
 func _build_maze(p: ClashPlayerState, wave: int) -> void:
 	var reserve := _gold_reserve(p)
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var wall_cost: int = int(TowerData.get_def("wall")["cost"])
 	var gunner_cost: int = int(TowerData.get_def("gunner")["cost"])
-	var max_pieces := 10
-	var max_walls := 3
+	var max_pieces := 18
 	match p.bot_difficulty:
 		WaveScaler.Difficulty.EASY:
-			max_pieces = 6
-			max_walls = 2
+			max_pieces = 12
 		WaveScaler.Difficulty.HARD:
-			max_pieces = 14
-			max_walls = 4
+			max_pieces = 28
 		_:
-			max_pieces = 10
-			max_walls = 3
+			max_pieces = 20
+	var blueprint := _maze_blueprint(p.lane_index, _maze_strategy)
 	var placed := 0
-	var walls_placed := 0
-	while p.gold > reserve and placed < max_pieces:
+	# First: follow the chosen serpentine blueprint.
+	for cell in blueprint:
+		if placed >= max_pieces or p.gold <= reserve:
+			break
 		var spendable := p.gold - reserve
 		if spendable < wall_cost:
 			break
-		var cell := _best_maze_cell(spawn, exit_c, p.lane_index)
-		if cell.x < 0:
-			break
-		# Prefer a bought combat tower on the path so the maze cell still shoots.
-		var piece_id := ""
-		if spendable >= gunner_cost:
-			piece_id = _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
-		if piece_id == "" or TowerData.is_wall(piece_id):
-			if walls_placed >= max_walls:
-				break
-			piece_id = "wall"
+		if not grid.is_buildable(cell):
+			continue
+		if pathfinder.would_block_path_between(spawn, exit_c, cell):
+			continue
+		var piece_id := "wall"
+		# Sometimes drop a combat tower into the snake early.
+		if spendable >= gunner_cost and _rng.randf() < 0.18:
+			var tid := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
+			if tid != "" and not TowerData.is_wall(tid):
+				piece_id = tid
 		var cost: int = int(TowerData.get_def(piece_id)["cost"])
 		if cost > spendable or not p.spend_gold(cost):
 			break
 		_place_owned(cell, piece_id)
 		pathfinder.rebuild()
 		placed += 1
-		if TowerData.is_wall(piece_id):
-			walls_placed += 1
+	# Then: greedy lengthening so each bot still finds its own shape.
+	while p.gold > reserve and placed < max_pieces:
+		var spendable2 := p.gold - reserve
+		if spendable2 < wall_cost:
+			break
+		var cell2 := _best_maze_cell(spawn, exit_c, p.lane_index)
+		if cell2.x < 0:
+			break
+		var piece2 := "wall"
+		if spendable2 >= gunner_cost and _rng.randf() < 0.35:
+			var tid2 := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable2)
+			if tid2 != "" and not TowerData.is_wall(tid2):
+				piece2 = tid2
+		var cost2: int = int(TowerData.get_def(piece2)["cost"])
+		if cost2 > spendable2 or not p.spend_gold(cost2):
+			break
+		_place_owned(cell2, piece2)
+		pathfinder.rebuild()
+		placed += 1
+
+
+## Blueprint cells for a maze family. Random offsets keep runs from looking identical.
+func _maze_blueprint(lane: int, strategy: String) -> Array[Vector2i]:
+	var r: Vector2i = grid.lane_col_ranges[lane]
+	var x0 := r.x
+	var x1 := r.y
+	var spawn := grid.get_lane_spawn(lane)
+	var exit_c := grid.get_lane_exit(lane)
+	var out: Array[Vector2i] = []
+	var row_step := 2 if _rng.randf() < 0.55 else 1
+	var start_y := 1 + _rng.randi_range(0, 1)
+	match strategy:
+		"serp_h", "serp_h_flip":
+			# Alternating horizontal barriers (gap left / gap right) — like a weave.
+			var gap_left := strategy == "serp_h_flip"
+			if _rng.randf() < 0.5:
+				gap_left = not gap_left
+			var y := start_y
+			while y < grid.rows - 1:
+				var gap_x := x0 if gap_left else x1
+				for x in range(x0, x1 + 1):
+					if x == gap_x:
+						continue
+					var cell := Vector2i(x, y)
+					if cell == spawn or cell == exit_c:
+						continue
+					out.append(cell)
+				gap_left = not gap_left
+				y += row_step
+		"serp_v", "serp_v_flip":
+			# Vertical corridor walls with U-turn openings at alternating ends.
+			var flip := strategy == "serp_v_flip"
+			if _rng.randf() < 0.5:
+				flip = not flip
+			var cols: Array[int] = []
+			# Interior dividers between corridors (leave edges + mid walkable-ish).
+			if x1 - x0 >= 4:
+				cols = [x0 + 1, x0 + 3] if not flip else [x0 + 1, x1 - 1]
+			else:
+				cols = [x0 + 1] if not flip else [x1 - 1]
+			var open_at_top := true
+			for cx in cols:
+				var open_y := 1 if open_at_top else grid.rows - 2
+				if flip:
+					open_y = grid.rows - 2 if open_at_top else 1
+				for y in range(1, grid.rows - 1):
+					if y == open_y:
+						continue
+					var cell2 := Vector2i(cx, y)
+					if cell2 == spawn or cell2 == exit_c:
+						continue
+					out.append(cell2)
+				# Cap near spawn/exit to force the U-turn.
+				var cap_y := 2 if open_at_top else grid.rows - 3
+				for x in range(x0, x1 + 1):
+					if x == cx:
+						continue
+					# Only block toward the closed end so one corridor remains.
+					var toward_closed := (open_at_top and x < cx) or ((not open_at_top) and x > cx)
+					if flip:
+						toward_closed = (open_at_top and x > cx) or ((not open_at_top) and x < cx)
+					if not toward_closed and _rng.randf() < 0.65:
+						continue
+					var cap := Vector2i(x, cap_y)
+					if cap == spawn or cap == exit_c:
+						continue
+					out.append(cap)
+				open_at_top = not open_at_top
+		"scatter":
+			# Random mid-lane chokes; greedy pass finishes the shape.
+			for _i in 10:
+				var cell3 := Vector2i(_rng.randi_range(x0, x1), _rng.randi_range(2, grid.rows - 3))
+				if cell3 != spawn and cell3 != exit_c:
+					out.append(cell3)
+		_:
+			# greedy: no blueprint — pure lengthening below.
+			pass
+	# Mild shuffle so placement order isn't identical every time.
+	for i in range(out.size() - 1, 0, -1):
+		var j := _rng.randi_range(0, i)
+		var tmp := out[i]
+		out[i] = out[j]
+		out[j] = tmp
+	return out
 
 
 func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
@@ -136,6 +251,9 @@ func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
 		var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
 		var candidates := _build_combat_candidates(p.lane_index, path_cells)
 		var cell := _next_place_cell(candidates, spawn, exit_c)
+		# Path-adjacent full after early rounds — keep spending on any empty lane cell.
+		if cell.x < 0:
+			cell = _next_open_lane_cell(p.lane_index, spawn, exit_c)
 		if cell.x < 0:
 			break
 		var cost: int = int(TowerData.get_def(tower_id)["cost"])
@@ -144,6 +262,66 @@ func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
 		_place_owned(cell, tower_id)
 		pathfinder.rebuild()
 		placed += 1
+
+
+## Spend gold upgrading owned walls into combat towers (same cell).
+func _replace_walls_with_towers(p: ClashPlayerState, wave: int) -> void:
+	var reserve := _gold_reserve(p)
+	var swapped := 0
+	while p.gold > reserve and swapped < 12:
+		var spendable := p.gold - reserve
+		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
+		if tower_id == "" or TowerData.is_wall(tower_id):
+			break
+		var cost: int = int(TowerData.get_def(tower_id)["cost"])
+		var wall_cell := _owned_wall_cell(p.lane_index)
+		if wall_cell.x < 0:
+			break
+		if not p.spend_gold(cost):
+			break
+		var removed := grid.remove_tower_at(wall_cell, false)
+		if removed != null and is_instance_valid(removed):
+			removed.queue_free()
+		_place_owned(wall_cell, tower_id)
+		pathfinder.rebuild()
+		swapped += 1
+
+
+func _owned_wall_cell(lane: int) -> Vector2i:
+	for cell in grid.towers.keys():
+		if grid.lane_index_for_cell(cell) != lane:
+			continue
+		var node: Node = grid.towers[cell]
+		if node is Tower:
+			var tower := node as Tower
+			if tower.has_meta("clash_owner") and int(tower.get_meta("clash_owner")) == player_id:
+				if TowerData.is_wall(tower.tower_id):
+					return cell
+	return Vector2i(-1, -1)
+
+
+func _next_open_lane_cell(lane: int, spawn: Vector2i, exit_c: Vector2i) -> Vector2i:
+	var r: Vector2i = grid.lane_col_ranges[lane]
+	var cells: Array[Vector2i] = []
+	for y in range(1, grid.rows - 1):
+		for x in range(r.x, r.y + 1):
+			var cell := Vector2i(x, y)
+			if grid.is_buildable(cell):
+				cells.append(cell)
+	# Prefer mid-lane empties; shuffle lightly.
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da := absi(a.y - grid.rows / 2)
+		var db := absi(b.y - grid.rows / 2)
+		return da > db
+	)
+	while not cells.is_empty():
+		var cell2: Vector2i = cells.pop_back()
+		if not grid.is_buildable(cell2):
+			continue
+		if pathfinder.would_block_path_between(spawn, exit_c, cell2):
+			continue
+		return cell2
+	return Vector2i(-1, -1)
 
 
 func _place_owned(cell: Vector2i, tower_id: String) -> void:
@@ -214,20 +392,23 @@ func _best_maze_cell(spawn: Vector2i, exit_c: Vector2i, lane: int) -> Vector2i:
 	return best
 
 
-func _upgrade_owned_towers(p: ClashPlayerState) -> void:
-	# Easy upgrades sometimes; Medium/Hard more often.
+func _upgrade_owned_towers(p: ClashPlayerState, force: bool = false) -> void:
+	# Easy upgrades sometimes; Medium/Hard more often. Forced pass spends leftovers.
 	var upgrade_chance := 0.35
 	var max_upgrades := 2
 	match p.bot_difficulty:
 		WaveScaler.Difficulty.EASY:
-			upgrade_chance = 0.28
-			max_upgrades = 2
+			upgrade_chance = 0.35
+			max_upgrades = 3
 		WaveScaler.Difficulty.HARD:
-			upgrade_chance = 0.85
-			max_upgrades = 10
+			upgrade_chance = 0.9
+			max_upgrades = 12
 		_:
-			upgrade_chance = 0.55
-			max_upgrades = 6
+			upgrade_chance = 0.65
+			max_upgrades = 8
+	if force:
+		upgrade_chance = 1.0
+		max_upgrades = maxi(max_upgrades, 6)
 	if _rng.randf() > upgrade_chance:
 		return
 	var reserve := _gold_reserve(p)

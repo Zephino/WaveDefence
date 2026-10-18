@@ -6,8 +6,8 @@ const ROWS := 15
 const TILE_SIZE := 40
 const SIEGE_COLS := 32
 const SIEGE_ROWS := 32
-## Clash: buildable columns per lane (top→bottom path).
-const CLASH_LANE_COLS := 5
+## Clash: buildable columns per lane (top→bottom path). Wide enough for serpentine mazes.
+const CLASH_LANE_COLS := 7
 const CLASH_ROWS := 15
 ## Share of buildable cells turned into permanent rocks on random maps.
 const RANDOM_BLOCK_RATIO := 0.14

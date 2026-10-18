@@ -708,13 +708,14 @@ func _check_wave_clear() -> void:
 			if bonus > 0:
 				game_state.add_gold(bonus)
 		_record_wave_milestones(wave)
+		# Clash income must land before wave_cleared so bots spend the new gold.
+		if _is_clash() and clash_match != null and not clash_match.finished:
+			clash_match.award_round_income()
 		wave_cleared.emit(wave, kills, bonus)
 		_emit_enemies_remaining()
 		if game_state.is_game_over or (_is_clash() and clash_match.finished):
 			return
 		if _is_clash():
-			# Income payout + prep for next round (bots act from main on wave_cleared).
-			clash_match.award_round_income()
 			phase = Phase.PREP
 			skip_unlocked = false
 			intermission_left = 0.0
