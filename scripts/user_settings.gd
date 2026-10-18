@@ -20,6 +20,8 @@ const KEY_PERFORMANCE_MODE := "performance_mode"
 const KEY_SHOW_ENEMY_HP := "show_enemy_hp_bars"
 const KEY_SHOW_GRID_COORDS := "show_grid_coordinates"
 const KEY_SCREENSHOT_WATERMARK := "screenshot_watermark"
+const KEY_TOWERS_SHOP_PINNED := "towers_shop_pinned"
+const KEY_SEND_SHOP_PINNED := "send_shop_pinned"
 
 static var _loaded: bool = false
 static var large_controls: bool = false
@@ -37,6 +39,8 @@ static var performance_mode: bool = false
 static var show_enemy_hp_bars: bool = false
 static var show_grid_coordinates: bool = false
 static var screenshot_watermark: bool = true
+static var towers_shop_pinned: bool = false
+static var send_shop_pinned: bool = false
 
 
 static func ensure_loaded() -> void:
@@ -63,6 +67,8 @@ static func ensure_loaded() -> void:
 	show_enemy_hp_bars = bool(cfg.get_value(SECTION, KEY_SHOW_ENEMY_HP, false))
 	show_grid_coordinates = bool(cfg.get_value(SECTION, KEY_SHOW_GRID_COORDS, false))
 	screenshot_watermark = bool(cfg.get_value(SECTION, KEY_SCREENSHOT_WATERMARK, true))
+	towers_shop_pinned = bool(cfg.get_value(SECTION, KEY_TOWERS_SHOP_PINNED, false))
+	send_shop_pinned = bool(cfg.get_value(SECTION, KEY_SEND_SHOP_PINNED, false))
 	build_speed_mult = clampf(build_speed_mult, 1.0, 2.5)
 
 
@@ -82,6 +88,8 @@ static func _apply_defaults() -> void:
 	show_enemy_hp_bars = false
 	show_grid_coordinates = false
 	screenshot_watermark = true
+	towers_shop_pinned = false
+	send_shop_pinned = false
 
 
 static func _save_prefs() -> void:
@@ -102,6 +110,8 @@ static func _save_prefs() -> void:
 	cfg.set_value(SECTION, KEY_SHOW_ENEMY_HP, show_enemy_hp_bars)
 	cfg.set_value(SECTION, KEY_SHOW_GRID_COORDS, show_grid_coordinates)
 	cfg.set_value(SECTION, KEY_SCREENSHOT_WATERMARK, screenshot_watermark)
+	cfg.set_value(SECTION, KEY_TOWERS_SHOP_PINNED, towers_shop_pinned)
+	cfg.set_value(SECTION, KEY_SEND_SHOP_PINNED, send_shop_pinned)
 	cfg.save(SAVE_PATH)
 
 
@@ -253,3 +263,25 @@ static func set_screenshot_watermark(on: bool) -> void:
 static func is_screenshot_watermark() -> bool:
 	ensure_loaded()
 	return screenshot_watermark
+
+
+static func set_towers_shop_pinned(on: bool) -> void:
+	ensure_loaded()
+	towers_shop_pinned = on
+	_save_prefs()
+
+
+static func is_towers_shop_pinned() -> bool:
+	ensure_loaded()
+	return towers_shop_pinned
+
+
+static func set_send_shop_pinned(on: bool) -> void:
+	ensure_loaded()
+	send_shop_pinned = on
+	_save_prefs()
+
+
+static func is_send_shop_pinned() -> bool:
+	ensure_loaded()
+	return send_shop_pinned

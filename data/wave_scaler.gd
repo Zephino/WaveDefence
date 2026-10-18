@@ -404,14 +404,64 @@ const CLASH_CHEATER_HEAL_INTERVAL := 2.5
 const CLASH_BASE_INCOME := 10
 ## Fallback income bump if a pack omits income_bump.
 const CLASH_SEND_INCOME_BUMP := 2
+## Human send-shop levels (1–4). Bots ignore level gates.
+const CLASH_SEND_SHOP_MAX_LEVEL := 4
+## Cost to upgrade from level key → key+1.
+const CLASH_SEND_SHOP_UPGRADE_COSTS := {1: 1500, 2: 5000, 3: 15000}
 ## Slightly lighter base packs so multi-lane boards stay readable.
 const CLASH_CREEP_COUNT_MULT := 0.75
 
 ## Send package ids → cost / creep count / permanent income bump (paid every round).
+## min_shop_level gates human unlocks; bots may buy any pack.
 const CLASH_SEND_PACKS := {
-	"scout": {"label": "Scout x3", "cost": 40, "count": 3, "hp_mult": 0.7, "speed_mult": 1.15, "bounty_mult": 0.6, "income_bump": 2},
-	"pack": {"label": "Pack x6", "cost": 80, "count": 6, "hp_mult": 1.0, "speed_mult": 1.0, "bounty_mult": 0.8, "income_bump": 4},
-	"brute": {"label": "Brute x2", "cost": 120, "count": 2, "hp_mult": 2.2, "speed_mult": 0.85, "bounty_mult": 1.2, "income_bump": 6},
+	"scout": {
+		"label": "Scout x3", "cost": 40, "count": 3, "hp_mult": 0.7, "speed_mult": 1.15,
+		"bounty_mult": 0.6, "income_bump": 2, "min_shop_level": 1,
+	},
+	"pack": {
+		"label": "Pack x6", "cost": 80, "count": 6, "hp_mult": 1.0, "speed_mult": 1.0,
+		"bounty_mult": 0.8, "income_bump": 4, "min_shop_level": 1,
+	},
+	"brute": {
+		"label": "Brute x2", "cost": 120, "count": 2, "hp_mult": 2.2, "speed_mult": 0.85,
+		"bounty_mult": 1.2, "income_bump": 6, "min_shop_level": 1,
+	},
+	"raid": {
+		"label": "Raid x10", "cost": 200, "count": 10, "hp_mult": 1.1, "speed_mult": 1.05,
+		"bounty_mult": 0.75, "income_bump": 10, "min_shop_level": 2,
+	},
+	"juggernaut": {
+		"label": "Juggernaut x3", "cost": 280, "count": 3, "hp_mult": 3.0, "speed_mult": 0.75,
+		"bounty_mult": 1.3, "income_bump": 12, "min_shop_level": 2,
+	},
+	"strikers": {
+		"label": "Strikers x8", "cost": 220, "count": 8, "hp_mult": 0.85, "speed_mult": 1.35,
+		"bounty_mult": 0.7, "income_bump": 11, "min_shop_level": 2,
+	},
+	"warlord": {
+		"label": "Warlord x1", "cost": 450, "count": 1, "boss": true, "hp_mult": 1.0, "speed_mult": 1.0,
+		"bounty_mult": 1.0, "income_bump": 18, "min_shop_level": 3,
+	},
+	"skirmisher": {
+		"label": "Skirmisher x1", "cost": 300, "count": 1, "flying": true, "hp_mult": 1.2, "speed_mult": 1.1,
+		"bounty_mult": 1.0, "income_bump": 14, "min_shop_level": 3,
+	},
+	"golem": {
+		"label": "Golem x1", "cost": 400, "count": 1, "hp_mult": 4.5, "speed_mult": 0.65,
+		"bounty_mult": 1.5, "income_bump": 16, "min_shop_level": 3,
+	},
+	"air_wing": {
+		"label": "Air Wing x10", "cost": 900, "count": 10, "flying": true, "hp_mult": 1.0, "speed_mult": 1.0,
+		"bounty_mult": 0.9, "income_bump": 28, "min_shop_level": 4,
+	},
+	"war_council": {
+		"label": "War Council x3", "cost": 1200, "count": 3, "boss": true, "hp_mult": 1.0, "speed_mult": 1.0,
+		"bounty_mult": 1.0, "income_bump": 35, "min_shop_level": 4,
+	},
+	"wrecker": {
+		"label": "Wrecker x1", "cost": 1000, "count": 1, "wrecker": true, "hp_mult": 3.8, "speed_mult": 0.7,
+		"bounty_mult": 1.4, "income_bump": 30, "min_shop_level": 4,
+	},
 }
 
 
@@ -425,6 +475,22 @@ static func clash_send_pack_ids() -> Array:
 
 static func clash_send_pack(pack_id: String) -> Dictionary:
 	return CLASH_SEND_PACKS.get(pack_id, CLASH_SEND_PACKS["scout"])
+
+
+## Pack ids unlocked at or below the given send-shop level.
+static func clash_send_packs_for_level(level: int) -> Array:
+	var out: Array = []
+	var lv := clampi(level, 1, CLASH_SEND_SHOP_MAX_LEVEL)
+	for id in clash_send_pack_ids():
+		var pack := clash_send_pack(str(id))
+		if int(pack.get("min_shop_level", 1)) <= lv:
+			out.append(str(id))
+	return out
+
+
+## Gold to upgrade from `from_level` to from_level+1 (0 if maxed / invalid).
+static func clash_send_shop_upgrade_cost(from_level: int) -> int:
+	return int(CLASH_SEND_SHOP_UPGRADE_COSTS.get(from_level, 0))
 
 
 ## Permanent +gold/round from buying this pack (stacks for the rest of the match).

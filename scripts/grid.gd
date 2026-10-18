@@ -522,6 +522,21 @@ func is_terrain_blocked(cell: Vector2i) -> bool:
 	return get_tile(cell) == Tile.BLOCKED
 
 
+## True when a world-space segment crosses any BLOCKED tile (Clash lane dividers).
+func segment_hits_blocked(from_global: Vector2, to_global: Vector2) -> bool:
+	var a := to_local(from_global)
+	var b := to_local(to_global)
+	var dist := a.distance_to(b)
+	var step_px := maxf(float(tile_px()) * 0.25, 2.0)
+	var steps := maxi(1, int(ceil(dist / step_px)))
+	for i in range(steps + 1):
+		var t := float(i) / float(steps)
+		var p := a.lerp(b, t)
+		if get_tile(world_to_cell(p)) == Tile.BLOCKED:
+			return true
+	return false
+
+
 func is_buildable(cell: Vector2i) -> bool:
 	if not in_bounds(cell):
 		return false

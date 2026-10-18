@@ -1,4 +1,27 @@
-﻿## Version 00.02.71
+﻿## Version 00.02.73
+Date: 10/18/2026
+Time: 12:05 PM
+
+### Changes
+- Towers and Clash Send shops are floating popups (map-edge toggles, Esc/X close) with **Pin** to dock them
+- Clash send-shop levels 1–4 (upgrade for 1500 / 5000 / 15000) unlock stronger packs with larger **+income/rnd**
+- New packs include bosses, fliers, and **Wrecker** (destroys defender towers/walls on cells it walks)
+
+### Reason
+Players wanted Clash sends to progress like a shop and clearer income rewards, plus shops that don't permanently eat the sidebars.
+
+## Version 00.02.72
+Date: 10/18/2026
+Time: 11:26 AM
+
+### Changes
+- Clash brown lane dividers **destroy any projectile** (and cosmetic shots) that pass over them
+- Lightning chains and splash cannot jump across a divider either
+
+### Reason
+When leaked mobs moved into another column, shots were still flying across the board; dividers should fully neutralize cross-lane fire.
+
+## Version 00.02.71
 Date: 10/18/2026
 Time: 2:58 AM
 

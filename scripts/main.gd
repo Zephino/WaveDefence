@@ -224,6 +224,7 @@ func _setup_ui() -> void:
 	if clash_match != null:
 		hud.setup_clash(clash_match)
 		hud.clash_send_requested.connect(_on_clash_send_requested)
+		hud.clash_send_shop_upgrade_requested.connect(_on_clash_send_shop_upgrade_requested)
 	wave_manager.begin_run()
 	hud.refresh_run_labels()
 	_set_start_status()
@@ -285,26 +286,47 @@ func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 	if clash_match.try_send_pack(clash_match.human_id, target_id, pack_id):
 		var pack := WaveScaler.clash_send_pack(pack_id)
 		var bump := WaveScaler.clash_send_income_bump(pack_id)
+		var rate := clash_match.human().income_per_round
 		var n := 0
 		if wave_manager.phase == WaveManager.Phase.WAVE:
 			n = wave_manager.flush_pending_clash_sends()
 		var dest := clash_match.get_player(target_id)
 		var dest_name := dest.display_name if dest else "opponent"
 		if n > 0:
-			hud.set_status("Sent %s to %s now (+%d/rnd income)." % [
+			hud.set_status("Sent %s to %s now (+%d/rnd; income now +%d/rnd)." % [
 				str(pack.get("label", pack_id)),
 				dest_name,
 				bump,
+				rate,
 			])
 		else:
-			hud.set_status("Queued %s to %s (+%d/rnd income)." % [
+			hud.set_status("Queued %s to %s (+%d/rnd; income now +%d/rnd)." % [
 				str(pack.get("label", pack_id)),
 				dest_name,
 				bump,
+				rate,
 			])
 		hud.refresh_clash_panel()
 	else:
 		hud.set_status("Can't send that package.")
+
+
+func _on_clash_send_shop_upgrade_requested() -> void:
+	if clash_match == null or clash_match.finished:
+		return
+	var before := clash_match.human().send_shop_level
+	if clash_match.try_upgrade_send_shop(clash_match.human_id):
+		var lv := clash_match.human().send_shop_level
+		hud.set_status("Send shop upgraded to Lv%d (new packs unlock)." % lv)
+		hud.refresh_clash_panel()
+	else:
+		var cost := WaveScaler.clash_send_shop_upgrade_cost(before)
+		if before >= WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL:
+			hud.set_status("Send shop is already maxed.")
+		elif cost > 0:
+			hud.set_status("Need %d gold to upgrade the send shop." % cost)
+		else:
+			hud.set_status("Can't upgrade the send shop.")
 
 
 func _run_clash_bot_sends() -> void:

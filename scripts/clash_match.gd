@@ -133,6 +133,7 @@ func tick_cheater_heals(delta: float) -> void:
 
 
 ## Buy a send pack aimed at target. Returns false if invalid/unaffordable.
+## Humans must meet pack min_shop_level; bots may buy any pack.
 func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 	if finished:
 		return false
@@ -144,15 +145,40 @@ func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 		return false
 	if not WaveScaler.CLASH_SEND_PACKS.has(pack_id):
 		return false
+	var pack := WaveScaler.clash_send_pack(pack_id)
+	if from_p.is_human and from_p.send_shop_level < int(pack.get("min_shop_level", 1)):
+		return false
 	if from_p.is_human and game_state != null:
 		from_p.gold = game_state.gold
-	var pack := WaveScaler.clash_send_pack(pack_id)
 	var cost: int = int(pack.get("cost", 0))
 	if not from_p.spend_gold(cost):
 		return false
 	to_p.enqueue_incoming(pack_id, from_id)
 	from_p.bump_income(WaveScaler.clash_send_income_bump(pack_id))
 	if from_p.is_human:
+		sync_human_to_game_state()
+	players_changed.emit()
+	return true
+
+
+## Spend gold to raise human send-shop level by 1. Returns false if maxed/unaffordable.
+func try_upgrade_send_shop(player_id: int) -> bool:
+	if finished:
+		return false
+	var p := get_player(player_id)
+	if p == null or not p.alive:
+		return false
+	if p.send_shop_level >= WaveScaler.CLASH_SEND_SHOP_MAX_LEVEL:
+		return false
+	var cost := WaveScaler.clash_send_shop_upgrade_cost(p.send_shop_level)
+	if cost <= 0:
+		return false
+	if p.is_human and game_state != null:
+		p.gold = game_state.gold
+	if not p.spend_gold(cost):
+		return false
+	p.send_shop_level += 1
+	if p.is_human:
 		sync_human_to_game_state()
 	players_changed.emit()
 	return true

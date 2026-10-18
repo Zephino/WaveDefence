@@ -3,6 +3,8 @@ extends Node2D
 
 signal died(enemy: Enemy, bounty: int)
 signal leaked(enemy: Enemy)
+## Clash wrecker destroyed a defender tower/wall at this cell.
+signal wrecked_at(cell: Vector2i)
 
 var max_hp: float = 20.0
 var hp: float = 20.0
@@ -10,6 +12,9 @@ var speed: float = 60.0
 var bounty: int = 5
 var is_boss: bool = false
 var is_flying: bool = false
+## Clash send: destroys defender towers/walls on path cells it enters.
+var is_wrecker: bool = false
+var _wreck_grid: GameGrid = null
 ## Wave this enemy belongs to (used so early-send leftovers don't inflate the new wave's kill % ).
 var wave_index: int = 0
 ## Clash: defending player / lane (-1 = classic single board).
@@ -85,6 +90,9 @@ func setup(
 	else:
 		_radius = 10.0
 		_base_color = Color(0.85, 0.35, 0.35)
+	if is_wrecker:
+		_radius = 14.0
+		_base_color = Color(0.95, 0.45, 0.12)
 	if monster_type != "":
 		_base_color = _base_color.lerp(MonsterTypes.tint_color(monster_type), 0.7)
 	# Path points are grid-local (same space as this node's parent offset).
@@ -92,6 +100,15 @@ func setup(
 		position = path[0]
 		path_index = 1 if path.size() > 1 else 0
 		path_dist = 0.0
+	queue_redraw()
+
+
+## Enable wrecker smash on path cells (Clash send pack).
+func configure_wrecker(p_grid: GameGrid) -> void:
+	is_wrecker = true
+	_wreck_grid = p_grid
+	_radius = 14.0
+	_base_color = Color(0.95, 0.45, 0.12)
 	queue_redraw()
 
 
@@ -233,11 +250,37 @@ func _move_along_path(delta: float) -> void:
 	var dist := to_target.length()
 	if dist <= step:
 		position = target
+		_try_wreck_current_cell()
 		path_index += 1
 		if path_index >= path.size():
 			_leak()
 	else:
 		position += to_target.normalized() * step
+
+
+## Smash defender towers/walls on the cell this wrecker just entered.
+func _try_wreck_current_cell() -> void:
+	if not is_wrecker or _wreck_grid == null or not alive:
+		return
+	var cell := _wreck_grid.world_to_cell(position)
+	if not _wreck_grid.in_bounds(cell):
+		return
+	var tile := _wreck_grid.get_tile(cell)
+	if tile == GameGrid.Tile.SPAWN or tile == GameGrid.Tile.EXIT or tile == GameGrid.Tile.BLOCKED:
+		return
+	var tower: Node = _wreck_grid.get_tower_at(cell)
+	if tower == null:
+		return
+	if tower is Tower:
+		var t := tower as Tower
+		if lane_id >= 0 and t.lane_id >= 0 and t.lane_id != lane_id:
+			return
+	var removed := _wreck_grid.remove_tower_at(cell)
+	if removed == null:
+		return
+	if is_instance_valid(removed):
+		removed.queue_free()
+	wrecked_at.emit(cell)
 
 
 func _move_snake(delta: float) -> void:

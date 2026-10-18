@@ -42,13 +42,20 @@ func _process(delta: float) -> void:
 	if target == null or not is_instance_valid(target) or not target.alive:
 		queue_free()
 		return
+	var prev_global := global_position
 	var to_target := target.global_position - global_position
 	var step := speed * delta
 	if to_target.length() <= step:
 		global_position = target.global_position
+		if _hits_clash_divider(prev_global, global_position):
+			_neutralize()
+			return
 		_impact()
 	else:
 		global_position += to_target.normalized() * step
+		if _hits_clash_divider(prev_global, global_position):
+			_neutralize()
+			return
 	queue_redraw()
 
 
@@ -57,6 +64,19 @@ func impact_now() -> void:
 	if not alive:
 		return
 	_impact()
+
+
+## Destroy the shot with no damage (Clash brown lane dividers).
+func _neutralize() -> void:
+	alive = false
+	queue_free()
+
+
+func _hits_clash_divider(from_global: Vector2, to_global: Vector2) -> bool:
+	var g := _clash_grid()
+	if g == null or not g.is_clash_layout:
+		return false
+	return g.segment_hits_blocked(from_global, to_global)
 
 
 func _impact() -> void:
@@ -146,12 +166,16 @@ func _can_hit_lane(enemy: Enemy) -> bool:
 func _find_next_chain(from_pos: Vector2, chain_range: float, exclude: Array[Enemy]) -> Enemy:
 	var best: Enemy = null
 	var best_d := chain_range
+	var g := _clash_grid()
 	for child in enemy_container.get_children():
 		if child is Enemy:
 			var e := child as Enemy
 			if not e.alive or e in exclude:
 				continue
 			if not _can_hit_lane(e):
+				continue
+			# Lightning can't jump across Clash brown dividers either.
+			if g != null and g.is_clash_layout and g.segment_hits_blocked(from_pos, e.global_position):
 				continue
 			var d := from_pos.distance_to(e.global_position)
 			if d <= best_d:
@@ -172,12 +196,16 @@ func _spawn_bolt(from_pos: Vector2, to_pos: Vector2) -> void:
 
 
 func _damage_in_radius(center: Vector2, radius: float, dmg: float, apply_effects: bool) -> void:
+	var g := _clash_grid()
 	for child in enemy_container.get_children():
 		if child is Enemy:
 			var e := child as Enemy
 			if e.alive and center.distance_to(e.global_position) <= radius:
-				if _can_hit_lane(e):
-					_apply_to_enemy(e, dmg, apply_effects)
+				if not _can_hit_lane(e):
+					continue
+				if g != null and g.is_clash_layout and g.segment_hits_blocked(center, e.global_position):
+					continue
+				_apply_to_enemy(e, dmg, apply_effects)
 
 
 func _apply_to_enemy(enemy: Enemy, dmg: float, apply_effects: bool) -> void:

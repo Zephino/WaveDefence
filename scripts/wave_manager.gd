@@ -414,18 +414,41 @@ func _append_clash_send_specs(wave: int, lane: int, defender: int, pack_id: Stri
 	var hp_m: float = float(pack.get("hp_mult", 1.0))
 	var sp_m: float = float(pack.get("speed_mult", 1.0))
 	var bo_m: float = float(pack.get("bounty_mult", 0.8))
+	var flying := bool(pack.get("flying", false))
+	var boss := bool(pack.get("boss", false))
+	var wrecker := bool(pack.get("wrecker", false))
 	for _k in n:
+		var base_hp: float
+		var base_speed: float
+		var base_bounty: int
+		if boss and flying:
+			base_hp = WaveScaler.flying_boss_hp(wave)
+			base_speed = WaveScaler.flying_boss_speed(wave)
+			base_bounty = WaveScaler.flying_boss_bounty(wave)
+		elif boss:
+			base_hp = WaveScaler.boss_hp(wave)
+			base_speed = WaveScaler.boss_speed(wave)
+			base_bounty = WaveScaler.boss_bounty(wave)
+		elif flying:
+			base_hp = WaveScaler.flying_creep_hp(wave)
+			base_speed = WaveScaler.flying_creep_speed(wave)
+			base_bounty = WaveScaler.flying_creep_bounty(wave)
+		else:
+			base_hp = WaveScaler.creep_hp(wave)
+			base_speed = WaveScaler.creep_speed(wave)
+			base_bounty = WaveScaler.creep_bounty(wave)
 		var spec := _make_spawn_spec(
 			wave,
-			WaveScaler.creep_hp(wave) * hp_m,
-			WaveScaler.creep_speed(wave) * sp_m,
-			maxi(int(round(float(WaveScaler.creep_bounty(wave)) * bo_m)), 1),
-			false,
-			false
+			base_hp * hp_m,
+			base_speed * sp_m,
+			maxi(int(round(float(base_bounty) * bo_m)), 1),
+			boss,
+			flying
 		)
 		spec["lane_id"] = lane
 		spec["defender_id"] = defender
 		spec["sent"] = true
+		spec["wrecker"] = wrecker
 		spawn_queue.append(spec)
 
 
@@ -582,6 +605,9 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 	)
 	enemy.lane_id = lane_id
 	enemy.defender_id = defender_id
+	if bool(spec.get("wrecker", false)):
+		enemy.configure_wrecker(grid)
+		enemy.wrecked_at.connect(_on_wrecker_wrecked)
 	if bool(spec.get("snake", false)):
 		var prev: Enemy = _snake_tail
 		if _is_clash() and lane_id >= 0:
@@ -598,6 +624,10 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 	enemy_spawned.emit(enemy)
 	_emit_enemies_remaining()
 	return true
+
+
+func _on_wrecker_wrecked(_cell: Vector2i) -> void:
+	repath_living_enemies()
 
 
 func _on_enemy_died(enemy: Enemy, bounty: int) -> void:

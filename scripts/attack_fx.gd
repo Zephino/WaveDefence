@@ -59,6 +59,17 @@ class TravelingShot extends Node2D:
 			return _target.global_position
 		return _aim
 
+	func _clash_grid() -> GameGrid:
+		var n := get_parent()
+		while n != null:
+			if n is GameGrid:
+				return n as GameGrid
+			var g := n.get_node_or_null("GameGrid") as GameGrid
+			if g != null:
+				return g
+			n = n.get_parent()
+		return null
+
 	func _process(delta: float) -> void:
 		if _impacted:
 			_life -= delta
@@ -68,6 +79,7 @@ class TravelingShot extends Node2D:
 				queue_redraw()
 			return
 		_life -= delta
+		var prev := global_position
 		var dest := _aim_point()
 		var to_target := dest - global_position
 		var step := _speed * delta
@@ -76,12 +88,20 @@ class TravelingShot extends Node2D:
 			_trail.pop_front()
 		if to_target.length() <= step or _life <= 0.0 or _from.distance_to(global_position) >= _max_range:
 			global_position = dest if to_target.length() <= step else global_position
+			var g_end := _clash_grid()
+			if g_end != null and g_end.is_clash_layout and g_end.segment_hits_blocked(prev, global_position):
+				queue_free()
+				return
 			_impacted = true
 			_life = 0.12
 			_max_life = 0.12
 			queue_redraw()
 			return
 		global_position += to_target.normalized() * step
+		var g_mid := _clash_grid()
+		if g_mid != null and g_mid.is_clash_layout and g_mid.segment_hits_blocked(prev, global_position):
+			queue_free()
+			return
 		queue_redraw()
 
 	func _draw_trail(color: Color, width: float) -> void:

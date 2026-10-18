@@ -255,6 +255,38 @@ func _run() -> void:
 		errors.append("clash human send brute should succeed with topped-up gold")
 	elif clash_match.human().income_per_round != income1 + WaveScaler.clash_send_income_bump("brute"):
 		errors.append("brute send should bump income by its own higher amount")
+	# Send-shop levels: humans start at 1; higher packs need upgrades.
+	if clash_match.human().send_shop_level != 1:
+		errors.append("human send shop should start at level 1")
+	var lv1_packs: Array = WaveScaler.clash_send_packs_for_level(1)
+	if not lv1_packs.has("scout") or lv1_packs.has("raid") or lv1_packs.has("wrecker"):
+		errors.append("level-1 send packs should be starter trio only")
+	if clash_match.try_send_pack(0, 1, "raid"):
+		errors.append("human should not buy level-2 pack before shop upgrade")
+	if WaveScaler.clash_send_shop_upgrade_cost(1) != 1500:
+		errors.append("send shop 1→2 should cost 1500")
+	if WaveScaler.clash_send_shop_upgrade_cost(2) != 5000:
+		errors.append("send shop 2→3 should cost 5000")
+	if WaveScaler.clash_send_shop_upgrade_cost(3) != 15000:
+		errors.append("send shop 3→4 should cost 15000")
+	state.gold = 2000
+	clash_match.sync_human_gold_from_game_state()
+	if not clash_match.try_upgrade_send_shop(0):
+		errors.append("human should upgrade send shop 1→2 with 2000 gold")
+	elif clash_match.human().send_shop_level != 2:
+		errors.append("send shop should be level 2 after upgrade")
+	elif not WaveScaler.clash_send_packs_for_level(2).has("raid"):
+		errors.append("level-2 packs should include raid")
+	# Bots ignore shop level and may buy high-tier packs.
+	var bot_sender := clash_match.get_player(1)
+	if bot_sender:
+		bot_sender.gold = 5000
+		if not clash_match.try_send_pack(1, 0, "wrecker"):
+			errors.append("bot should buy wrecker without send-shop level")
+	if WaveScaler.clash_send_income_bump("wrecker") <= WaveScaler.clash_send_income_bump("brute"):
+		errors.append("wrecker income bump should exceed starter packs")
+	if WaveScaler.clash_send_income_bump("war_council") <= WaveScaler.clash_send_income_bump("raid"):
+		errors.append("higher-tier packs should grant clearly larger income bumps")
 	# Round income must land on GameState even if ClashPlayerState gold is stale.
 	var rate := clash_match.human().income_per_round
 	state.gold = 500
@@ -434,7 +466,55 @@ func _run() -> void:
 	else:
 		lane_tower.queue_free()
 		errors.append("clash smoke could not place a lane-0 tower for targeting check")
+	# Wrecker destroys a defender wall on the path cell it steps onto.
+	var wreck_cell := Vector2i(int(grid.lane_col_ranges[0].x) + 1, 5)
+	if not grid.is_buildable(wreck_cell):
+		wreck_cell = Vector2i(int(grid.lane_col_ranges[0].y), 5)
+	var wreck_wall := Tower.new()
+	wreck_wall.setup("wall", main.enemies, main.projectiles)
+	if grid.is_buildable(wreck_cell):
+		grid.place_tower(wreck_cell, wreck_wall)
+		var wrecker := Enemy.new()
+		main.enemies.add_child(wrecker)
+		var wpath := PackedVector2Array([
+			grid.cell_to_world_center(wreck_cell),
+			grid.cell_to_world_center(wreck_cell + Vector2i(0, 1)),
+		])
+		wrecker.setup(wpath, 50.0, 200.0, 1, false, false)
+		wrecker.lane_id = 0
+		wrecker.configure_wrecker(grid)
+		# Arrive at first waypoint (wall cell) then advance.
+		wrecker.position = wpath[0]
+		wrecker.path_index = 0
+		wrecker._try_wreck_current_cell()
+		if grid.get_tower_at(wreck_cell) != null:
+			errors.append("wrecker should remove defender tower/wall on entered cell")
+		if wrecker.get_parent() != null:
+			wrecker.get_parent().remove_child(wrecker)
+		wrecker.free()
+	else:
+		wreck_wall.queue_free()
+		errors.append("clash smoke could not place a wall for wrecker check")
+	# Floating shops: pin towers and select a type still arms placement.
+	var hud: UIHud = main.hud
+	if hud != null:
+		var prev_pin := UserSettings.is_towers_shop_pinned()
+		hud._towers_pinned = true
+		hud._towers_open = true
+		hud._apply_towers_shop_layout()
+		if hud._towers_panel == null or not hud._towers_panel.visible:
+			errors.append("pinned towers shop should stay visible")
+		hud._on_tower_button("gunner")
+		if not hud.tower_buttons.has("gunner"):
+			errors.append("towers popup should keep tower buttons after pin")
+		hud._towers_pinned = prev_pin
+		UserSettings.set_towers_shop_pinned(prev_pin)
+		hud._apply_towers_shop_layout()
 	clash_match.queue_free()
+	# Drop any leftover smoke enemies before classic targeting checks.
+	for leftover in main.enemies.get_children():
+		main.enemies.remove_child(leftover)
+		leftover.free()
 	grid.reset(true)
 	build.pathfinder.sync_region()
 	build.pathfinder.rebuild()
@@ -454,6 +534,41 @@ func _run() -> void:
 	UserSettings._loaded = false
 	UserSettings.ensure_loaded()
 
+	# Clash brown dividers neutralize shots that cross them.
+	grid.reset_clash(3)
+	build.pathfinder.sync_region()
+	build.pathfinder.rebuild()
+	var div_x := int(grid.lane_col_ranges[0].y) + 1
+	var div_cell := Vector2i(div_x, 4)
+	if grid.get_tile(div_cell) != GameGrid.Tile.BLOCKED:
+		errors.append("clash lane divider should be BLOCKED terrain")
+	else:
+		var left_pt := grid.to_global(grid.cell_to_world_center(Vector2i(div_x - 1, 4)))
+		var right_pt := grid.to_global(grid.cell_to_world_center(Vector2i(div_x + 1, 4)))
+		if not grid.segment_hits_blocked(left_pt, right_pt):
+			errors.append("segment across clash divider should hit BLOCKED")
+		var same_lane_a := grid.to_global(grid.cell_to_world_center(Vector2i(div_x - 2, 4)))
+		var same_lane_b := grid.to_global(grid.cell_to_world_center(Vector2i(div_x - 1, 4)))
+		if grid.segment_hits_blocked(same_lane_a, same_lane_b):
+			errors.append("same-lane segment should not hit divider")
+		var cross_proj := Projectile.new()
+		cross_proj.enemy_container = main.enemies
+		main.projectiles.add_child(cross_proj)
+		cross_proj.global_position = left_pt
+		var dummy := Enemy.new()
+		dummy.alive = true
+		main.enemies.add_child(dummy)
+		dummy.global_position = right_pt
+		cross_proj.setup(dummy, 10.0, 0.0, "none", {}, main.enemies, Color.WHITE, 2000.0, 0)
+		# One big step toward the other lane should die on the divider.
+		cross_proj._process(1.0)
+		if is_instance_valid(cross_proj) and cross_proj.alive:
+			errors.append("projectile crossing clash divider should neutralize")
+		if is_instance_valid(dummy):
+			dummy.queue_free()
+		if is_instance_valid(cross_proj):
+			cross_proj.queue_free()
+
 	# Restore classic map for remaining tests.
 	grid.reset(true)
 	build.pathfinder.sync_region()
@@ -468,7 +583,16 @@ func _run() -> void:
 		var classic_mob := Enemy.new()
 		classic_mob.lane_id = -1
 		main.enemies.add_child(classic_mob)
-		classic_mob.global_position = classic_tower.global_position + Vector2(10, 0)
+		var cm_pos := classic_tower.global_position + Vector2(10, 0)
+		classic_mob.setup(
+			PackedVector2Array([classic_tower.position + Vector2(10, 0), classic_tower.position + Vector2(40, 0)]),
+			20.0,
+			0.0,
+			1,
+			false,
+			false
+		)
+		classic_mob.global_position = cm_pos
 		if classic_tower._find_target() != classic_mob:
 			errors.append("classic tower should fire at a nearby enemy")
 		classic_mob.queue_free()
