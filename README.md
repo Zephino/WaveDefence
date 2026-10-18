@@ -183,7 +183,7 @@ Expect `SMOKE_TEST_OK`.
 
 The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
 
-**HUD (PC and mobile):** **Towers** and Clash **Send** are floating popups (map-edge toggles; Esc/X closes). **Pin** docks Towers on the left and Send atop the right Actions column. Actions (timer / upgrade / sell / End Run) stay on the **right**.
+**HUD (PC and mobile):** **Towers** and Clash **Send** are floating popups (map-edge toggles; Esc/X closes). Drag the title bar to move them; **Pin** docks Towers on the left and Send atop the right controls. Right column keeps timer / upgrade / sell / End Run (no filler labels).
 
 Mobile extras:
 

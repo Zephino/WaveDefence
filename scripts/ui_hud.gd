@@ -38,6 +38,12 @@ var _send_open: bool = false
 var _towers_pinned: bool = false
 var _send_pinned: bool = false
 var _send_upgrade_btn: Button
+var _towers_float_pos: Vector2 = Vector2(-1, -1)
+var _send_float_pos: Vector2 = Vector2(-1, -1)
+var _drag_shop: String = ""
+var _drag_grab: Vector2 = Vector2.ZERO
+var _towers_drag_bar: Control
+var _send_drag_bar: Control
 
 var gold_label: Label
 var lives_label: Label
@@ -165,14 +171,12 @@ func _build_ui(version_text: String) -> void:
 	UserSettings.ensure_loaded()
 	_towers_pinned = UserSettings.is_towers_shop_pinned()
 	_send_pinned = UserSettings.is_send_shop_pinned()
+	_towers_float_pos = UserSettings.get_towers_shop_pos()
+	_send_float_pos = UserSettings.get_send_shop_pos()
 	_towers_open = true
 	_send_open = false
 
 	var action_parent := _make_actions_panel(root)
-	var actions_title := Label.new()
-	actions_title.text = "Actions"
-	actions_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	action_parent.add_child(actions_title)
 	_fill_actions_column(action_parent)
 
 	_build_towers_shop_panel(root)
@@ -616,7 +620,11 @@ func _build_towers_shop_panel(root: Control) -> void:
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 4)
+	header.mouse_filter = Control.MOUSE_FILTER_STOP
+	header.tooltip_text = "Drag to move (when unpinned)"
+	header.gui_input.connect(_on_towers_header_gui_input)
 	column.add_child(header)
+	_towers_drag_bar = header
 	var shop_title := Label.new()
 	shop_title.text = "Towers"
 	shop_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -671,7 +679,11 @@ func _build_send_shop_panel(root: Control) -> void:
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 4)
+	header.mouse_filter = Control.MOUSE_FILTER_STOP
+	header.tooltip_text = "Drag to move (when unpinned)"
+	header.gui_input.connect(_on_send_header_gui_input)
 	column.add_child(header)
+	_send_drag_bar = header
 	var send_title := Label.new()
 	send_title.text = "Send"
 	send_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -795,12 +807,15 @@ func _apply_towers_shop_layout() -> void:
 		_towers_panel.visible = true
 		_towers_open = true
 	elif _towers_open:
-		var board := GameLayout.board_origin()
 		var w := GameLayout.sidebar_width()
 		var h := minf(GameLayout.board_pixel_size().y - 48.0, 520.0)
-		_towers_panel.position = Vector2(board.x + 6.0, board.y + 52.0)
 		_towers_panel.size = Vector2(w, h)
 		_towers_panel.custom_minimum_size = Vector2(w, h)
+		if _towers_float_pos.x >= 0.0:
+			_towers_panel.position = _clamp_shop_pos(_towers_float_pos, _towers_panel.size)
+		else:
+			var board := GameLayout.board_origin()
+			_towers_panel.position = Vector2(board.x + 6.0, board.y + 52.0)
 		_towers_panel.visible = true
 	else:
 		_towers_panel.visible = false
@@ -833,18 +848,88 @@ func _apply_send_shop_layout() -> void:
 		_send_panel.visible = true
 		_send_open = true
 	elif _send_open:
-		var board := GameLayout.board_origin()
 		var board_sz := GameLayout.board_pixel_size()
 		var w := maxf(GameLayout.sidebar_width(), 200.0)
 		var h := minf(board_sz.y - 48.0, 420.0)
-		_send_panel.position = Vector2(board.x + board_sz.x - w - 6.0, board.y + 52.0)
 		_send_panel.size = Vector2(w, h)
 		_send_panel.custom_minimum_size = Vector2(w, h)
+		if _send_float_pos.x >= 0.0:
+			_send_panel.position = _clamp_shop_pos(_send_float_pos, _send_panel.size)
+		else:
+			var board := GameLayout.board_origin()
+			_send_panel.position = Vector2(board.x + board_sz.x - w - 6.0, board.y + 52.0)
 		_send_panel.visible = true
 	else:
 		_send_panel.visible = false
 	if _send_toggle:
 		_send_toggle.modulate = Color(0.75, 1.15, 1.1) if _send_panel.visible else Color.WHITE
+
+
+func _clamp_shop_pos(pos: Vector2, size: Vector2) -> Vector2:
+	var view := get_viewport().get_visible_rect().size if get_viewport() else Vector2(1280, 720)
+	var max_x := maxf(view.x - size.x - 4.0, 4.0)
+	var max_y := maxf(view.y - size.y - 4.0, 4.0)
+	return Vector2(clampf(pos.x, 4.0, max_x), clampf(pos.y, 4.0, max_y))
+
+
+func _on_towers_header_gui_input(event: InputEvent) -> void:
+	_handle_shop_drag(event, "towers")
+
+
+func _on_send_header_gui_input(event: InputEvent) -> void:
+	_handle_shop_drag(event, "send")
+
+
+func _handle_shop_drag(event: InputEvent, which: String) -> void:
+	var pinned := _towers_pinned if which == "towers" else _send_pinned
+	var panel := _towers_panel if which == "towers" else _send_panel
+	if pinned or panel == null or not panel.visible:
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+			return
+		# Don't steal clicks from Pin/X — only drag from title/empty header space.
+		var bar := _towers_drag_bar if which == "towers" else _send_drag_bar
+		if bar != null:
+			for child in bar.get_children():
+				if child is BaseButton:
+					var btn := child as BaseButton
+					if btn.get_global_rect().has_point(mb.global_position):
+						return
+		_drag_shop = which
+		_drag_grab = mb.global_position - panel.global_position
+
+
+func _input(event: InputEvent) -> void:
+	if _drag_shop == "":
+		return
+	var panel := _towers_panel if _drag_shop == "towers" else _send_panel
+	if panel == null:
+		_drag_shop = ""
+		return
+	if event is InputEventMouseMotion:
+		var mm := event as InputEventMouseMotion
+		var next := _clamp_shop_pos(mm.global_position - _drag_grab, panel.size)
+		panel.position = next
+		if _drag_shop == "towers":
+			_towers_float_pos = next
+		else:
+			_send_float_pos = next
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_persist_shop_float_pos(_drag_shop)
+			_drag_shop = ""
+			get_viewport().set_input_as_handled()
+
+
+func _persist_shop_float_pos(which: String) -> void:
+	if which == "towers":
+		UserSettings.set_towers_shop_pos(_towers_float_pos)
+	else:
+		UserSettings.set_send_shop_pos(_send_float_pos)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -956,13 +1041,6 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	end_run_button.tooltip_text = "End this run and check the leaderboard"
 	end_run_button.pressed.connect(show_end_run_confirm)
 	sidebar.add_child(end_run_button)
-
-	var help := Label.new()
-	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.text = GameLayout.help_text()
-	help.modulate = Color(0.6, 0.65, 0.7)
-	sidebar.add_child(help)
 
 
 func _sidebar_button(text: String, height: float) -> Button:
@@ -1167,7 +1245,8 @@ func update_boss_hp(name_text: String, ratio: float, visible: bool) -> void:
 func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 	match mode:
 		"prep":
-			timer_label.text = "Build freely"
+			# Skip button already says Start Round — no redundant status line.
+			timer_label.text = ""
 			if game_state:
 				set_next_wave_brief(_WavePreview.summary_line(1, game_state.game_mode, game_state.monster_mode))
 			skip_button.text = "Start Round"
@@ -1185,7 +1264,7 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 			else:
 				skip_button.tooltip_text = "Path blocked or skip not available"
 		_:
-			timer_label.text = "Wave in progress"
+			timer_label.text = ""
 			if can_skip:
 				skip_button.text = "Send Next Wave"
 				skip_button.disabled = false

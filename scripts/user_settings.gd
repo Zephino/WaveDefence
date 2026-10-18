@@ -22,6 +22,10 @@ const KEY_SHOW_GRID_COORDS := "show_grid_coordinates"
 const KEY_SCREENSHOT_WATERMARK := "screenshot_watermark"
 const KEY_TOWERS_SHOP_PINNED := "towers_shop_pinned"
 const KEY_SEND_SHOP_PINNED := "send_shop_pinned"
+const KEY_TOWERS_SHOP_POS_X := "towers_shop_pos_x"
+const KEY_TOWERS_SHOP_POS_Y := "towers_shop_pos_y"
+const KEY_SEND_SHOP_POS_X := "send_shop_pos_x"
+const KEY_SEND_SHOP_POS_Y := "send_shop_pos_y"
 
 static var _loaded: bool = false
 static var large_controls: bool = false
@@ -41,6 +45,9 @@ static var show_grid_coordinates: bool = false
 static var screenshot_watermark: bool = true
 static var towers_shop_pinned: bool = false
 static var send_shop_pinned: bool = false
+## Floating shop positions; x < 0 means “use default layout”.
+static var towers_shop_pos: Vector2 = Vector2(-1, -1)
+static var send_shop_pos: Vector2 = Vector2(-1, -1)
 
 
 static func ensure_loaded() -> void:
@@ -69,6 +76,14 @@ static func ensure_loaded() -> void:
 	screenshot_watermark = bool(cfg.get_value(SECTION, KEY_SCREENSHOT_WATERMARK, true))
 	towers_shop_pinned = bool(cfg.get_value(SECTION, KEY_TOWERS_SHOP_PINNED, false))
 	send_shop_pinned = bool(cfg.get_value(SECTION, KEY_SEND_SHOP_PINNED, false))
+	towers_shop_pos = Vector2(
+		float(cfg.get_value(SECTION, KEY_TOWERS_SHOP_POS_X, -1.0)),
+		float(cfg.get_value(SECTION, KEY_TOWERS_SHOP_POS_Y, -1.0))
+	)
+	send_shop_pos = Vector2(
+		float(cfg.get_value(SECTION, KEY_SEND_SHOP_POS_X, -1.0)),
+		float(cfg.get_value(SECTION, KEY_SEND_SHOP_POS_Y, -1.0))
+	)
 	build_speed_mult = clampf(build_speed_mult, 1.0, 2.5)
 
 
@@ -90,6 +105,8 @@ static func _apply_defaults() -> void:
 	screenshot_watermark = true
 	towers_shop_pinned = false
 	send_shop_pinned = false
+	towers_shop_pos = Vector2(-1, -1)
+	send_shop_pos = Vector2(-1, -1)
 
 
 static func _save_prefs() -> void:
@@ -112,6 +129,10 @@ static func _save_prefs() -> void:
 	cfg.set_value(SECTION, KEY_SCREENSHOT_WATERMARK, screenshot_watermark)
 	cfg.set_value(SECTION, KEY_TOWERS_SHOP_PINNED, towers_shop_pinned)
 	cfg.set_value(SECTION, KEY_SEND_SHOP_PINNED, send_shop_pinned)
+	cfg.set_value(SECTION, KEY_TOWERS_SHOP_POS_X, towers_shop_pos.x)
+	cfg.set_value(SECTION, KEY_TOWERS_SHOP_POS_Y, towers_shop_pos.y)
+	cfg.set_value(SECTION, KEY_SEND_SHOP_POS_X, send_shop_pos.x)
+	cfg.set_value(SECTION, KEY_SEND_SHOP_POS_Y, send_shop_pos.y)
 	cfg.save(SAVE_PATH)
 
 
@@ -285,3 +306,25 @@ static func set_send_shop_pinned(on: bool) -> void:
 static func is_send_shop_pinned() -> bool:
 	ensure_loaded()
 	return send_shop_pinned
+
+
+static func set_towers_shop_pos(pos: Vector2) -> void:
+	ensure_loaded()
+	towers_shop_pos = pos
+	_save_prefs()
+
+
+static func get_towers_shop_pos() -> Vector2:
+	ensure_loaded()
+	return towers_shop_pos
+
+
+static func set_send_shop_pos(pos: Vector2) -> void:
+	ensure_loaded()
+	send_shop_pos = pos
+	_save_prefs()
+
+
+static func get_send_shop_pos() -> Vector2:
+	ensure_loaded()
+	return send_shop_pos

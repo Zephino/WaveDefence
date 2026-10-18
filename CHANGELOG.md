@@ -1,4 +1,15 @@
-﻿## Version 00.02.74
+﻿## Version 00.02.75
+Date: 10/18/2026
+Time: 12:30 PM
+
+### Changes
+- Towers / Send popups are **draggable** by the title bar (position saved)
+- Removed clutter: **Actions** heading, **Build freely** / wave-in-progress filler text, and the always-on help block
+
+### Reason
+Players wanted to place the shop windows themselves and the right column had redundant labels.
+
+## Version 00.02.74
 Date: 10/18/2026
 Time: 12:15 PM
 
