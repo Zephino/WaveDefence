@@ -1,7 +1,7 @@
 class_name ClashBotAI
 extends RefCounted
 
-## Places towers and queues sends for one Clash bot during prep.
+## Places a maze, upgrades sometimes, and queues sends for one Clash bot.
 
 var clash_match: ClashMatch
 var grid: GameGrid
@@ -35,11 +35,14 @@ func run_prep_turn(wave: int) -> void:
 	var p := clash_match.get_player(player_id)
 	if p == null or not p.alive or p.is_human:
 		return
-	_place_towers(p, wave)
-	_upgrade_owned_towers(p)
+	# Maze first so the lane snakes, then combat cover, sends, upgrades.
+	_build_maze(p, wave)
+	_place_combat_towers(p, wave)
 	_try_sends(p, wave, false)
-	# Leftover gold after sends still goes into defense.
-	_place_towers(p, wave)
+	_upgrade_owned_towers(p)
+	# Leftover gold still goes into maze / defense.
+	_build_maze(p, wave)
+	_place_combat_towers(p, wave)
 	_upgrade_owned_towers(p)
 	if clash_match != null:
 		clash_match.players_changed.emit()
@@ -52,32 +55,6 @@ func run_send_turn(wave: int) -> void:
 	if p == null or not p.alive or p.is_human:
 		return
 	_try_sends(p, wave, true)
-
-
-func _place_towers(p: ClashPlayerState, wave: int) -> void:
-	var reserve := _gold_reserve(p)
-	var spawn := grid.get_lane_spawn(p.lane_index)
-	var exit_c := grid.get_lane_exit(p.lane_index)
-	var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
-	var candidates := _build_candidates(p.lane_index, path_cells)
-	var placed := 0
-	while p.gold > reserve and placed < 24:
-		var spendable := p.gold - reserve
-		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
-		if tower_id == "":
-			break
-		var cost: int = int(TowerData.get_def(tower_id)["cost"])
-		var cell := _next_place_cell(candidates, spawn, exit_c)
-		if cell.x < 0:
-			break
-		if not p.spend_gold(cost):
-			break
-		var tower := Tower.new()
-		tower.setup(tower_id, enemy_container, projectile_container)
-		tower.set_meta("clash_owner", player_id)
-		grid.place_tower(cell, tower)
-		pathfinder.rebuild()
-		placed += 1
 
 
 func _cheapest_send_cost() -> int:
@@ -99,17 +76,159 @@ func _gold_reserve(p: ClashPlayerState) -> int:
 	return maxi(int(float(p.gold) * ratio), _cheapest_send_cost())
 
 
+## Force a longer snake with walls (and occasional cheap path towers).
+func _build_maze(p: ClashPlayerState, wave: int) -> void:
+	var reserve := _gold_reserve(p)
+	var spawn := grid.get_lane_spawn(p.lane_index)
+	var exit_c := grid.get_lane_exit(p.lane_index)
+	var wall_cost: int = int(TowerData.get_def("wall")["cost"])
+	var max_pieces := 10
+	match p.bot_difficulty:
+		WaveScaler.Difficulty.EASY:
+			max_pieces = 6
+		WaveScaler.Difficulty.HARD:
+			max_pieces = 16
+		_:
+			max_pieces = 12
+	var placed := 0
+	while p.gold > reserve and placed < max_pieces:
+		var spendable := p.gold - reserve
+		if spendable < wall_cost:
+			break
+		var cell := _best_maze_cell(spawn, exit_c, p.lane_index)
+		if cell.x < 0:
+			break
+		# Mostly walls; sometimes a combat tower on the path as a maze piece.
+		var piece_id := "wall"
+		if spendable >= int(TowerData.get_def("gunner")["cost"]) and _rng.randf() < 0.22:
+			piece_id = _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
+			if piece_id == "":
+				piece_id = "wall"
+		var cost: int = int(TowerData.get_def(piece_id)["cost"])
+		if cost > spendable or not p.spend_gold(cost):
+			break
+		_place_owned(cell, piece_id)
+		pathfinder.rebuild()
+		placed += 1
+
+
+func _place_combat_towers(p: ClashPlayerState, wave: int) -> void:
+	var reserve := _gold_reserve(p)
+	var spawn := grid.get_lane_spawn(p.lane_index)
+	var exit_c := grid.get_lane_exit(p.lane_index)
+	var placed := 0
+	while p.gold > reserve and placed < 20:
+		var spendable := p.gold - reserve
+		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
+		if tower_id == "" or TowerData.is_wall(tower_id):
+			break
+		var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
+		var candidates := _build_combat_candidates(p.lane_index, path_cells)
+		var cell := _next_place_cell(candidates, spawn, exit_c)
+		if cell.x < 0:
+			break
+		var cost: int = int(TowerData.get_def(tower_id)["cost"])
+		if not p.spend_gold(cost):
+			break
+		_place_owned(cell, tower_id)
+		pathfinder.rebuild()
+		placed += 1
+
+
+func _place_owned(cell: Vector2i, tower_id: String) -> void:
+	var tower := Tower.new()
+	tower.setup(tower_id, enemy_container, projectile_container)
+	tower.set_meta("clash_owner", player_id)
+	grid.place_tower(cell, tower)
+
+
+## Pick the buildable lane cell that lengthens the path the most without sealing it.
+func _best_maze_cell(spawn: Vector2i, exit_c: Vector2i, lane: int) -> Vector2i:
+	var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
+	if path_cells.size() < 2:
+		return Vector2i(-1, -1)
+	var base_len := path_cells.size()
+	var path_set: Dictionary = {}
+	for c in path_cells:
+		path_set[c] = true
+	var r: Vector2i = grid.lane_col_ranges[lane]
+	var best := Vector2i(-1, -1)
+	var best_score := -1
+	# Prefer path cells and path-adjacent cells that force a detour.
+	var candidates: Array[Vector2i] = []
+	for c in path_cells:
+		if c == spawn or c == exit_c:
+			continue
+		candidates.append(c)
+	for y in range(1, grid.rows - 1):
+		for x in range(r.x, r.y + 1):
+			var cell := Vector2i(x, y)
+			if path_set.has(cell) or not grid.is_buildable(cell):
+				continue
+			var adj := false
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if path_set.has(cell + d):
+					adj = true
+					break
+			if adj:
+				candidates.append(cell)
+	for cell in candidates:
+		if not grid.is_buildable(cell):
+			continue
+		if pathfinder.would_block_path_between(spawn, exit_c, cell):
+			continue
+		var new_len := pathfinder.path_length_with_block(spawn, exit_c, cell)
+		if new_len <= 0:
+			continue
+		var gain := new_len - base_len
+		# Prefer lengthening; on ties favor mid-lane path cells (real maze bits).
+		var score := gain * 100
+		if path_set.has(cell):
+			score += 40
+		score += (grid.rows - absi(cell.y - grid.rows / 2))
+		score += _rng.randi_range(0, 5)
+		if score > best_score:
+			best_score = score
+			best = cell
+	# Even if no length gain, still place a safe path choke when possible.
+	if best.x < 0:
+		for cell2 in path_cells:
+			if cell2 == spawn or cell2 == exit_c:
+				continue
+			if not grid.is_buildable(cell2):
+				continue
+			if pathfinder.would_block_path_between(spawn, exit_c, cell2):
+				continue
+			return cell2
+	return best
+
+
 func _upgrade_owned_towers(p: ClashPlayerState) -> void:
-	if p.bot_difficulty == WaveScaler.Difficulty.EASY:
+	# Easy upgrades sometimes; Medium/Hard more often.
+	var upgrade_chance := 0.35
+	var max_upgrades := 2
+	match p.bot_difficulty:
+		WaveScaler.Difficulty.EASY:
+			upgrade_chance = 0.28
+			max_upgrades = 2
+		WaveScaler.Difficulty.HARD:
+			upgrade_chance = 0.85
+			max_upgrades = 10
+		_:
+			upgrade_chance = 0.55
+			max_upgrades = 6
+	if _rng.randf() > upgrade_chance:
 		return
 	var reserve := _gold_reserve(p)
 	var towers := _owned_towers_in_lane(p.lane_index)
 	var upgraded := 0
-	while p.gold > reserve and upgraded < 16:
+	while p.gold > reserve and upgraded < max_upgrades:
 		var best: Tower = null
 		var best_cost := 1 << 30
 		for tower in towers:
 			if tower == null or not is_instance_valid(tower):
+				continue
+			if TowerData.is_wall(tower.tower_id):
 				continue
 			if not tower.can_stat_upgrade():
 				continue
@@ -152,7 +271,6 @@ func _pick_affordable_tower_id(wave: int, difficulty: int, gold: int) -> String:
 		if gunner_cost <= gold:
 			return "gunner"
 		return ""
-	# Prefer a mid-cost tower when flush; otherwise cheapest so gold still gets spent.
 	if gold >= 80 and affordable.size() > 1 and _rng.randf() < 0.65:
 		return affordable[_rng.randi_range(0, affordable.size() - 1)]
 	var cheapest := affordable[0]
@@ -180,7 +298,7 @@ func _tower_pool(wave: int, difficulty: int) -> Array[String]:
 	return pool
 
 
-func _build_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i]:
+func _build_combat_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	var path_set: Dictionary = {}
 	for c in path_cells:
@@ -197,7 +315,6 @@ func _build_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i
 				if path_set.has(cell + d):
 					adj += 1
 			if adj > 0:
-				# Higher score = earlier pop. Prefer path-adjacent cells near the spawn.
 				scored.append({"cell": cell, "score": adj * 20 + (grid.rows - y)})
 	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a["score"]) < int(b["score"])
@@ -253,7 +370,6 @@ func _try_sends(p: ClashPlayerState, wave: int, during_wave: bool = false) -> vo
 		return
 	if _rng.randf() > send_chance:
 		return
-	# Spend-down leaves ~reserve gold; a ratio of that is often below pack cost.
 	var budget := maxi(int(float(p.gold) * budget_ratio), cheapest)
 	var sent := 0
 	while sent < max_sends and budget > 0:
@@ -261,7 +377,6 @@ func _try_sends(p: ClashPlayerState, wave: int, during_wave: bool = false) -> vo
 		if pack_id == "":
 			break
 		var cost: int = int(WaveScaler.clash_send_pack(pack_id)["cost"])
-		# Fair target: uniform among living opponents (never bias to human).
 		var target: ClashPlayerState = opponents[_rng.randi_range(0, opponents.size() - 1)]
 		if not clash_match.try_send_pack(player_id, target.player_id, pack_id):
 			break

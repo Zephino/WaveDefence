@@ -1,4 +1,15 @@
-﻿## Version 00.02.46
+﻿## Version 00.02.47
+Date: 10/18/2026
+Time: 12:01 AM
+
+### Changes
+- Clash bots build a wall maze that lengthens their lane path, then place combat towers along it
+- Bots still send packs and upgrade sometimes (Easy included) instead of only dumping gold into sends
+
+### Reason
+Bots were lining towers beside a straight path and mostly sending; they should maze like a real defender.
+
+## Version 00.02.46
 Date: 10/17/2026
 Time: 11:55 PM
 

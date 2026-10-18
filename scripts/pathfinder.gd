@@ -84,3 +84,16 @@ func would_block_path_between(from: Vector2i, to: Vector2i, cell: Vector2i) -> b
 	if not grid.is_buildable(cell):
 		return true
 	return not has_path_between(from, to, cell)
+
+
+## Path length after temporarily blocking `cell`. 0 if that would cut spawn→exit.
+func path_length_with_block(from: Vector2i, to: Vector2i, cell: Vector2i) -> int:
+	if not grid.in_bounds(cell):
+		return 0
+	var was_solid := astar.is_point_solid(cell)
+	if not was_solid:
+		astar.set_point_solid(cell, true)
+	var path := astar.get_id_path(from, to)
+	if not was_solid:
+		astar.set_point_solid(cell, false)
+	return path.size()

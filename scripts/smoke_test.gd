@@ -217,6 +217,35 @@ func _run() -> void:
 	var opp := clash_match.living_opponents_of(1)
 	if opp.size() != 2:
 		errors.append("bot living opponents should include human and other bot")
+	var bot_ai := ClashBotAI.new()
+	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, 2)
+	var bot_p := clash_match.get_player(2)
+	var path_before := build.pathfinder.get_cell_path_between(
+		grid.get_lane_spawn(2), grid.get_lane_exit(2)
+	).size()
+	var gold_before := bot_p.gold if bot_p else 0
+	bot_ai.run_prep_turn(1)
+	var path_after := build.pathfinder.get_cell_path_between(
+		grid.get_lane_spawn(2), grid.get_lane_exit(2)
+	).size()
+	var owned := 0
+	var walls := 0
+	for cell in grid.towers.keys():
+		if grid.lane_index_for_cell(cell) != 2:
+			continue
+		var t: Node = grid.towers[cell]
+		if t is Tower and t.has_meta("clash_owner") and int(t.get_meta("clash_owner")) == 2:
+			owned += 1
+			if TowerData.is_wall((t as Tower).tower_id):
+				walls += 1
+	if owned < 2:
+		errors.append("clash bot should place walls/towers in its lane")
+	if walls < 1:
+		errors.append("clash bot should build maze walls, not only combat towers")
+	if path_after <= path_before:
+		errors.append("clash bot maze should lengthen its lane path")
+	if bot_p != null and bot_p.gold >= gold_before:
+		errors.append("clash bot should spend gold on maze/defense/sends")
 	var nxt := clash_match.next_living_after_lane(0)
 	if nxt == null or nxt.lane_index != 1:
 		errors.append("clash overflow should wrap to the next living lane")
