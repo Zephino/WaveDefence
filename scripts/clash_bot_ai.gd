@@ -36,74 +36,121 @@ func run_prep_turn(wave: int) -> void:
 	if p == null or not p.alive or p.is_human:
 		return
 	_place_towers(p, wave)
+	_upgrade_owned_towers(p)
 	_try_sends(p, wave)
+	# Leftover gold after sends still goes into defense.
+	_place_towers(p, wave)
+	_upgrade_owned_towers(p)
+	if clash_match != null:
+		clash_match.players_changed.emit()
 
 
 func _place_towers(p: ClashPlayerState, wave: int) -> void:
-	var budget_ratio := 0.45
-	var max_places := 2
-	var upgrade_chance := 0.0
-	match p.bot_difficulty:
-		WaveScaler.Difficulty.EASY:
-			budget_ratio = 0.35
-			max_places = 1
-			upgrade_chance = 0.0
-		WaveScaler.Difficulty.HARD:
-			budget_ratio = 0.7
-			max_places = 4
-			upgrade_chance = 0.55
-		_:
-			budget_ratio = 0.5
-			max_places = 2
-			upgrade_chance = 0.25
-
-	var spend_cap := int(float(p.gold) * budget_ratio)
-	var spent := 0
-	var placed := 0
+	var reserve := _gold_reserve(p)
 	var spawn := grid.get_lane_spawn(p.lane_index)
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
 	var candidates := _build_candidates(p.lane_index, path_cells)
-	candidates.shuffle()
-
-	while placed < max_places and spent < spend_cap:
-		var tower_id := _pick_tower_id(wave, p.bot_difficulty)
-		var cost: int = int(TowerData.get_def(tower_id)["cost"])
-		if cost <= 0 or spent + cost > spend_cap or not p.can_afford(cost):
+	var placed := 0
+	while p.gold > reserve and placed < 24:
+		var spendable := p.gold - reserve
+		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
+		if tower_id == "":
 			break
+		var cost: int = int(TowerData.get_def(tower_id)["cost"])
 		var cell := _next_place_cell(candidates, spawn, exit_c)
 		if cell.x < 0:
 			break
 		if not p.spend_gold(cost):
 			break
-		spent += cost
 		var tower := Tower.new()
 		tower.setup(tower_id, enemy_container, projectile_container)
 		tower.set_meta("clash_owner", player_id)
 		grid.place_tower(cell, tower)
 		pathfinder.rebuild()
 		placed += 1
-		if upgrade_chance > 0.0 and _rng.randf() < upgrade_chance:
-			_try_upgrade_tower(p, tower)
-
-	if clash_match != null:
-		clash_match.players_changed.emit()
 
 
-func _try_upgrade_tower(p: ClashPlayerState, tower: Tower) -> void:
-	if tower == null or not is_instance_valid(tower):
+func _gold_reserve(p: ClashPlayerState) -> int:
+	var ratio := 0.12
+	match p.bot_difficulty:
+		WaveScaler.Difficulty.EASY:
+			ratio = 0.18
+		WaveScaler.Difficulty.HARD:
+			ratio = 0.08
+		_:
+			ratio = 0.12
+	# Keep a little cash for a cheap send; spend the rest on the lane.
+	return maxi(int(float(p.gold) * ratio), 20)
+
+
+func _upgrade_owned_towers(p: ClashPlayerState) -> void:
+	if p.bot_difficulty == WaveScaler.Difficulty.EASY:
 		return
-	if not tower.can_stat_upgrade():
-		return
-	var cost := tower.next_stat_upgrade_cost()
-	if cost <= 0 or not p.can_afford(cost):
-		return
-	if not p.spend_gold(cost):
-		return
-	tower.apply_stat_upgrade()
+	var reserve := _gold_reserve(p)
+	var towers := _owned_towers_in_lane(p.lane_index)
+	var upgraded := 0
+	while p.gold > reserve and upgraded < 16:
+		var best: Tower = null
+		var best_cost := 1 << 30
+		for tower in towers:
+			if tower == null or not is_instance_valid(tower):
+				continue
+			if not tower.can_stat_upgrade():
+				continue
+			var cost := tower.next_stat_upgrade_cost()
+			if cost <= 0 or cost > p.gold - reserve:
+				continue
+			if cost < best_cost:
+				best_cost = cost
+				best = tower
+		if best == null:
+			break
+		if not p.spend_gold(best_cost):
+			break
+		best.apply_stat_upgrade()
+		upgraded += 1
 
 
-func _pick_tower_id(wave: int, difficulty: int) -> String:
+func _owned_towers_in_lane(lane: int) -> Array[Tower]:
+	var out: Array[Tower] = []
+	for cell in grid.towers.keys():
+		if grid.lane_index_for_cell(cell) != lane:
+			continue
+		var node: Node = grid.towers[cell]
+		if node is Tower:
+			var tower := node as Tower
+			if tower.has_meta("clash_owner") and int(tower.get_meta("clash_owner")) == player_id:
+				out.append(tower)
+	return out
+
+
+func _pick_affordable_tower_id(wave: int, difficulty: int, gold: int) -> String:
+	var pool := _tower_pool(wave, difficulty)
+	var affordable: Array[String] = []
+	for id in pool:
+		var cost: int = int(TowerData.get_def(id)["cost"])
+		if cost > 0 and cost <= gold and TowerData.is_unlocked(id, wave):
+			affordable.append(id)
+	if affordable.is_empty():
+		var gunner_cost: int = int(TowerData.get_def("gunner")["cost"])
+		if gunner_cost <= gold:
+			return "gunner"
+		return ""
+	# Prefer a mid-cost tower when flush; otherwise cheapest so gold still gets spent.
+	if gold >= 80 and affordable.size() > 1 and _rng.randf() < 0.65:
+		return affordable[_rng.randi_range(0, affordable.size() - 1)]
+	var cheapest := affordable[0]
+	var cheapest_cost: int = int(TowerData.get_def(cheapest)["cost"])
+	for id in affordable:
+		var cost: int = int(TowerData.get_def(id)["cost"])
+		if cost < cheapest_cost:
+			cheapest = id
+			cheapest_cost = cost
+	return cheapest
+
+
+func _tower_pool(wave: int, difficulty: int) -> Array[String]:
 	var pool: Array[String] = ["gunner"]
 	if wave >= 3:
 		pool.append("rapid")
@@ -115,14 +162,7 @@ func _pick_tower_id(wave: int, difficulty: int) -> String:
 		pool.append("lightning")
 	if wave >= 8:
 		pool.append("antiair")
-	# Prefer unlocked only.
-	var unlocked: Array[String] = []
-	for id in pool:
-		if TowerData.is_unlocked(id, wave):
-			unlocked.append(id)
-	if unlocked.is_empty():
-		return "gunner"
-	return unlocked[_rng.randi_range(0, unlocked.size() - 1)]
+	return pool
 
 
 func _build_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i]:
@@ -131,21 +171,24 @@ func _build_candidates(lane: int, path_cells: Array[Vector2i]) -> Array[Vector2i
 	for c in path_cells:
 		path_set[c] = true
 	var r: Vector2i = grid.lane_col_ranges[lane]
+	var scored: Array = []
 	for y in range(1, grid.rows - 1):
 		for x in range(r.x, r.y + 1):
 			var cell := Vector2i(x, y)
-			if path_set.has(cell):
+			if path_set.has(cell) or not grid.is_buildable(cell):
 				continue
-			if not grid.is_buildable(cell):
-				continue
-			# Prefer cells adjacent to the path.
-			var adj := false
+			var adj := 0
 			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 				if path_set.has(cell + d):
-					adj = true
-					break
-			if adj:
-				out.append(cell)
+					adj += 1
+			if adj > 0:
+				# Higher score = earlier pop. Prefer path-adjacent cells near the spawn.
+				scored.append({"cell": cell, "score": adj * 20 + (grid.rows - y)})
+	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["score"]) < int(b["score"])
+	)
+	for item in scored:
+		out.append(item["cell"] as Vector2i)
 	if out.is_empty():
 		for y in range(1, grid.rows - 1):
 			for x in range(r.x, r.y + 1):

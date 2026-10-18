@@ -1,4 +1,15 @@
-﻿## Version 00.02.39
+﻿## Version 00.02.40
+Date: 10/17/2026
+Time: 11:18 PM
+
+### Changes
+- Clash bots spend most of their gold each prep: keep placing path-side towers until only a small send reserve remains
+- Medium/Hard bots also dump leftover gold into cheapest upgrades on their existing towers
+
+### Reason
+Bots were hoarding gold (1–4 towers and 35–70% spend caps), so their lanes stayed too weak.
+
+## Version 00.02.39
 Date: 10/17/2026
 Time: 11:02 PM
 
