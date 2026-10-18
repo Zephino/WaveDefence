@@ -104,7 +104,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 - Select a tower from the left shop, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
 - **Hold left-click and drag** to paint-place many walls/towers in a row.
-- Place cheap **Walls** to shape the maze. Tap a wall to **select/sell** it; tap again with a combat tower selected (or drag-paint over it) to **build on top of the wall**.
+- Place cheap **Walls** to shape the maze. Tap a wall/tower to **select** (Sell); tap the same piece again or **right-click / Esc** to deselect and stop placing. Drag-paint a combat tower over a wall to build on top of it.
 - You **cannot** build a wall or tower on top of an existing tower — **sell it first**.
 - Towers **block the path**. You cannot place a tower that fully cuts off spawn → exit.
 - Click a placed tower to select it; **Ctrl+click** or **Shift+click** to select multiple.

@@ -507,36 +507,31 @@ func _run() -> void:
 		if not build.can_place_at(place_cell):
 			errors.append("expected to build gunner over wall")
 		else:
-			# First tap selects the wall (so it can be sold); second tap / paint builds over.
+			# First tap selects the wall; second tap deselects (paint-drag builds over).
 			build.try_place_at(world)
 			if build.selection_count() != 1:
 				errors.append("first tap on wall with a tower selected should select the wall")
 			elif not TowerData.is_wall((build.selected_towers[0] as Tower).tower_id):
 				errors.append("selected piece should still be the wall")
 			build.try_place_at(world)
+			if build.selection_count() != 0:
+				errors.append("second tap on selected wall should deselect")
+			if grid.get_tower_at(place_cell) == null or not TowerData.is_wall(grid.get_tower_at(place_cell).tower_id):
+				errors.append("deselect tap must not destroy the wall")
+			# Paint stroke overbuilds without a prior select.
+			build.try_place_at(world, false, true)
 			var over = grid.get_tower_at(place_cell)
 			if over == null or over.tower_id != "gunner":
-				errors.append("second tap should build gunner over selected wall")
+				errors.append("paint stroke should build gunner over wall")
 			if build.selection_count() != 0:
 				errors.append("placing over wall should clear selection")
-			# Fresh wall: paint stroke may overbuild without a prior select.
-			var paint_cell := Vector2i(4, 2)
-			build.select_tower_type("wall")
-			if build.can_place_at(paint_cell):
-				build.try_place_at(grid.cell_to_world_center(paint_cell))
-			build.select_tower_type("gunner")
-			if build.can_place_at(paint_cell):
-				build.try_place_at(grid.cell_to_world_center(paint_cell), false, true)
-			var painted = grid.get_tower_at(paint_cell)
-			if painted == null or painted.tower_id != "gunner":
-				errors.append("paint stroke should build over walls without pre-select")
 			build.pathfinder.rebuild()
 			if not build.pathfinder.astar.is_point_solid(place_cell):
 				errors.append("replaced wall cell must stay blocked for pathing")
 			var path_cells := build.pathfinder.get_cell_path()
 			if place_cell in path_cells:
 				errors.append("enemies must not path through replaced wall cell")
-			# Select wall + sell
+			# Select wall + sell; also verify placing can be turned off.
 			var sell_cell := Vector2i(5, 2)
 			build.select_tower_type("wall")
 			if build.can_place_at(sell_cell):
@@ -545,10 +540,32 @@ func _run() -> void:
 			build.try_place_at(grid.cell_to_world_center(sell_cell))
 			if build.selection_count() != 1:
 				errors.append("should be able to select a wall to sell")
+			build.set_placing_enabled(false)
+			var empty_cell := Vector2i(6, 2)
+			if build.try_place_at(grid.cell_to_world_center(empty_cell)):
+				errors.append("placing should be blocked after deselect/placing off")
+			if build.selection_count() != 0:
+				errors.append("empty click with placing off should clear board selection")
+			build.select_tower_type("gunner")
+			build.try_place_at(grid.cell_to_world_center(sell_cell))
+			if build.selection_count() != 1:
+				errors.append("should re-select wall after re-arming place type")
 			elif not build.sell_selected():
 				errors.append("selling a selected wall should succeed")
 			elif grid.get_tower_at(sell_cell) != null:
 				errors.append("sold wall should be removed")
+			# Re-click selected combat tower deselects.
+			var gun_cell := Vector2i(3, 3)
+			if build.can_place_at(gun_cell):
+				build.try_place_at(grid.cell_to_world_center(gun_cell))
+			var gun = grid.get_tower_at(gun_cell)
+			if gun != null:
+				build.try_place_at(grid.cell_to_world_center(gun_cell))
+				if build.selection_count() != 1:
+					errors.append("tap combat tower should select it")
+				build.try_place_at(grid.cell_to_world_center(gun_cell))
+				if build.selection_count() != 0:
+					errors.append("re-tap selected combat tower should deselect")
 
 	# Cannot build wall/tower over an existing tower — must sell first.
 	build.clear_selection()

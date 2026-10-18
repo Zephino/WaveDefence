@@ -1,4 +1,15 @@
-﻿## Version 00.02.55
+﻿## Version 00.02.56
+Date: 10/18/2026
+Time: 1:19 AM
+
+### Changes
+- Right-click / Esc / Deselect clears selection and stops placing until you pick a shop type again
+- Tapping the same selected tower or wall again deselects it; drag-paint still builds over walls
+
+### Reason
+Players need a way to stop accidental placements while selecting/selling walls and towers.
+
+## Version 00.02.55
 Date: 10/18/2026
 Time: 1:17 AM
 

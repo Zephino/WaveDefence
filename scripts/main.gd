@@ -436,7 +436,11 @@ func _handle_key(event: InputEventKey) -> void:
 		KEY_ESCAPE:
 			if _game_paused:
 				_resume_from_pause()
-			elif not _aim_ability_id.is_empty() or build_system.selection_count() > 0:
+			elif (
+				not _aim_ability_id.is_empty()
+				or build_system.selection_count() > 0
+				or build_system.placing_enabled
+			):
 				_on_deselect()
 			else:
 				_toggle_pause()
@@ -466,22 +470,10 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 		return
 
 	if event.button_index == MOUSE_BUTTON_RIGHT:
+		# Right-click always clears selection + stops placing (pan with middle mouse / Pan mode / Space).
 		if event.pressed:
-			if _map_needs_pan() and _is_on_board_view(screen):
-				_begin_pan(screen)
-				get_viewport().set_input_as_handled()
-				return
-			var local_map := _screen_to_map(screen)
-			if not _aim_ability_id.is_empty() or _is_on_map(local_map) or build_system.selection_count() > 0:
-				_on_deselect()
-				get_viewport().set_input_as_handled()
-		else:
-			if _panning:
-				var was_drag := _pan_moved
-				_panning = false
-				if not was_drag:
-					_on_deselect()
-				get_viewport().set_input_as_handled()
+			_on_deselect()
+			get_viewport().set_input_as_handled()
 		return
 
 	if event.button_index != MOUSE_BUTTON_LEFT:
@@ -566,14 +558,14 @@ func _finish_pointer_press() -> void:
 		build_system.try_place_at(local_map, false)
 		var tower = grid.get_tower_at(cell)
 		var count := build_system.selection_count()
-		if tower and count > 0:
+		if count > 0 and tower:
 			if was_wall and TowerData.is_wall((tower as Tower).tower_id):
-				hud.set_status("Wall selected — Sell, or tap again with a tower to build over it.")
+				hud.set_status("Wall selected — Sell, or drag-paint a tower over it. Tap again to deselect.")
 			else:
-				hud.set_status("Selected %d. Long-press or Multi: On to multi-select." % maxi(count, 1))
+				hud.set_status("Selected %d. Tap again to deselect. Long-press / Multi for more." % maxi(count, 1))
 			hud.show_touch_tower_info(tower as Tower)
-		elif was_wall and tower != null and not TowerData.is_wall((tower as Tower).tower_id):
-			hud.set_status("Tower built over wall.")
+		elif count == 0 and before != null:
+			hud.set_status("Deselected — pick a tower type to place, or tap another piece.")
 	_awaiting_tower_tap = false
 	_long_press_triggered = false
 	_paint_holding = false
@@ -772,9 +764,10 @@ func _on_tower_type_selected(tower_id: String) -> void:
 	if _pan_mode and hud != null:
 		hud.set_pan_mode(false)
 	build_system.select_tower_type(tower_id)
+	hud.highlight_tower(tower_id)
 	var def := TowerData.get_def(tower_id)
 	var name := str(def.get("display_name", tower_id))
-	hud.set_status("Placing %s. Sell a tower before building over it." % name)
+	hud.set_status("Placing %s. Right-click or re-tap a selected tower to deselect." % name)
 
 
 func _on_sell_selected() -> void:
@@ -788,12 +781,19 @@ func _on_sell_selected() -> void:
 
 func _on_deselect() -> void:
 	var had_aim := not _aim_ability_id.is_empty()
+	var had_sel := build_system.selection_count() > 0
+	var was_placing := build_system.placing_enabled
 	_clear_command_aim()
-	if build_system.selection_count() <= 0:
-		hud.set_status("Aim cancelled." if had_aim else "Nothing selected.")
-		return
 	build_system.clear_selection()
-	hud.set_status("Aim cancelled." if had_aim else "Selection cleared.")
+	build_system.set_placing_enabled(false)
+	if hud:
+		hud.clear_tower_highlight()
+	if had_aim:
+		hud.set_status("Aim cancelled.")
+	elif had_sel or was_placing:
+		hud.set_status("Deselected — pick a tower type to place again.")
+	else:
+		hud.set_status("Nothing selected.")
 
 
 func _on_selected_towers_changed(count: int, sell_total: int) -> void:

@@ -721,6 +721,16 @@ func highlight_tower(tower_id: String) -> void:
 			btn.modulate = Color(1.2, 1.15, 0.7) if id == tower_id else Color.WHITE
 
 
+func clear_tower_highlight() -> void:
+	var wave := game_state.wave if game_state else 0
+	for id in tower_buttons.keys():
+		var btn: Button = tower_buttons[id]
+		if not TowerData.is_unlocked(id, wave):
+			btn.modulate = Color(0.55, 0.55, 0.55)
+		else:
+			btn.modulate = Color.WHITE
+
+
 func set_banner(text: String) -> void:
 	var cleaned := text.strip_edges()
 	banner_label.text = cleaned
@@ -807,7 +817,7 @@ func update_sell_button(count: int, sell_total: int) -> void:
 		sell_button.tooltip_text = "Refund about %d gold" % sell_total
 		if deselect_button:
 			deselect_button.disabled = false
-			deselect_button.tooltip_text = "Clear %d selected tower(s) (Esc / right-click)" % count
+			deselect_button.tooltip_text = "Clear selection and stop placing (Esc / right-click)"
 
 
 func update_upgrade_buttons(can_stat: bool, upgrade_cost: int, can_final: bool, final_cost: int) -> void:

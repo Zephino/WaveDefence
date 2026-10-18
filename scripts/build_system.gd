@@ -61,7 +61,14 @@ func select_tower_type(tower_id: String) -> void:
 	if not TowerData.is_unlocked(tower_id, game_state.wave if game_state else 0):
 		return
 	selected_tower_id = tower_id
+	placing_enabled = true
 	selection_changed.emit(selected_tower_id)
+
+
+func set_placing_enabled(enabled: bool) -> void:
+	placing_enabled = enabled
+	if grid != null:
+		grid.set_hover(Vector2i(-1, -1), false, false)
 
 
 ## Returns the tower under the cursor, or null if none.
@@ -128,26 +135,33 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 			if not additive_select:
 				_clear_placed_selection()
 			return false
-		# Tap selects the wall (for sell). Tap again while selected, or paint-drag, builds over it.
+		# Tap selects; tap again deselects. Paint-drag builds over the wall.
 		var already_selected := existing in selected_towers
-		if not paint_stroke and not already_selected:
+		if not paint_stroke:
 			if additive_select:
 				_toggle_selected(existing)
+			elif already_selected:
+				_clear_placed_selection()
 			else:
 				_select_only(existing)
 			return false
-		if additive_select and not paint_stroke:
-			_toggle_selected(existing)
-			return false
-	elif existing and not _can_replace_wall(existing):
+	elif existing:
 		if not _tower_owned_by_human(existing as Tower):
 			if not additive_select:
 				_clear_placed_selection()
 			return false
 		if additive_select:
 			_toggle_selected(existing)
+		elif existing in selected_towers and selected_towers.size() == 1:
+			_clear_placed_selection()
 		else:
 			_select_only(existing)
+		return false
+
+	# Empty cell — only place when a shop type is armed.
+	if not placing_enabled:
+		if not additive_select:
+			_clear_placed_selection()
 		return false
 
 	if not can_place_at(cell):
