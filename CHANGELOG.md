@@ -1,4 +1,26 @@
-﻿## Version 00.02.68
+﻿## Version 00.02.70
+Date: 10/18/2026
+Time: 2:52 AM
+
+### Changes
+- Moved **Move start / end** controls out of the crowded Actions sidebar onto a floating cyan bar on the **top-left of the map**
+- Buttons relabeled Start/End ◀ ▶ (200g each) so they are easier to spot after wave 10
+
+### Reason
+Players could not find portal slides buried among the right-side action buttons.
+
+## Version 00.02.69
+Date: 10/18/2026
+Time: 2:49 AM
+
+### Changes
+- Vortex only pulls enemies standing on the **8 tiles** around its center (not a long aura reach)
+- Orbit radius matches that ring (~1 tile); selection/pull range tightened to the lockdown zone
+
+### Reason
+Pull was grabbing from far outside the 3×3; grabs should only happen on the ring around the Vortex.
+
+## Version 00.02.68
 Date: 10/18/2026
 Time: 2:46 AM
 

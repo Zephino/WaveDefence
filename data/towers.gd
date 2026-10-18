@@ -177,10 +177,10 @@ const TYPES := {
 	},
 	"vortex": {
 		"display_name": "Vortex",
-		"blurb": "No damage. The tower sits on 1 cell but locks a 3×3 build zone (cannot sit in a map corner). Ground path walks the 8 tiles around the center; grabbed enemies spin the orbit ring, then release. Unlocks at wave 12.",
+		"blurb": "No damage. The tower sits on 1 cell but locks a 3×3 build zone (cannot sit in a map corner). Only pulls enemies on the 8 tiles around the center; they spin that ring for one lap, then release. Unlocks at wave 12.",
 		"cost": 90,
 		"damage": 0.0,
-		"range": 120.0,
+		"range": 60.0,
 		"fire_rate": 0.0,
 		"splash_radius": 0.0,
 		"color": Color(0.55, 0.35, 0.85),
@@ -188,7 +188,8 @@ const TYPES := {
 		"is_aura": true,
 		"footprint": 3,
 		"path_block_center_only": true,
-		"orbit_radius": 88.0,
+		"pull_ring_only": true,
+		"orbit_radius": 40.0,
 		"orbit_laps": 1.0,
 		"orbit_immune": 1.5,
 		"target_filter": "ground",
@@ -250,6 +251,11 @@ static func footprint_cells(center: Vector2i, size: int = 1) -> Array[Vector2i]:
 ## True when only the anchor cell blocks ground path (ring cells stay walkable).
 static func path_blocks_center_only(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("path_block_center_only", false))
+
+
+## True when the aura only grabs enemies standing on the 8 ring tiles around the center.
+static func pulls_from_ring_only(tower_id: String) -> bool:
+	return bool(get_def(tower_id).get("pull_ring_only", false))
 
 
 ## Cells that become solid for A* when this tower is placed at `center`.
@@ -493,9 +499,9 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 	if bool(def.get("is_aura", false)) or str(def.get("effect", "none")) == "orbit":
 		var fp := footprint_size(tower_id)
 		if fp > 1:
-			if path_blocks_center_only(tower_id):
+			if path_blocks_center_only(tower_id) or pulls_from_ring_only(tower_id):
 				lines.append(
-					"1-cell tower  |  Locks %d×%d build zone  |  Path walks the ring  |  Not in corners"
+					"1-cell tower  |  Locks %d×%d build zone  |  Pulls only the 8 ring tiles  |  Not in corners"
 					% [fp, fp]
 				)
 			else:

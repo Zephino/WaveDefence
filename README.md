@@ -113,7 +113,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 - After +3, choose a **final** elemental buff: **Fire / Ice / Poison / Lightning** (sidebar buttons). One per tower — keeps the tower’s type and adds a light extra effect (e.g. Burn + Ice still burns, with a mild slow).
 - **Sell Selected** sells every selected tower/wall (~50% refund of base + upgrade gold).
 - After the main menu, build freely with **no timer**. Press **Start Round** when ready.
-- From **wave 10** onward (prep / intermission only), pay **200 gold** to slide **Spawn** or **Exit** one cell left/right on the same row (sidebar **Move portals**). Cannot leave the map or seal the path. Clash: your lane only.
+- From **wave 10** onward (prep / intermission only), a cyan **Move start / end** bar appears on the **top-left of the map**. Pay **200 gold** per click to slide start or end one cell left/right on the same row. Cannot leave the map or seal the path. Clash: your lane only.
 - That starts a **build countdown**, then waves auto-run with intermissions between them.
 - After **Start Round**, the build countdown is always skippable (small gold bonus for time left).
 - After a wave ends, the break timer is always skippable (small gold bonus for time left).
@@ -142,7 +142,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 | Lightning | 80 | Chain damage; strong vs air (2.0×). Bolt flashes when Effects is on |
 | Spike | 45 | Melee ground-only; high damage, very short range |
 | Anti-Air | 65 | Air-only flak; long range |
-| Vortex | 90 | No damage (unlocks wave **12**); 1-cell tower that **locks a 3×3** build zone (not in corners); ground path walks the 8 ring tiles; pull spins enemies on the orbit ring for one lap |
+| Vortex | 90 | No damage (unlocks wave **12**); 1-cell tower that **locks a 3×3** build zone (not in corners); only pulls enemies on the **8 ring tiles**, spins them one lap, then releases |
 | Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
 | Command | 100 | Does not shoot. Select it, then place **pay-on-place** abilities. Combat ones (Air Strike / Barricade Spike / Recon Flare) arm as **path traps** and only spend gold when placed — they wait for enemies instead of missing. Supply Drop buffs nearby towers on place (no spend if none in range). Hover ability buttons for tower-style tooltips. |
 

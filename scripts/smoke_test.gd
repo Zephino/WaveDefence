@@ -843,6 +843,8 @@ func _run() -> void:
 		errors.append("vortex should lock a 3x3 zone")
 	if not TowerData.path_blocks_center_only("vortex"):
 		errors.append("vortex should path-block only its center")
+	if not TowerData.pulls_from_ring_only("vortex"):
+		errors.append("vortex should only pull from the 8 ring tiles")
 	if TowerData.path_block_cells(Vector2i(5, 5), "vortex") != [Vector2i(5, 5)]:
 		errors.append("vortex path_block_cells should be center only")
 	if TowerData.unlock_wave("vortex") != 12:

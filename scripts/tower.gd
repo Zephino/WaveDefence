@@ -109,19 +109,29 @@ func _process(delta: float) -> void:
 func _tick_orbit_aura() -> void:
 	if enemy_container == null:
 		return
+	var ring_only := TowerData.pulls_from_ring_only(tower_id)
 	var range_px := _engage_range()
 	var radius := float(def.get("orbit_radius", 48.0))
 	var laps := float(def.get("orbit_laps", 1.0))
 	var immune := float(def.get("orbit_immune", 1.5))
 	# Towers live on GameGrid; enemies share the same map transform — use map-local pos.
 	var center := position
+	var grid := get_parent() as GameGrid
+	if grid == null:
+		grid = _clash_grid()
+	if ring_only and grid != null:
+		# Orbit on the ring tile centers (~1 tile from the vortex; upgrades scale slightly).
+		radius = float(grid.tile_px()) * (float(def.get("orbit_radius", 40.0)) / 40.0)
 	for child in enemy_container.get_children():
 		if not (child is Enemy):
 			continue
 		var e := child as Enemy
 		if not _can_engage(e):
 			continue
-		if not _in_fire_range(e, range_px):
+		if ring_only:
+			if not _enemy_on_pull_ring(e, grid):
+				continue
+		elif not _in_fire_range(e, range_px):
 			continue
 		if e.try_begin_orbit(center, radius, laps, immune):
 			# Ice final (or native freeze buff keys) can mild-slow while grabbing.
@@ -135,6 +145,19 @@ func _tick_orbit_aura() -> void:
 					float(def.get("slow_factor", 0.7)),
 					float(def.get("slow_duration", 1.5))
 				)
+
+
+## True when the enemy cell is one of the 8 neighbors of this tower's anchor (not the center).
+func _enemy_on_pull_ring(enemy: Enemy, grid: GameGrid) -> bool:
+	if grid == null or enemy == null:
+		return false
+	var anchor: Vector2i = get_meta("anchor_cell", grid.world_to_cell(position))
+	var local := grid.to_local(enemy.global_position)
+	var ec := grid.world_to_cell(local)
+	var dx := absi(ec.x - anchor.x)
+	var dy := absi(ec.y - anchor.y)
+	# Chebyshev distance 1 = exactly the eight tiles around the center.
+	return maxi(dx, dy) == 1
 
 
 func _tick_ability_cooldowns(delta: float) -> void:
