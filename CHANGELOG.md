@@ -1,4 +1,15 @@
-﻿## Version 00.02.63
+﻿## Version 00.02.64
+Date: 10/18/2026
+Time: 2:15 AM
+
+### Changes
+- With a combat tower selected, tap or drag on a wall builds over it
+- With placing stopped (Deselect / right-click / Esc), tap a wall to select it for Sell
+
+### Reason
+Wall presses only selected and never started an overbuild, so players could not easily build on walls or sell them.
+
+## Version 00.02.63
 Date: 10/18/2026
 Time: 2:10 AM
 

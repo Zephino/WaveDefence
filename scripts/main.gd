@@ -514,7 +514,7 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 	var cell := grid.world_to_cell(local_map)
 	var existing = grid.get_tower_at(cell)
 
-	# Existing wall/tower: short-tap selects (so walls can be sold). Paint-drag still builds over walls.
+	# Existing piece: overbuild walls while a combat type is armed; otherwise select for sell.
 	if existing != null:
 		if additive:
 			_paint_enabled = false
@@ -522,6 +522,21 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 			build_system.try_place_at(local_map, true)
 			hud.set_status("Selection: %d tower(s)." % build_system.selection_count())
 			hud.show_touch_tower_info(existing as Tower)
+			return
+		var wall_overbuild := (
+			build_system.placing_enabled
+			and TowerData.is_wall((existing as Tower).tower_id)
+			and not TowerData.is_wall(build_system.selected_tower_id)
+			and build_system.can_place_at(cell)
+		)
+		if wall_overbuild:
+			_awaiting_tower_tap = false
+			var overbuilt := _paint_place_at(local_map, true)
+			_paint_enabled = overbuilt
+			if not overbuilt and not game_state.can_afford(
+				int(TowerData.get_def(build_system.selected_tower_id)["cost"])
+			):
+				hud.set_status("Not enough gold.")
 			return
 		_awaiting_tower_tap = true
 		_paint_enabled = false
@@ -560,12 +575,15 @@ func _finish_pointer_press() -> void:
 		var count := build_system.selection_count()
 		if count > 0 and tower:
 			if was_wall and TowerData.is_wall((tower as Tower).tower_id):
-				hud.set_status("Wall selected — Sell, or drag-paint a tower over it. Tap again to deselect.")
+				hud.set_status("Wall selected — Sell, or pick a combat tower and tap it to build over. Tap again to deselect.")
 			else:
 				hud.set_status("Selected %d. Tap again to deselect. Long-press / Multi for more." % maxi(count, 1))
 			hud.show_touch_tower_info(tower as Tower)
 		elif count == 0 and before != null:
-			hud.set_status("Deselected — pick a tower type to place, or tap another piece.")
+			if was_wall and tower != null and not TowerData.is_wall((tower as Tower).tower_id):
+				hud.set_status("Tower built over wall.")
+			else:
+				hud.set_status("Deselected — pick a tower type to place, or tap another piece.")
 	_awaiting_tower_tap = false
 	_long_press_triggered = false
 	_paint_holding = false
@@ -748,7 +766,7 @@ func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:
 		if existing == null:
 			_last_paint_cell = cell
 		return false
-	# Paint strokes may build over walls; single taps select walls instead.
+	# Combat types may build over walls on tap or drag.
 	if build_system.try_place_at(local_map, false, true):
 		_last_paint_cell = cell
 		if show_status:

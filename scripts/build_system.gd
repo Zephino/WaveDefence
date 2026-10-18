@@ -135,9 +135,10 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 			if not additive_select:
 				_clear_placed_selection()
 			return false
-		# Tap selects; tap again deselects. Paint-drag builds over the wall.
-		var already_selected := existing in selected_towers
-		if not paint_stroke:
+		# Placing a combat tower: tap or paint builds over the wall.
+		# Not placing: tap selects the wall so it can be sold.
+		if not placing_enabled or additive_select:
+			var already_selected := existing in selected_towers
 			if additive_select:
 				_toggle_selected(existing)
 			elif already_selected:
@@ -145,6 +146,7 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 			else:
 				_select_only(existing)
 			return false
+		# Fall through to spend + replace (paint_stroke or single tap).
 	elif existing:
 		if not _tower_owned_by_human(existing as Tower):
 			if not additive_select:
