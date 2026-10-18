@@ -210,17 +210,87 @@ func _run() -> void:
 	clash_match.setup(state, 3, [WaveScaler.Difficulty.EASY, WaveScaler.Difficulty.HARD])
 	if clash_match.player_count() != 3:
 		errors.append("clash match should have 3 players")
+	# Cheater bot: +500 gold, +100 lives, slow heal toward 50 after dipping to ≤10.
+	var cheater_match := ClashMatch.new()
+	main.add_child(cheater_match)
+	cheater_match.setup(state, 2, [WaveScaler.Difficulty.CHEATER])
+	var cheater := cheater_match.get_player(1)
+	if cheater == null or not WaveScaler.is_cheater_bot(cheater.bot_difficulty):
+		errors.append("clash setup should create a Cheater bot")
+	else:
+		var want_gold := WaveScaler.CLASH_STARTING_GOLD + WaveScaler.CLASH_CHEATER_EXTRA_GOLD
+		var want_lives := WaveScaler.CLASH_STARTING_LIVES + WaveScaler.CLASH_CHEATER_EXTRA_LIVES
+		if cheater.gold != want_gold:
+			errors.append("cheater should start with %d gold (got %d)" % [want_gold, cheater.gold])
+		if cheater.lives != want_lives:
+			errors.append("cheater should start with %d lives (got %d)" % [want_lives, cheater.lives])
+		cheater.lives = WaveScaler.CLASH_CHEATER_HEAL_TRIGGER + 1
+		cheater.lose_life(1)  # dips to trigger → starts healing
+		if not cheater.cheater_healing:
+			errors.append("cheater should start healing at ≤%d lives" % WaveScaler.CLASH_CHEATER_HEAL_TRIGGER)
+		var healed := 0
+		for _tick in 50:
+			healed += cheater.tick_cheater_heal(WaveScaler.CLASH_CHEATER_HEAL_INTERVAL)
+		if cheater.lives < WaveScaler.CLASH_CHEATER_HEAL_TARGET:
+			errors.append(
+				"cheater should heal toward %d lives (got %d after ticks)"
+				% [WaveScaler.CLASH_CHEATER_HEAL_TARGET, cheater.lives]
+			)
+		if healed < 1:
+			errors.append("cheater heal ticks should restore at least one life")
+	cheater_match.queue_free()
+	var income0 := clash_match.human().income_per_round
 	if not clash_match.try_send_pack(0, 1, "scout"):
 		errors.append("clash human send scout should succeed with starting gold")
-	if clash_match.human().income_per_round <= WaveScaler.CLASH_BASE_INCOME:
-		errors.append("clash send should bump income")
+	var scout_bump := WaveScaler.clash_send_income_bump("scout")
+	if clash_match.human().income_per_round != income0 + scout_bump:
+		errors.append("scout send should bump income by %d" % scout_bump)
+	if WaveScaler.clash_send_income_bump("brute") <= scout_bump:
+		errors.append("pricier send packs should bump income more than cheaper ones")
+	# Refund-style gold top-up so brute affordability isn't the focus.
+	clash_match.human().add_gold(200)
+	clash_match.sync_human_to_game_state()
+	var income1 := clash_match.human().income_per_round
+	if not clash_match.try_send_pack(0, 2, "brute"):
+		errors.append("clash human send brute should succeed with topped-up gold")
+	elif clash_match.human().income_per_round != income1 + WaveScaler.clash_send_income_bump("brute"):
+		errors.append("brute send should bump income by its own higher amount")
 	var opp := clash_match.living_opponents_of(1)
 	if opp.size() != 2:
 		errors.append("bot living opponents should include human and other bot")
 	var bot_ai := ClashBotAI.new()
 	bot_ai.setup(clash_match, grid, build.pathfinder, main.enemies, main.projectiles, 2)
-	# Force a serpentine style so smoke covers weave mazes.
-	bot_ai._maze_strategy = "serp_h"
+	# Force a reference one-tile maze template.
+	bot_ai._maze_strategy = "switchback"
+	for tid in ClashMazeTemplates.TEMPLATE_IDS:
+		var tpath := ClashMazeTemplates.path_cells(tid)
+		if tpath.is_empty() or tpath[0] != Vector2i(ClashMazeTemplates.MID, 0):
+			errors.append("maze template %s should start at spawn" % tid)
+		elif tpath[tpath.size() - 1] != Vector2i(ClashMazeTemplates.MID, ClashMazeTemplates.HEIGHT - 1):
+			errors.append("maze template %s should end at exit" % tid)
+		elif tpath.size() < 30:
+			errors.append("maze template %s path looks too short (%d)" % [tid, tpath.size()])
+		else:
+			# Chord-free: shortest walk on the path set must use every cell.
+			var walk: Dictionary = {}
+			for c in tpath:
+				walk[c] = true
+			var q: Array[Vector2i] = [tpath[0]]
+			var dist: Dictionary = {tpath[0]: 1}
+			var qi := 0
+			while qi < q.size():
+				var cur: Vector2i = q[qi]
+				qi += 1
+				for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n: Vector2i = cur + d
+					if walk.has(n) and not dist.has(n):
+						dist[n] = int(dist[cur]) + 1
+						q.append(n)
+			var goal: Vector2i = tpath[tpath.size() - 1]
+			if not dist.has(goal) or int(dist[goal]) < tpath.size():
+				errors.append("maze template %s has a shortcut (bfs=%s len=%d)" % [
+					tid, str(dist.get(goal, -1)), tpath.size()
+				])
 	var bot_p := clash_match.get_player(2)
 	var path_before := build.pathfinder.get_cell_path_between(
 		grid.get_lane_spawn(2), grid.get_lane_exit(2)

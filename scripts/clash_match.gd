@@ -30,10 +30,13 @@ func setup(p_state: GameState, player_count: int, bot_difficulties: Array) -> vo
 			p.bot_difficulty = WaveScaler.Difficulty.MEDIUM
 		else:
 			var bot_i := i - 1
-			p.display_name = "Bot %d" % i
 			p.bot_difficulty = WaveScaler.Difficulty.MEDIUM
 			if bot_i < bot_difficulties.size():
 				p.bot_difficulty = int(bot_difficulties[bot_i])
+			if WaveScaler.is_cheater_bot(p.bot_difficulty):
+				p.display_name = "Cheater" if count == 2 else "Cheater %d" % i
+			else:
+				p.display_name = "Bot %d" % i
 		p.reset_economy()
 		players.append(p)
 	human_id = 0
@@ -99,6 +102,21 @@ func award_round_income() -> void:
 	players_changed.emit()
 
 
+## Cheater bots slowly restore lives after dipping to the heal trigger.
+func tick_cheater_heals(delta: float) -> void:
+	if finished or delta <= 0.0:
+		return
+	var any := false
+	for p in players:
+		var cp := p as ClashPlayerState
+		if cp == null or not cp.alive:
+			continue
+		if cp.tick_cheater_heal(delta) > 0:
+			any = true
+	if any:
+		players_changed.emit()
+
+
 ## Buy a send pack aimed at target. Returns false if invalid/unaffordable.
 func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 	if finished:
@@ -113,11 +131,12 @@ func try_send_pack(from_id: int, to_id: int, pack_id: String) -> bool:
 		return false
 	if from_p.is_human and game_state != null:
 		from_p.gold = game_state.gold
-	var cost: int = int(WaveScaler.clash_send_pack(pack_id)["cost"])
+	var pack := WaveScaler.clash_send_pack(pack_id)
+	var cost: int = int(pack.get("cost", 0))
 	if not from_p.spend_gold(cost):
 		return false
 	to_p.enqueue_incoming(pack_id, from_id)
-	from_p.bump_income()
+	from_p.bump_income(WaveScaler.clash_send_income_bump(pack_id))
 	if from_p.is_human:
 		sync_human_to_game_state()
 	players_changed.emit()

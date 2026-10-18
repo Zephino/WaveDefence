@@ -217,6 +217,8 @@ func refresh_clash_panel() -> void:
 			continue
 		if not cp.alive:
 			parts.append("%s: OUT" % cp.display_name)
+		elif cp.cheater_healing:
+			parts.append("%s L%d♥ $%d +%d/rnd" % [cp.display_name, cp.lives, cp.gold, cp.income_per_round])
 		else:
 			parts.append("%s L%d $%d +%d/rnd" % [cp.display_name, cp.lives, cp.gold, cp.income_per_round])
 	if _clash_status_label:
@@ -273,13 +275,14 @@ func _rebuild_clash_send_box() -> void:
 	for pack_id in WaveScaler.clash_send_pack_ids():
 		var pack := WaveScaler.clash_send_pack(str(pack_id))
 		var cost: int = int(pack.get("cost", 0))
+		var bump := WaveScaler.clash_send_income_bump(str(pack_id))
 		var pbtn := Button.new()
-		pbtn.text = "%s (%d)" % [str(pack.get("label", pack_id)), cost]
+		pbtn.text = "%s (%d) +%d/rnd" % [str(pack.get("label", pack_id)), cost, bump]
 		pbtn.focus_mode = Control.FOCUS_NONE
 		pbtn.custom_minimum_size = Vector2(0, GameLayout.button_height(26.0))
 		pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pbtn.disabled = game_state == null or not game_state.can_afford(cost)
-		pbtn.tooltip_text = "Send now (prep or during the round). Raises your income by %d." % WaveScaler.CLASH_SEND_INCOME_BUMP
+		pbtn.tooltip_text = "Send now (prep or during the round). Permanently raises your income by +%d/rnd." % bump
 		var pid := str(pack_id)
 		pbtn.pressed.connect(func() -> void:
 			clash_send_requested.emit(_clash_target_id, pid)

@@ -1,4 +1,49 @@
-﻿## Version 00.02.50
+﻿## Version 00.02.54
+Date: 10/18/2026
+Time: 1:07 AM
+
+### Changes
+- Clash lanes are **7×15** to match the maze reference sheets; bots train on 12 sheet styles (switchback, serpent, slalom, fortress, …) plus greedy/scatter
+- Bots prioritize building combat towers **over walls** on path corners after locking the snake
+
+### Reason
+Use the full sheet set to teach serpentine pathing, and exploit wall→tower overbuilds the way players do.
+
+## Version 00.02.53
+Date: 10/18/2026
+Time: 1:02 AM
+
+### Changes
+- Clash bot difficulty **Cheater**: +500 starting gold, +100 lives, and slow life regen back toward 50 after dropping to 10
+- Clash setup UI includes Cheater; HUD shows a heal marker while regenerating
+
+### Reason
+Give a unfair endless-fight opponent you can run against as long as you want.
+
+## Version 00.02.52
+Date: 10/18/2026
+Time: 1:00 AM
+
+### Changes
+- Clash bots use 12 reference 7×14 one-tile maze templates (switchbacks, alleys, hairpins, S-bends, and more)
+- Templates are chord-free corridors (~30–44 tiles) so the forced path matches the sheet; bots fill all tower slots with walls before spending on combat
+- Clash starting gold is 320 so a full maze can lock in during the opening prep
+
+### Reason
+Player-provided maze sheet should drive bot builds so they look like real one-tile serpentine defenses.
+
+## Version 00.02.51
+Date: 10/18/2026
+Time: 12:34 AM
+
+### Changes
+- Clash send packs now grant different permanent income bumps by price: Scout +2/rnd, Pack +4/rnd, Brute +6/rnd
+- Send buttons show the +income amount for each pack
+
+### Reason
+Paying more for a send should raise ongoing round income more than a cheap scout.
+
+## Version 00.02.50
 Date: 10/18/2026
 Time: 12:20 AM
 

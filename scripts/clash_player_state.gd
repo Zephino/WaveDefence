@@ -14,6 +14,9 @@ var income_per_round: int = WaveScaler.CLASH_BASE_INCOME
 var alive: bool = true
 ## Queued send packs for the next wave aimed at this player: Array of {pack_id, from_id}.
 var incoming_sends: Array = []
+## Cheater heal: after dipping to ≤ trigger, regenerate toward target.
+var cheater_healing: bool = false
+var cheater_heal_timer: float = 0.0
 
 
 func reset_economy() -> void:
@@ -22,6 +25,11 @@ func reset_economy() -> void:
 	income_per_round = WaveScaler.CLASH_BASE_INCOME
 	alive = true
 	incoming_sends.clear()
+	cheater_healing = false
+	cheater_heal_timer = 0.0
+	if not is_human and WaveScaler.is_cheater_bot(bot_difficulty):
+		gold += WaveScaler.CLASH_CHEATER_EXTRA_GOLD
+		lives += WaveScaler.CLASH_CHEATER_EXTRA_LIVES
 
 
 func add_gold(amount: int) -> void:
@@ -45,8 +53,44 @@ func lose_life(amount: int = 1) -> void:
 	if not alive:
 		return
 	lives = maxi(lives - amount, 0)
+	if (
+		not is_human
+		and WaveScaler.is_cheater_bot(bot_difficulty)
+		and lives > 0
+		and lives <= WaveScaler.CLASH_CHEATER_HEAL_TRIGGER
+	):
+		cheater_healing = true
 	if lives <= 0:
 		alive = false
+		cheater_healing = false
+
+
+## Slow +1 life ticks while cheater_healing toward HEAL_TARGET. Returns lives gained.
+func tick_cheater_heal(delta: float) -> int:
+	if not alive or is_human or not WaveScaler.is_cheater_bot(bot_difficulty):
+		return 0
+	if lives <= WaveScaler.CLASH_CHEATER_HEAL_TRIGGER:
+		cheater_healing = true
+	if not cheater_healing:
+		return 0
+	if lives >= WaveScaler.CLASH_CHEATER_HEAL_TARGET:
+		cheater_healing = false
+		cheater_heal_timer = 0.0
+		return 0
+	cheater_heal_timer += delta
+	var gained := 0
+	while (
+		cheater_heal_timer >= WaveScaler.CLASH_CHEATER_HEAL_INTERVAL
+		and lives < WaveScaler.CLASH_CHEATER_HEAL_TARGET
+		and alive
+	):
+		cheater_heal_timer -= WaveScaler.CLASH_CHEATER_HEAL_INTERVAL
+		lives += 1
+		gained += 1
+	if lives >= WaveScaler.CLASH_CHEATER_HEAL_TARGET:
+		cheater_healing = false
+		cheater_heal_timer = 0.0
+	return gained
 
 
 func award_income() -> void:

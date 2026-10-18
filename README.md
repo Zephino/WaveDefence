@@ -69,11 +69,11 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
   - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with the **Pan** sidebar toggle (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
-  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Each lane starts empty (no rock handicaps; ~7 cols wide for serpentine mazes). Build only in your lane. Towers only attack mobs in **their own lane**. **Buy send packs** anytime; income rises per send. Leaks overflow to the next living lane. **Last standing** wins. Bots pick varied maze styles (horizontal weave, vertical corridors, greedy/scatter), buy the snake, turn walls into towers, upgrade, and send. A light on-device “memory” biases styles that made longer paths (not a neural net). No leaderboard for Clash yet.
+  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Each lane starts empty (no rock handicaps; **7×15** one-tile maze space matching the reference sheets). Build only in your lane. Towers only attack mobs in **their own lane**. **Buy send packs** anytime; pricier packs permanently raise income more (Scout +2/rnd, Pack +4/rnd, Brute +6/rnd). Leaks overflow to the next living lane. **Last standing** wins. Bots learn among **12 sheet maze styles** (switchback, serpent, slalom, fortress, …) plus greedy/scatter for their own pathing; they sketch with walls then **build combat towers over those walls** (preferring path corners). On-device memory biases styles that made longer paths. Bot difficulty includes **Cheater** (+500 gold, +100 lives, slowly heals back toward 50 after dropping to 10) for long endless fights. No leaderboard for Clash yet.
 - **Monsters** — independent of map (Clash always uses Classic monsters for v1):
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
-- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot difficulties). Starting gold **350 / 200 / 100** (Clash uses Medium gold for everyone)
+- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot Easy/Medium/Hard/**Cheater**). Starting gold **350 / 200 / 100** (Clash starts at **320** so bots can lock in a full one-tile maze)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
 - **Settings** — opens a popup:
   - **Large Controls**, **Effects**, **Performance mode**, **Show tower range**, **High contrast**, **Show enemy HP bars**, **Show grid coordinates**, **Screenshot watermark**
@@ -146,7 +146,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 
 Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns/trap modes are in `data/command_abilities.gd`.
 
-Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**.
+Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**. Clash: **320** for every lane.
 
 ## Debug / playtest
 

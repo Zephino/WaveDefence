@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Endless wave formulas. Tune freely, then re-run (F5).
 
-enum Difficulty { EASY, MEDIUM, HARD }
+enum Difficulty { EASY, MEDIUM, HARD, CHEATER }
 enum GameMode { CLASSIC, RANDOM, SIEGE, CLASH }
 ## Independent of map mode: Classic spawns (no resists) vs Randomize elemental types.
 enum MonsterMode { CLASSIC, RANDOMIZE }
@@ -40,8 +40,14 @@ static func difficulty_label(difficulty: int) -> String:
 			return "Easy"
 		Difficulty.HARD:
 			return "Hard"
+		Difficulty.CHEATER:
+			return "Cheater"
 		_:
 			return "Medium"
+
+
+static func is_cheater_bot(difficulty: int) -> bool:
+	return difficulty == Difficulty.CHEATER
 
 
 static func mode_label(mode: int) -> String:
@@ -381,18 +387,28 @@ static func early_send_bonus_from_timer(seconds_left: float) -> int:
 ## --- Clash mode (lanes vs AI) ---
 const CLASH_MIN_PLAYERS := 2
 const CLASH_MAX_PLAYERS := 4
-const CLASH_STARTING_GOLD := STARTING_GOLD_MEDIUM
+## Enough for a full 7×15 one-tile maze in walls (~55×5) plus a little send reserve.
+const CLASH_STARTING_GOLD := 320
 const CLASH_STARTING_LIVES := STARTING_LIVES
+## Cheater bot: stacked on top of normal Clash start (endless-fight handicap).
+const CLASH_CHEATER_EXTRA_GOLD := 500
+const CLASH_CHEATER_EXTRA_LIVES := 100
+## When lives drop to this, cheater slowly regenerates toward HEAL_TARGET.
+const CLASH_CHEATER_HEAL_TRIGGER := 10
+const CLASH_CHEATER_HEAL_TARGET := 50
+## Seconds per +1 life while healing.
+const CLASH_CHEATER_HEAL_INTERVAL := 2.5
 const CLASH_BASE_INCOME := 10
+## Fallback income bump if a pack omits income_bump.
 const CLASH_SEND_INCOME_BUMP := 2
 ## Slightly lighter base packs so multi-lane boards stay readable.
 const CLASH_CREEP_COUNT_MULT := 0.75
 
-## Send package ids → cost / creep count / HP mult (vs current wave creep).
+## Send package ids → cost / creep count / permanent income bump (paid every round).
 const CLASH_SEND_PACKS := {
-	"scout": {"label": "Scout x3", "cost": 40, "count": 3, "hp_mult": 0.7, "speed_mult": 1.15, "bounty_mult": 0.6},
-	"pack": {"label": "Pack x6", "cost": 80, "count": 6, "hp_mult": 1.0, "speed_mult": 1.0, "bounty_mult": 0.8},
-	"brute": {"label": "Brute x2", "cost": 120, "count": 2, "hp_mult": 2.2, "speed_mult": 0.85, "bounty_mult": 1.2},
+	"scout": {"label": "Scout x3", "cost": 40, "count": 3, "hp_mult": 0.7, "speed_mult": 1.15, "bounty_mult": 0.6, "income_bump": 2},
+	"pack": {"label": "Pack x6", "cost": 80, "count": 6, "hp_mult": 1.0, "speed_mult": 1.0, "bounty_mult": 0.8, "income_bump": 4},
+	"brute": {"label": "Brute x2", "cost": 120, "count": 2, "hp_mult": 2.2, "speed_mult": 0.85, "bounty_mult": 1.2, "income_bump": 6},
 }
 
 
@@ -406,6 +422,12 @@ static func clash_send_pack_ids() -> Array:
 
 static func clash_send_pack(pack_id: String) -> Dictionary:
 	return CLASH_SEND_PACKS.get(pack_id, CLASH_SEND_PACKS["scout"])
+
+
+## Permanent +gold/round from buying this pack (stacks for the rest of the match).
+static func clash_send_income_bump(pack_id: String) -> int:
+	var pack := clash_send_pack(pack_id)
+	return maxi(int(pack.get("income_bump", CLASH_SEND_INCOME_BUMP)), 0)
 
 
 static func clash_creep_count(wave: int) -> int:

@@ -878,7 +878,7 @@ func _show_clash_setup(difficulty: int) -> void:
 	box.add_child(title)
 
 	var note := Label.new()
-	note.text = "You plus AI bots. Pick 2–4 players and each bot’s difficulty (tower placement + sends)."
+	note.text = "You plus AI bots. Pick 2–4 players and each bot’s difficulty. Cheater starts with +500 gold, +100 lives, and slowly heals back toward 50 once it drops to 10 — good for long endless fights."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size = Vector2(360, 0)
 	note.modulate = Color(0.7, 0.75, 0.8)
@@ -954,13 +954,14 @@ func _refresh_clash_setup_ui() -> void:
 			{"d": WaveScaler.Difficulty.EASY, "t": "Easy"},
 			{"d": WaveScaler.Difficulty.MEDIUM, "t": "Medium"},
 			{"d": WaveScaler.Difficulty.HARD, "t": "Hard"},
+			{"d": WaveScaler.Difficulty.CHEATER, "t": "Cheater"},
 		]:
 			var diff: int = int(item["d"])
 			var btn := _menu_button(str(item["t"]), func() -> void:
 				_clash_bot_diffs[bot_i] = diff
 				_style_clash_bot_diffs()
 			, true)
-			btn.custom_minimum_size = Vector2(90, GameLayout.button_height(32.0))
+			btn.custom_minimum_size = Vector2(78, GameLayout.button_height(32.0))
 			diff_row.add_child(btn)
 			btns[diff] = btn
 		_clash_bot_diff_buttons.append(btns)

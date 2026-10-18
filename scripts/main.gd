@@ -279,22 +279,23 @@ func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 		return
 	if clash_match.try_send_pack(clash_match.human_id, target_id, pack_id):
 		var pack := WaveScaler.clash_send_pack(pack_id)
+		var bump := WaveScaler.clash_send_income_bump(pack_id)
 		var n := 0
 		if wave_manager.phase == WaveManager.Phase.WAVE:
 			n = wave_manager.flush_pending_clash_sends()
 		var dest := clash_match.get_player(target_id)
 		var dest_name := dest.display_name if dest else "opponent"
 		if n > 0:
-			hud.set_status("Sent %s to %s now (+%d income)." % [
+			hud.set_status("Sent %s to %s now (+%d/rnd income)." % [
 				str(pack.get("label", pack_id)),
 				dest_name,
-				WaveScaler.CLASH_SEND_INCOME_BUMP,
+				bump,
 			])
 		else:
-			hud.set_status("Queued %s to %s (+%d income)." % [
+			hud.set_status("Queued %s to %s (+%d/rnd income)." % [
 				str(pack.get("label", pack_id)),
 				dest_name,
-				WaveScaler.CLASH_SEND_INCOME_BUMP,
+				bump,
 			])
 		hud.refresh_clash_panel()
 	else:
@@ -339,11 +340,13 @@ func _process(delta: float) -> void:
 		_panning = false
 		hud.hide_board_tower_tooltip()
 		return
-	if clash_match != null and wave_manager != null and wave_manager.phase == WaveManager.Phase.WAVE:
-		_clash_bot_send_cd -= delta
-		if _clash_bot_send_cd <= 0.0:
-			_clash_bot_send_cd = 2.4
-			_run_clash_bot_sends()
+	if clash_match != null and not clash_match.finished:
+		clash_match.tick_cheater_heals(delta)
+		if wave_manager != null and wave_manager.phase == WaveManager.Phase.WAVE:
+			_clash_bot_send_cd -= delta
+			if _clash_bot_send_cd <= 0.0:
+				_clash_bot_send_cd = 2.4
+				_run_clash_bot_sends()
 	hud.tick_tooltips()
 	var mouse := get_global_mouse_position()
 	var local_map := _screen_to_map(mouse)
