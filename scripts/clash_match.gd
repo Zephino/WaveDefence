@@ -77,6 +77,19 @@ func living_count() -> int:
 	return living_players().size()
 
 
+## Next living player after this lane, wrapping (skips eliminated). Null if none other.
+func next_living_after_lane(lane: int) -> ClashPlayerState:
+	var n := players.size()
+	if n <= 0:
+		return null
+	for step in n:
+		var idx := (lane + 1 + step) % n
+		var cp := players[idx] as ClashPlayerState
+		if cp != null and cp.alive and cp.lane_index != lane:
+			return cp
+	return null
+
+
 func award_round_income() -> void:
 	for p in players:
 		var cp := p as ClashPlayerState

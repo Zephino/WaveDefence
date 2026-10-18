@@ -8,6 +8,8 @@ var def: Dictionary = {}
 var fire_cooldown: float = 0.0
 var enemy_container: Node
 var projectile_container: Node
+## Clash lane this tower defends (-1 = Classic / any lane).
+var lane_id: int = -1
 var selected: bool = false
 var upgrade_level: int = 0
 var final_element: String = ""
@@ -128,17 +130,82 @@ func apply_fire_buff(mult: float, duration: float) -> void:
 	queue_redraw()
 
 
+func _clash_grid() -> GameGrid:
+	var g := get_parent() as GameGrid
+	if g != null:
+		return g
+	if enemy_container != null:
+		var host := enemy_container.get_parent()
+		if host != null:
+			return host.get_node_or_null("GameGrid") as GameGrid
+	return null
+
+
+func _is_clash_board() -> bool:
+	var g := _clash_grid()
+	return g != null and g.is_clash_layout
+
+
+func _resolved_lane() -> int:
+	if not _is_clash_board():
+		return -1
+	if lane_id >= 0:
+		return lane_id
+	var g := _clash_grid()
+	if g != null:
+		return g.lane_index_for_cell(g.world_to_cell(position))
+	return -1
+
+
+func _physical_lane(enemy: Enemy) -> int:
+	if not _is_clash_board():
+		return -1
+	var g := _clash_grid()
+	if g == null:
+		return -1
+	return g.lane_index_for_global(enemy.global_position)
+
+
+func _engage_range() -> float:
+	var range_px := float(def.get("range", 100.0))
+	if not _is_clash_board():
+		return range_px
+	var g := _clash_grid()
+	var my_lane := _resolved_lane()
+	if g == null or my_lane < 0 or my_lane >= g.lane_col_ranges.size():
+		return range_px
+	# Edge of a 5-col lane is 2 tiles from the path; short-range towers must still reach it.
+	var cols: Vector2i = g.lane_col_ranges[my_lane]
+	var mid_x := (float(cols.x + cols.y) * 0.5 + 0.5) * float(g.tile_px())
+	var need := absf(position.x - mid_x) + float(g.tile_px()) * 0.75
+	return maxf(range_px, need)
+
+
+func _can_engage(enemy: Enemy) -> bool:
+	if not _is_clash_board():
+		return TowerData.can_target_enemy(def, enemy)
+	return TowerData.can_target_enemy_in_lane(def, enemy, _resolved_lane(), _physical_lane(enemy))
+
+
+func _in_fire_range(enemy: Enemy, range_px: float) -> bool:
+	if _is_clash_board():
+		return to_local(enemy.global_position).length() <= range_px
+	return global_position.distance_to(enemy.global_position) <= range_px
+
+
 func _find_target() -> Enemy:
-	var range_px: float = float(def.get("range", 100.0))
+	var range_px := _engage_range()
 	var prefer_bosses := TowerData.prefers_bosses(def)
 	var best: Enemy = null
 	var best_score := -INF
+	if enemy_container == null:
+		return null
 	for child in enemy_container.get_children():
 		if child is Enemy:
 			var e := child as Enemy
-			if not TowerData.can_target_enemy(def, e):
+			if not _can_engage(e):
 				continue
-			if global_position.distance_to(e.global_position) > range_px:
+			if not _in_fire_range(e, range_px):
 				continue
 			# Prefer enemies further along the path; boss-hunters hard-prefer bosses.
 			var progress := float(e.path_index)
@@ -177,7 +244,8 @@ func _fire_at(target: Enemy) -> void:
 		def,
 		enemy_container,
 		def.get("color", Color.WHITE),
-		float(def.get("projectile_speed", 320.0))
+		float(def.get("projectile_speed", 320.0)),
+		_resolved_lane()
 	)
 	# Must be in the projectile layer before setting global_position, or shots
 	# inherit the board offset as local coords and appear beside the tower.

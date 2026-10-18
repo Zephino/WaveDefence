@@ -37,12 +37,21 @@ func run_prep_turn(wave: int) -> void:
 		return
 	_place_towers(p, wave)
 	_upgrade_owned_towers(p)
-	_try_sends(p, wave)
+	_try_sends(p, wave, false)
 	# Leftover gold after sends still goes into defense.
 	_place_towers(p, wave)
 	_upgrade_owned_towers(p)
 	if clash_match != null:
 		clash_match.players_changed.emit()
+
+
+func run_send_turn(wave: int) -> void:
+	if clash_match == null or clash_match.finished:
+		return
+	var p := clash_match.get_player(player_id)
+	if p == null or not p.alive or p.is_human:
+		return
+	_try_sends(p, wave, true)
 
 
 func _place_towers(p: ClashPlayerState, wave: int) -> void:
@@ -71,6 +80,12 @@ func _place_towers(p: ClashPlayerState, wave: int) -> void:
 		placed += 1
 
 
+func _cheapest_send_cost() -> int:
+	if WaveScaler.CLASH_SEND_PACKS.has("scout"):
+		return int(WaveScaler.clash_send_pack("scout")["cost"])
+	return 40
+
+
 func _gold_reserve(p: ClashPlayerState) -> int:
 	var ratio := 0.12
 	match p.bot_difficulty:
@@ -80,8 +95,8 @@ func _gold_reserve(p: ClashPlayerState) -> int:
 			ratio = 0.08
 		_:
 			ratio = 0.12
-	# Keep a little cash for a cheap send; spend the rest on the lane.
-	return maxi(int(float(p.gold) * ratio), 20)
+	# Keep enough for at least one send pack; spend the rest on the lane.
+	return maxi(int(float(p.gold) * ratio), _cheapest_send_cost())
 
 
 func _upgrade_owned_towers(p: ClashPlayerState) -> void:
@@ -209,7 +224,7 @@ func _next_place_cell(candidates: Array[Vector2i], spawn: Vector2i, exit_c: Vect
 	return Vector2i(-1, -1)
 
 
-func _try_sends(p: ClashPlayerState, wave: int) -> void:
+func _try_sends(p: ClashPlayerState, wave: int, during_wave: bool = false) -> void:
 	var opponents := clash_match.living_opponents_of(player_id)
 	if opponents.is_empty():
 		return
@@ -229,10 +244,17 @@ func _try_sends(p: ClashPlayerState, wave: int) -> void:
 			send_chance = 0.4
 			max_sends = 1
 			budget_ratio = 0.22
+	if during_wave:
+		send_chance = minf(send_chance + 0.25, 0.9)
+		budget_ratio = minf(budget_ratio + 0.15, 0.5)
 
+	var cheapest := _cheapest_send_cost()
+	if p.gold < cheapest:
+		return
 	if _rng.randf() > send_chance:
 		return
-	var budget := int(float(p.gold) * budget_ratio)
+	# Spend-down leaves ~reserve gold; a ratio of that is often below pack cost.
+	var budget := maxi(int(float(p.gold) * budget_ratio), cheapest)
 	var sent := 0
 	while sent < max_sends and budget > 0:
 		var pack_id := _pick_pack(budget, wave)

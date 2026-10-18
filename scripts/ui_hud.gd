@@ -232,7 +232,7 @@ func _rebuild_clash_send_box() -> void:
 		_clash_send_box.remove_child(c)
 		c.queue_free()
 	var title := Label.new()
-	title.text = "Send to enemy"
+	title.text = "Send (anytime)"
 	title.modulate = Color(0.85, 0.9, 0.55)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_clash_send_box.add_child(title)
@@ -279,7 +279,7 @@ func _rebuild_clash_send_box() -> void:
 		pbtn.custom_minimum_size = Vector2(0, GameLayout.button_height(26.0))
 		pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pbtn.disabled = game_state == null or not game_state.can_afford(cost)
-		pbtn.tooltip_text = "Send to selected opponent. Raises your income by %d." % WaveScaler.CLASH_SEND_INCOME_BUMP
+		pbtn.tooltip_text = "Send now (prep or during the round). Raises your income by %d." % WaveScaler.CLASH_SEND_INCOME_BUMP
 		var pid := str(pack_id)
 		pbtn.pressed.connect(func() -> void:
 			clash_send_requested.emit(_clash_target_id, pid)

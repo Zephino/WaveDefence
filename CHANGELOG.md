@@ -1,4 +1,48 @@
-﻿## Version 00.02.42
+﻿## Version 00.02.46
+Date: 10/17/2026
+Time: 11:55 PM
+
+### Changes
+- Classic and Siege targeting ignore Clash lane rules completely (same fire check as before the lane lock)
+
+### Reason
+Towers also stopped firing in Classic, so the lane filter was not staying confined to Clash.
+
+## Version 00.02.45
+Date: 10/17/2026
+Time: 11:50 PM
+
+### Changes
+- Clash targeting uses the mob's current lane columns (not only a stamped id) and measures range in the tower's local space
+- Edge towers in a lane now reach the lane path so in-lane mobs get shot
+
+### Reason
+After the same-lane lock, some towers stopped firing at mobs walking their own path when a lane id was missing or range was checked in the wrong space.
+
+## Version 00.02.44
+Date: 10/17/2026
+Time: 11:40 PM
+
+### Changes
+- Clash towers only target, splash, and chain onto mobs in their own lane
+
+### Reason
+Towers were shooting across neighboring lanes when range reached the next path.
+
+## Version 00.02.43
+Date: 10/17/2026
+Time: 11:36 PM
+
+### Changes
+- Clash leaks now overflow into the next living lane instead of vanishing at the exit
+- Humans and bots can buy send packs during the live round; queued packs spawn immediately
+- Bots keep enough gold for a real send pack and spend that reserve instead of hoarding it
+- Lightning bolt FX no longer shadows `Node2D.to_local()`, which was failing script compile
+
+### Reason
+Mobs that reached a lane exit were supposed to continue to the next lane, and bots were not actually sending.
+
+## Version 00.02.42
 Date: 10/17/2026
 Time: 11:27 PM
 

@@ -21,6 +21,7 @@ var clash_match: ClashMatch = null
 var _clash_bots: Array = [] ## ClashBotAI
 var _clash_result_place: int = 0
 var _clash_human_won: bool = false
+var _clash_bot_send_cd: float = 0.0
 
 var enemies: Node2D
 var projectiles: Node2D
@@ -276,19 +277,41 @@ func _run_clash_bots() -> void:
 func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 	if clash_match == null or clash_match.finished:
 		return
-	if wave_manager.phase != WaveManager.Phase.PREP and wave_manager.phase != WaveManager.Phase.INTERMISSION:
-		hud.set_status("Sends only during prep / build timer.")
-		return
 	if clash_match.try_send_pack(clash_match.human_id, target_id, pack_id):
 		var pack := WaveScaler.clash_send_pack(pack_id)
-		hud.set_status("Queued %s to %s (+%d income)." % [
-			str(pack.get("label", pack_id)),
-			clash_match.get_player(target_id).display_name if clash_match.get_player(target_id) else "opponent",
-			WaveScaler.CLASH_SEND_INCOME_BUMP,
-		])
+		var n := 0
+		if wave_manager.phase == WaveManager.Phase.WAVE:
+			n = wave_manager.flush_pending_clash_sends()
+		var dest := clash_match.get_player(target_id)
+		var dest_name := dest.display_name if dest else "opponent"
+		if n > 0:
+			hud.set_status("Sent %s to %s now (+%d income)." % [
+				str(pack.get("label", pack_id)),
+				dest_name,
+				WaveScaler.CLASH_SEND_INCOME_BUMP,
+			])
+		else:
+			hud.set_status("Queued %s to %s (+%d income)." % [
+				str(pack.get("label", pack_id)),
+				dest_name,
+				WaveScaler.CLASH_SEND_INCOME_BUMP,
+			])
 		hud.refresh_clash_panel()
 	else:
 		hud.set_status("Can't send that package.")
+
+
+func _run_clash_bot_sends() -> void:
+	if clash_match == null or clash_match.finished:
+		return
+	var wave := maxi(game_state.wave, 1)
+	for bot in _clash_bots:
+		var ai := bot as ClashBotAI
+		if ai != null:
+			ai.run_send_turn(wave)
+	wave_manager.flush_pending_clash_sends()
+	if hud != null:
+		hud.refresh_clash_panel()
 
 
 func _on_clash_players_changed() -> void:
@@ -316,6 +339,11 @@ func _process(delta: float) -> void:
 		_panning = false
 		hud.hide_board_tower_tooltip()
 		return
+	if clash_match != null and wave_manager != null and wave_manager.phase == WaveManager.Phase.WAVE:
+		_clash_bot_send_cd -= delta
+		if _clash_bot_send_cd <= 0.0:
+			_clash_bot_send_cd = 2.4
+			_run_clash_bot_sends()
 	hud.tick_tooltips()
 	var mouse := get_global_mouse_position()
 	var local_map := _screen_to_map(mouse)
@@ -947,6 +975,8 @@ func _on_wave_started(wave: int, banner: String) -> void:
 	hud.set_banner(banner)
 	# Banner lives in the top bar; keep status short so text doesn't stack/overlap.
 	hud.set_status("Wave %d started." % wave)
+	if clash_match != null:
+		_clash_bot_send_cd = 0.6
 
 
 func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:

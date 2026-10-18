@@ -159,6 +159,12 @@ func lane_index_for_cell(cell: Vector2i) -> int:
 	return -1
 
 
+func lane_index_for_global(global_pos: Vector2) -> int:
+	if not is_clash_layout:
+		return -1
+	return lane_index_for_cell(world_to_cell(to_local(global_pos)))
+
+
 func is_clash_spawn_or_exit(cell: Vector2i) -> bool:
 	if not is_clash_layout:
 		return cell == spawn_cell or cell == exit_cell
@@ -437,6 +443,8 @@ func is_blocked_for_path(cell: Vector2i) -> bool:
 func place_tower(cell: Vector2i, tower: Node) -> void:
 	towers[cell] = tower
 	tower.position = cell_to_world_center(cell)
+	if tower is Tower:
+		(tower as Tower).lane_id = lane_index_for_cell(cell)
 	add_child(tower)
 	tower_placed.emit(cell, tower)
 	queue_redraw()

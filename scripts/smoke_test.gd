@@ -217,6 +217,49 @@ func _run() -> void:
 	var opp := clash_match.living_opponents_of(1)
 	if opp.size() != 2:
 		errors.append("bot living opponents should include human and other bot")
+	var nxt := clash_match.next_living_after_lane(0)
+	if nxt == null or nxt.lane_index != 1:
+		errors.append("clash overflow should wrap to the next living lane")
+	var wrap := clash_match.next_living_after_lane(2)
+	if wrap == null or wrap.lane_index != 0:
+		errors.append("clash overflow should wrap from last lane to first living")
+	var mid := clash_match.get_player(1)
+	if mid != null:
+		while mid.alive:
+			mid.lose_life(1)
+	var skip := clash_match.next_living_after_lane(0)
+	if skip == null or skip.lane_index != 2:
+		errors.append("clash overflow should skip eliminated lanes")
+	var lane0_cell := Vector2i(int(grid.lane_col_ranges[0].y), 4)
+	var lane_tower := Tower.new()
+	lane_tower.setup("gunner", main.enemies, main.projectiles)
+	if grid.is_buildable(lane0_cell):
+		grid.place_tower(lane0_cell, lane_tower)
+		if lane_tower.lane_id != 0:
+			errors.append("clash placed tower should lock to its lane")
+		var own_mob := Enemy.new()
+		own_mob.lane_id = 0
+		main.enemies.add_child(own_mob)
+		own_mob.global_position = lane_tower.global_position + Vector2(8, 0)
+		var other_cell := Vector2i(int(grid.lane_col_ranges[1].x), 4)
+		var other_mob := Enemy.new()
+		other_mob.lane_id = 1
+		main.enemies.add_child(other_mob)
+		other_mob.global_position = grid.to_global(grid.cell_to_world_center(other_cell))
+		var picked := lane_tower._find_target()
+		if picked != own_mob:
+			errors.append("clash tower should only target mobs in its lane")
+		own_mob.lane_id = -1
+		own_mob.defender_id = -1
+		if lane_tower._find_target() != own_mob:
+			errors.append("clash tower should still shoot an in-lane mob with unset lane id")
+		own_mob.queue_free()
+		other_mob.queue_free()
+		grid.remove_tower_at(lane0_cell)
+		lane_tower.queue_free()
+	else:
+		lane_tower.queue_free()
+		errors.append("clash smoke could not place a lane-0 tower for targeting check")
 	clash_match.queue_free()
 	grid.reset(true)
 	build.pathfinder.sync_region()
@@ -241,6 +284,25 @@ func _run() -> void:
 	grid.reset(true)
 	build.pathfinder.sync_region()
 	build.pathfinder.rebuild()
+	var classic_cell := Vector2i(3, 7)
+	var classic_tower := Tower.new()
+	classic_tower.setup("gunner", main.enemies, main.projectiles)
+	if grid.is_buildable(classic_cell):
+		grid.place_tower(classic_cell, classic_tower)
+		if classic_tower.lane_id != -1:
+			errors.append("classic placed tower should not lock to a clash lane")
+		var classic_mob := Enemy.new()
+		classic_mob.lane_id = -1
+		main.enemies.add_child(classic_mob)
+		classic_mob.global_position = classic_tower.global_position + Vector2(10, 0)
+		if classic_tower._find_target() != classic_mob:
+			errors.append("classic tower should fire at a nearby enemy")
+		classic_mob.queue_free()
+		grid.remove_tower_at(classic_cell)
+		classic_tower.queue_free()
+	else:
+		classic_tower.queue_free()
+		errors.append("classic smoke could not place a tower for targeting check")
 
 	# Monster modes: Classic has no resists; Randomize tags types and grows resists.
 	if MonsterTypes.resist_slot_count(1) != 1:

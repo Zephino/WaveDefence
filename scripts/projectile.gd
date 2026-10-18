@@ -10,6 +10,8 @@ var effect_data: Dictionary = {}
 var enemy_container: Node
 var color: Color = Color.WHITE
 var alive: bool = true
+## Clash lane this shot can hit (-1 = any).
+var lane_id: int = -1
 
 
 func setup(
@@ -20,7 +22,8 @@ func setup(
 	p_effect_data: Dictionary,
 	p_enemies: Node,
 	p_color: Color,
-	p_speed: float = 320.0
+	p_speed: float = 320.0,
+	p_lane_id: int = -1
 ) -> void:
 	target = p_target
 	damage = p_damage
@@ -30,6 +33,7 @@ func setup(
 	enemy_container = p_enemies
 	color = p_color
 	speed = maxf(p_speed, 40.0)
+	lane_id = p_lane_id
 
 
 func _process(delta: float) -> void:
@@ -116,6 +120,29 @@ func _apply_bonus_chain() -> void:
 		current = _find_next_chain(from_pos, chain_range, hit)
 
 
+func _clash_grid() -> GameGrid:
+	if enemy_container == null:
+		return null
+	var host := enemy_container.get_parent()
+	if host == null:
+		return null
+	return host.get_node_or_null("GameGrid") as GameGrid
+
+
+func _physical_lane(enemy: Enemy) -> int:
+	var g := _clash_grid()
+	if g == null:
+		return -1
+	return g.lane_index_for_global(enemy.global_position)
+
+
+func _can_hit_lane(enemy: Enemy) -> bool:
+	var g := _clash_grid()
+	if g == null or not g.is_clash_layout or lane_id < 0:
+		return TowerData.can_target_enemy(effect_data, enemy)
+	return TowerData.can_target_enemy_in_lane(effect_data, enemy, lane_id, _physical_lane(enemy))
+
+
 func _find_next_chain(from_pos: Vector2, chain_range: float, exclude: Array[Enemy]) -> Enemy:
 	var best: Enemy = null
 	var best_d := chain_range
@@ -124,7 +151,7 @@ func _find_next_chain(from_pos: Vector2, chain_range: float, exclude: Array[Enem
 			var e := child as Enemy
 			if not e.alive or e in exclude:
 				continue
-			if not TowerData.can_target_enemy(effect_data, e):
+			if not _can_hit_lane(e):
 				continue
 			var d := from_pos.distance_to(e.global_position)
 			if d <= best_d:
@@ -149,13 +176,14 @@ func _damage_in_radius(center: Vector2, radius: float, dmg: float, apply_effects
 		if child is Enemy:
 			var e := child as Enemy
 			if e.alive and center.distance_to(e.global_position) <= radius:
-				_apply_to_enemy(e, dmg, apply_effects)
+				if _can_hit_lane(e):
+					_apply_to_enemy(e, dmg, apply_effects)
 
 
 func _apply_to_enemy(enemy: Enemy, dmg: float, apply_effects: bool) -> void:
 	if enemy == null or not is_instance_valid(enemy) or not enemy.alive:
 		return
-	if not TowerData.can_target_enemy(effect_data, enemy):
+	if not _can_hit_lane(enemy):
 		return
 	var mult := TowerData.target_damage_mult(effect_data, enemy.is_flying, enemy.is_boss)
 	if mult <= 0.0:
@@ -220,13 +248,13 @@ func _draw() -> void:
 
 
 class LightningBolt extends Node2D:
-	var from_local := Vector2.ZERO
-	var to_local := Vector2.ZERO
+	var from_pt := Vector2.ZERO
+	var to_pt := Vector2.ZERO
 	var life := 0.15
 
 	func setup(from_global: Vector2, to_global: Vector2) -> void:
-		from_local = to_local(from_global)
-		to_local = to_local(to_global)
+		from_pt = to_local(from_global)
+		to_pt = to_local(to_global)
 
 	func _process(delta: float) -> void:
 		life -= delta
@@ -235,4 +263,4 @@ class LightningBolt extends Node2D:
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_line(from_local, to_local, Color(0.95, 0.9, 0.3, clampf(life / 0.15, 0.0, 1.0)), 2.5)
+		draw_line(from_pt, to_pt, Color(0.95, 0.9, 0.3, clampf(life / 0.15, 0.0, 1.0)), 2.5)

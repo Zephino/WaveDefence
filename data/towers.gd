@@ -352,6 +352,27 @@ static func can_target_enemy(def: Dictionary, enemy: Enemy) -> bool:
 			return true
 
 
+## Clash: attacker_lane >= 0 only engages that lane. Classic uses -1 (any).
+## physical_lane is the column-derived lane (-1 if unknown). Unset ids do not block.
+static func can_target_enemy_in_lane(
+	def: Dictionary,
+	enemy: Enemy,
+	attacker_lane: int,
+	physical_lane: int = -1
+) -> bool:
+	if not can_target_enemy(def, enemy):
+		return false
+	if attacker_lane < 0:
+		return true
+	# Column the mob is actually in wins over a stale/missing stamp.
+	if physical_lane >= 0:
+		return physical_lane == attacker_lane
+	if enemy.lane_id == attacker_lane or enemy.defender_id == attacker_lane:
+		return true
+	# Don't refuse a shot just because a spawn forgot to stamp lane_id.
+	return enemy.lane_id < 0 and enemy.defender_id < 0
+
+
 ## Multiplier vs air/ground and boss/creep. Defaults to 1.0 when unset.
 static func target_damage_mult(def: Dictionary, is_flying: bool, is_boss: bool = false) -> float:
 	match target_filter(def):

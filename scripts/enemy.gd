@@ -15,6 +15,8 @@ var wave_index: int = 0
 ## Clash: defending player / lane (-1 = classic single board).
 var defender_id: int = -1
 var lane_id: int = -1
+## Set during leaked if Clash overflowed this mob into the next lane.
+var overflow_pending: bool = false
 ## Randomize-mode type id (empty in Classic monsters).
 var monster_type: String = ""
 ## Element id → damage reduction 0..1 (burn / freeze / poison / lightning).
@@ -310,11 +312,27 @@ func _die() -> void:
 	queue_free()
 
 
+func start_overflow(new_path: PackedVector2Array, new_lane: int, new_defender: int) -> void:
+	if new_path.size() < 2:
+		return
+	overflow_pending = true
+	lane_id = new_lane
+	defender_id = new_defender
+	path = new_path
+	path_index = 1
+	path_dist = 0.0
+	position = path[0]
+	queue_redraw()
+
+
 func _leak() -> void:
 	if not alive:
 		return
-	alive = false
 	leaked.emit(self)
+	if overflow_pending:
+		overflow_pending = false
+		return
+	alive = false
 	queue_free()
 
 

@@ -510,7 +510,8 @@ func _process(delta: float) -> void:
 		return
 	if phase == Phase.INTERMISSION:
 		_process_intermission(_build_delta(delta))
-	elif phase == Phase.WAVE and spawning:
+	elif phase == Phase.WAVE and (spawning or not spawn_queue.is_empty()):
+		spawning = true
 		_process_spawning(delta)
 
 
@@ -630,11 +631,57 @@ func _on_enemy_leaked(enemy: Enemy) -> void:
 	SoundHub.play_leak()
 	if _is_clash() and enemy.defender_id >= 0:
 		clash_match.credit_leak(enemy.defender_id)
-	else:
+		if _try_clash_overflow(enemy):
+			_emit_enemies_remaining()
+			return
+	elif not _is_clash():
 		game_state.lose_life(1)
 	enemies_alive = maxi(enemies_alive - 1, 0)
 	_emit_enemies_remaining()
 	_check_wave_clear()
+
+
+func _try_clash_overflow(enemy: Enemy) -> bool:
+	if enemy == null or not is_instance_valid(enemy):
+		return false
+	if clash_match == null or clash_match.finished:
+		return false
+	var nxt := clash_match.next_living_after_lane(enemy.lane_id)
+	if nxt == null:
+		return false
+	var world_path: PackedVector2Array
+	if enemy.is_flying:
+		world_path = grid.build_lane_air_s_path(nxt.lane_index)
+	else:
+		world_path = _ensure_lane_ground_path(nxt.lane_index)
+	if world_path.size() < 2:
+		return false
+	enemy.start_overflow(world_path, nxt.lane_index, nxt.player_id)
+	return true
+
+
+## Mid-round Clash sends: dump queued packs into the live spawn list.
+func flush_pending_clash_sends() -> int:
+	if not _is_clash() or clash_match == null or clash_match.finished:
+		return 0
+	if game_state == null or game_state.is_game_over:
+		return 0
+	var added := 0
+	var wave := maxi(game_state.wave, 1)
+	for p in clash_match.living_players():
+		var cp := p as ClashPlayerState
+		for send in cp.take_incoming_sends():
+			var before := spawn_queue.size()
+			_append_clash_send_specs(wave, cp.lane_index, cp.player_id, str(send.get("pack_id", "scout")))
+			added += spawn_queue.size() - before
+	if added > 0:
+		enemies_this_wave_total += added
+		spawning = true
+		wave_active = true
+		if spawn_timer <= 0.0:
+			spawn_timer = 0.05
+		_emit_enemies_remaining()
+	return added
 
 
 func _update_skip_unlock() -> void:
