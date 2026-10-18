@@ -114,7 +114,8 @@ func can_place_at(cell: Vector2i) -> bool:
 	return true
 
 
-func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
+## paint_stroke: true while drag-painting so walls can be overbuilt without a prior select.
+func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_stroke: bool = false) -> bool:
 	if game_state.is_game_over:
 		return false
 	var cell := grid.world_to_cell(world_pos)
@@ -122,7 +123,23 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
 		return false
 
 	var existing := grid.get_tower_at(cell)
-	if existing and not _can_replace_wall(existing):
+	if existing and _can_replace_wall(existing):
+		if not _tower_owned_by_human(existing as Tower):
+			if not additive_select:
+				_clear_placed_selection()
+			return false
+		# Tap selects the wall (for sell). Tap again while selected, or paint-drag, builds over it.
+		var already_selected := existing in selected_towers
+		if not paint_stroke and not already_selected:
+			if additive_select:
+				_toggle_selected(existing)
+			else:
+				_select_only(existing)
+			return false
+		if additive_select and not paint_stroke:
+			_toggle_selected(existing)
+			return false
+	elif existing and not _can_replace_wall(existing):
 		if not _tower_owned_by_human(existing as Tower):
 			if not additive_select:
 				_clear_placed_selection()

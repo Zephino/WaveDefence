@@ -522,8 +522,8 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 	var cell := grid.world_to_cell(local_map)
 	var existing = grid.get_tower_at(cell)
 
-	# Tower press: wait for short-tap vs long-press (multi-select).
-	if existing != null and not (TowerData.is_wall(existing.tower_id) and not TowerData.is_wall(build_system.selected_tower_id) and build_system.can_place_at(cell)):
+	# Existing wall/tower: short-tap selects (so walls can be sold). Paint-drag still builds over walls.
+	if existing != null:
 		if additive:
 			_paint_enabled = false
 			_awaiting_tower_tap = false
@@ -560,13 +560,20 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 func _finish_pointer_press() -> void:
 	var local_map := _screen_to_map(get_global_mouse_position())
 	if _awaiting_tower_tap and not _long_press_triggered and _is_on_map(local_map):
-		build_system.try_place_at(local_map, false)
 		var cell := grid.world_to_cell(local_map)
+		var before = grid.get_tower_at(cell)
+		var was_wall := before != null and TowerData.is_wall((before as Tower).tower_id)
+		build_system.try_place_at(local_map, false)
 		var tower = grid.get_tower_at(cell)
 		var count := build_system.selection_count()
-		if tower:
-			hud.set_status("Selected %d. Long-press or Multi: On to multi-select." % maxi(count, 1))
+		if tower and count > 0:
+			if was_wall and TowerData.is_wall((tower as Tower).tower_id):
+				hud.set_status("Wall selected — Sell, or tap again with a tower to build over it.")
+			else:
+				hud.set_status("Selected %d. Long-press or Multi: On to multi-select." % maxi(count, 1))
 			hud.show_touch_tower_info(tower as Tower)
+		elif was_wall and tower != null and not TowerData.is_wall((tower as Tower).tower_id):
+			hud.set_status("Tower built over wall.")
 	_awaiting_tower_tap = false
 	_long_press_triggered = false
 	_paint_holding = false
@@ -749,7 +756,8 @@ func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:
 		if existing == null:
 			_last_paint_cell = cell
 		return false
-	if build_system.try_place_at(local_map, false):
+	# Paint strokes may build over walls; single taps select walls instead.
+	if build_system.try_place_at(local_map, false, true):
 		_last_paint_cell = cell
 		if show_status:
 			if had_wall and not TowerData.is_wall(build_system.selected_tower_id):

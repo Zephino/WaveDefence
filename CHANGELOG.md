@@ -1,4 +1,14 @@
-﻿## Version 00.02.54
+﻿## Version 00.02.55
+Date: 10/18/2026
+Time: 1:17 AM
+
+### Changes
+- Tapping a wall selects it again (for Sell); tap once more with a combat tower selected, or drag-paint over it, to build on top
+
+### Reason
+Combat tower placement was eating wall taps, so walls could not be selected to sell.
+
+## Version 00.02.54
 Date: 10/18/2026
 Time: 1:07 AM
 
