@@ -154,6 +154,13 @@ func _find_target() -> Enemy:
 	return best
 
 
+func _muzzle_global() -> Vector2:
+	var dir := _aim_dir
+	if dir.length_squared() < 0.001:
+		dir = Vector2.RIGHT
+	return global_position + dir * 12.0
+
+
 func _fire_at(target: Enemy) -> void:
 	var proj := Projectile.new()
 	var effect: String = str(def.get("effect", "none"))
@@ -161,6 +168,7 @@ func _fire_at(target: Enemy) -> void:
 	var aim := to_pos - global_position
 	if aim.length_squared() > 0.001:
 		_aim_dir = aim.normalized()
+	var muzzle := _muzzle_global()
 	proj.setup(
 		target,
 		float(def.get("damage", 1.0)),
@@ -171,14 +179,16 @@ func _fire_at(target: Enemy) -> void:
 		def.get("color", Color.WHITE),
 		float(def.get("projectile_speed", 320.0))
 	)
-	proj.global_position = global_position
+	# Must be in the projectile layer before setting global_position, or shots
+	# inherit the board offset as local coords and appear beside the tower.
 	projectile_container.add_child(proj)
+	proj.global_position = muzzle
 	if bool(def.get("melee", false)):
 		proj.impact_now()
 	if projectile_container != null:
 		_AttackFx.try_spawn(
 			effect,
-			global_position,
+			muzzle,
 			to_pos,
 			float(def.get("range", 100.0)),
 			projectile_container,

@@ -136,9 +136,12 @@ func _find_next_chain(from_pos: Vector2, chain_range: float, exclude: Array[Enem
 func _spawn_bolt(from_pos: Vector2, to_pos: Vector2) -> void:
 	if not UserSettings.is_effects_enabled():
 		return
+	var host: Node = get_parent()
+	if host == null:
+		host = enemy_container
 	var bolt := LightningBolt.new()
+	host.add_child(bolt)
 	bolt.setup(from_pos, to_pos)
-	enemy_container.get_parent().add_child(bolt)
 
 
 func _damage_in_radius(center: Vector2, radius: float, dmg: float, apply_effects: bool) -> void:
@@ -222,9 +225,8 @@ class LightningBolt extends Node2D:
 	var life := 0.15
 
 	func setup(from_global: Vector2, to_global: Vector2) -> void:
-		global_position = Vector2.ZERO
-		from_local = from_global
-		to_local = to_global
+		from_local = to_local(from_global)
+		to_local = to_local(to_global)
 
 	func _process(delta: float) -> void:
 		life -= delta

@@ -191,6 +191,7 @@ func _build_clash_panel(root: Control) -> void:
 	_clash_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(_clash_root)
 
+	# Status only — ignore mouse so it never blocks lane clicks.
 	_clash_status_label = Label.new()
 	_clash_status_label.position = Vector2(GameLayout.board_origin().x, 76)
 	_clash_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -199,20 +200,14 @@ func _build_clash_panel(root: Control) -> void:
 	_clash_status_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
 	_clash_root.add_child(_clash_status_label)
 
-	_clash_send_box = VBoxContainer.new()
-	var board_origin := GameLayout.board_origin()
-	_clash_send_box.position = Vector2(board_origin.x, 100)
-	_clash_send_box.custom_minimum_size = Vector2(minf(280.0, GameLayout.board_pixel_size().x * 0.45), 0)
-	_clash_send_box.add_theme_constant_override("separation", 4)
-	_clash_send_box.mouse_filter = Control.MOUSE_FILTER_STOP
-	_clash_root.add_child(_clash_send_box)
-
 
 func refresh_clash_panel() -> void:
 	if _clash_root == null:
 		return
 	var active := clash_match != null and game_state != null and WaveScaler.is_clash_mode(game_state.game_mode)
 	_clash_root.visible = active
+	if _clash_send_box:
+		_clash_send_box.visible = active
 	if not active:
 		return
 	var parts: PackedStringArray = PackedStringArray()
@@ -474,6 +469,15 @@ func set_run_summary_presented(on: bool) -> void:
 		_shop_shell.visible = not on
 	if _actions_shell:
 		_actions_shell.visible = not on
+	if _clash_root:
+		_clash_root.visible = not on and clash_match != null
+	if _clash_send_box:
+		_clash_send_box.visible = (
+			not on
+			and clash_match != null
+			and game_state != null
+			and WaveScaler.is_clash_mode(game_state.game_mode)
+		)
 	hide_board_tower_tooltip()
 
 
@@ -555,6 +559,13 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	skip_button.tooltip_text = "Skip the countdown when unlocked"
 	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
 	sidebar.add_child(skip_button)
+
+	_clash_send_box = VBoxContainer.new()
+	_clash_send_box.visible = false
+	_clash_send_box.add_theme_constant_override("separation", 4)
+	_clash_send_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_clash_send_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	sidebar.add_child(_clash_send_box)
 
 	upgrade_button = _sidebar_button("Upgrade", action_h)
 	upgrade_button.disabled = true

@@ -19,16 +19,16 @@ static func try_spawn(
 	match effect:
 		"burn":
 			var flame := FlameShot.new()
-			flame.setup(from_global, to_global, max_range, target)
 			parent.add_child(flame)
+			flame.setup(from_global, to_global, max_range, target)
 		"freeze":
 			var ice := IceShot.new()
-			ice.setup(from_global, to_global, max_range, target)
 			parent.add_child(ice)
+			ice.setup(from_global, to_global, max_range, target)
 		"poison":
 			var cloud := PoisonShot.new()
-			cloud.setup(from_global, to_global, max_range, target)
 			parent.add_child(cloud)
+			cloud.setup(from_global, to_global, max_range, target)
 		_:
 			pass
 

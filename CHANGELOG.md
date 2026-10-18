@@ -1,4 +1,24 @@
-﻿## Version 00.02.40
+﻿## Version 00.02.42
+Date: 10/17/2026
+Time: 11:27 PM
+
+### Changes
+- Clash **Send** pack buttons moved from the top of lane 1 into the right Actions sidebar so the human lane is fully clickable
+
+### Reason
+The buy-send panel sat on the board and blocked clicks on the top of your lane.
+
+## Version 00.02.41
+Date: 10/17/2026
+Time: 11:25 PM
+
+### Changes
+- Tower shots, elemental attack FX, and lightning bolts now spawn from the tower muzzle after they are parented to the board layer
+
+### Reason
+Attacks were given a world position before joining the offset/zoomed projectile layer, so they appeared off to the side of the tower.
+
+## Version 00.02.40
 Date: 10/17/2026
 Time: 11:18 PM
 
