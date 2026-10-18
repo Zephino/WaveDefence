@@ -28,6 +28,7 @@ var exit_cell: Vector2i = Vector2i(COLS - 1, ROWS / 2)
 var hover_cell: Vector2i = Vector2i(-1, -1)
 var hover_valid: bool = false
 var show_hover: bool = false
+var hover_footprint: int = 1
 var path_preview: PackedVector2Array = PackedVector2Array()
 var is_random_layout: bool = false
 var is_siege_layout: bool = false
@@ -50,9 +51,11 @@ func _ready() -> void:
 
 
 func _clear_tower_nodes() -> void:
+	var seen: Dictionary = {}
 	for cell in towers.keys():
 		var tower: Node = towers[cell]
-		if is_instance_valid(tower):
+		if is_instance_valid(tower) and not seen.has(tower):
+			seen[tower] = true
 			tower.queue_free()
 	towers.clear()
 
@@ -323,6 +326,105 @@ func _set_spawn_cell(cell: Vector2i) -> void:
 	tiles[spawn_cell.y][spawn_cell.x] = Tile.SPAWN
 
 
+func _set_exit_cell(cell: Vector2i) -> void:
+	if in_bounds(exit_cell) and get_tile(exit_cell) == Tile.EXIT:
+		tiles[exit_cell.y][exit_cell.x] = Tile.BUILDABLE
+	exit_cell = cell
+	tiles[exit_cell.y][exit_cell.x] = Tile.EXIT
+
+
+## Current spawn/exit for classic maps, or a Clash lane portal when `lane` is set.
+func portal_cell(which: String, lane: int = -1) -> Vector2i:
+	var is_spawn := which == "spawn"
+	if is_clash_layout and lane >= 0 and lane < lane_spawns.size():
+		return (lane_spawns[lane] if is_spawn else lane_exits[lane]) as Vector2i
+	return spawn_cell if is_spawn else exit_cell
+
+
+func _apply_portal_cell(which: String, cell: Vector2i, lane: int = -1) -> void:
+	var is_spawn := which == "spawn"
+	if is_clash_layout and lane >= 0 and lane < lane_spawns.size():
+		var old: Vector2i = (lane_spawns[lane] if is_spawn else lane_exits[lane]) as Vector2i
+		if is_spawn:
+			if in_bounds(old) and get_tile(old) == Tile.SPAWN:
+				tiles[old.y][old.x] = Tile.BUILDABLE
+			lane_spawns[lane] = cell
+			tiles[cell.y][cell.x] = Tile.SPAWN
+			if lane == 0:
+				spawn_cell = cell
+		else:
+			if in_bounds(old) and get_tile(old) == Tile.EXIT:
+				tiles[old.y][old.x] = Tile.BUILDABLE
+			lane_exits[lane] = cell
+			tiles[cell.y][cell.x] = Tile.EXIT
+			if lane == 0:
+				exit_cell = cell
+		return
+	if is_spawn:
+		_set_spawn_cell(cell)
+	else:
+		_set_exit_cell(cell)
+
+
+## True if sliding `which` (`spawn`/`exit`) by `dx` (±1) on the same row would keep a path.
+func can_slide_portal(which: String, dx: int, pathfinder: Pathfinder, lane: int = -1) -> bool:
+	return _slide_portal(which, dx, pathfinder, lane, true)
+
+
+## Commit a one-cell left/right portal slide on the same row. Returns false if illegal.
+func try_slide_portal(which: String, dx: int, pathfinder: Pathfinder, lane: int = -1) -> bool:
+	return _slide_portal(which, dx, pathfinder, lane, false)
+
+
+func _slide_portal(
+	which: String, dx: int, pathfinder: Pathfinder, lane: int, dry_run: bool
+) -> bool:
+	if which != "spawn" and which != "exit":
+		return false
+	if dx != -1 and dx != 1:
+		return false
+	if pathfinder == null:
+		return false
+	var current := portal_cell(which, lane)
+	var other_which := "exit" if which == "spawn" else "spawn"
+	var other := portal_cell(other_which, lane)
+	var target := Vector2i(current.x + dx, current.y)
+	if not in_bounds(target):
+		return false
+	if is_clash_layout and lane >= 0 and lane < lane_col_ranges.size():
+		var r: Vector2i = lane_col_ranges[lane]
+		if target.x < r.x or target.x > r.y:
+			return false
+	if target == other:
+		return false
+	if towers.has(target):
+		return false
+	if get_tile(target) == Tile.BLOCKED:
+		return false
+	# Don't land on a foreign Clash portal.
+	if is_clash_layout and is_clash_spawn_or_exit(target) and target != current:
+		return false
+
+	_apply_portal_cell(which, target, lane)
+	pathfinder.sync_region()
+	pathfinder.rebuild()
+	var ok := false
+	if is_clash_layout and lane >= 0:
+		ok = pathfinder.has_path_between(get_lane_spawn(lane), get_lane_exit(lane))
+	else:
+		ok = pathfinder.has_path()
+	if not ok or dry_run:
+		_apply_portal_cell(which, current, lane)
+		pathfinder.sync_region()
+		pathfinder.rebuild()
+		if not ok:
+			queue_redraw()
+			return false
+		return true
+	queue_redraw()
+	return true
+
+
 func _rim_cells() -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for x in cols:
@@ -440,11 +542,73 @@ func is_blocked_for_path(cell: Vector2i) -> bool:
 	return false
 
 
+func is_map_corner_cell(cell: Vector2i) -> bool:
+	return (cell.x == 0 or cell.x == cols - 1) and (cell.y == 0 or cell.y == rows - 1)
+
+
+## True when any cell of a centered footprint sits on a map corner.
+func footprint_touches_map_corner(center: Vector2i, size: int) -> bool:
+	for c in TowerData.footprint_cells(center, size):
+		if is_map_corner_cell(c):
+			return true
+	return false
+
+
+func footprint_in_bounds(center: Vector2i, size: int) -> bool:
+	for c in TowerData.footprint_cells(center, size):
+		if not in_bounds(c):
+			return false
+	return true
+
+
+func is_footprint_buildable(center: Vector2i, size: int) -> bool:
+	for c in TowerData.footprint_cells(center, size):
+		if not is_buildable(c):
+			return false
+	return true
+
+
+## Any tower on a cell bordering the footprint (not counting the footprint itself).
+func has_adjacent_tower_outside_footprint(center: Vector2i, size: int) -> bool:
+	var cells := TowerData.footprint_cells(center, size)
+	var inside: Dictionary = {}
+	for c in cells:
+		inside[c] = true
+	for c in cells:
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				if dx == 0 and dy == 0:
+					continue
+				var n := c + Vector2i(dx, dy)
+				if inside.has(n):
+					continue
+				if towers.has(n):
+					return true
+	return false
+
+
+## True if `cell` shares an edge/corner with a tower that forbids neighbors.
+func cell_adjacent_to_blocking_tower(cell: Vector2i) -> bool:
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			var node := get_tower_at(cell + Vector2i(dx, dy))
+			if node is Tower and TowerData.blocks_adjacent_placement((node as Tower).tower_id):
+				return true
+	return false
+
+
 func place_tower(cell: Vector2i, tower: Node) -> void:
-	towers[cell] = tower
+	var footprint := 1
+	if tower is Tower:
+		footprint = TowerData.footprint_size((tower as Tower).tower_id)
+	for c in TowerData.footprint_cells(cell, footprint):
+		towers[c] = tower
 	tower.position = cell_to_world_center(cell)
 	if tower is Tower:
 		(tower as Tower).lane_id = lane_index_for_cell(cell)
+		tower.set_meta("anchor_cell", cell)
 	add_child(tower)
 	tower_placed.emit(cell, tower)
 	queue_redraw()
@@ -454,7 +618,12 @@ func remove_tower_at(cell: Vector2i, notify: bool = true) -> Node:
 	if not towers.has(cell):
 		return null
 	var tower: Node = towers[cell]
-	towers.erase(cell)
+	var to_clear: Array[Vector2i] = []
+	for c in towers.keys():
+		if towers[c] == tower:
+			to_clear.append(c)
+	for c in to_clear:
+		towers.erase(c)
 	if notify:
 		tower_removed.emit(cell)
 	queue_redraw()
@@ -465,10 +634,11 @@ func get_tower_at(cell: Vector2i) -> Node:
 	return towers.get(cell, null)
 
 
-func set_hover(cell: Vector2i, valid: bool, visible: bool) -> void:
+func set_hover(cell: Vector2i, valid: bool, visible: bool, footprint: int = 1) -> void:
 	hover_cell = cell
 	hover_valid = valid
 	show_hover = visible
+	hover_footprint = maxi(footprint, 1)
 	queue_redraw()
 
 
@@ -513,9 +683,12 @@ func _draw() -> void:
 		draw_polyline(path_preview, Color(0.3, 0.85, 0.5, 0.55), 3.0, true)
 
 	if show_hover and in_bounds(hover_cell):
-		var hrect := Rect2(hover_cell.x * ts, hover_cell.y * ts, ts, ts)
 		var hcolor := Color(0.3, 0.9, 0.4, 0.35) if hover_valid else Color(0.95, 0.25, 0.25, 0.4)
-		draw_rect(hrect, hcolor)
+		for c in TowerData.footprint_cells(hover_cell, hover_footprint):
+			if not in_bounds(c):
+				continue
+			var hrect := Rect2(c.x * ts, c.y * ts, ts, ts)
+			draw_rect(hrect, hcolor)
 
 	var map_w := cols * ts
 	var map_h := rows * ts

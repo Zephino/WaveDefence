@@ -16,6 +16,9 @@ const STARTING_GOLD_HARD := 100
 ## Default / Medium starting gold (kept for older call sites and smoke tests).
 const STARTING_GOLD := STARTING_GOLD_MEDIUM
 const STARTING_LIVES := 20
+## After this wave number, pay to slide spawn/exit left/right on their row.
+const PORTAL_SLIDE_UNLOCK_WAVE := 10
+const PORTAL_SLIDE_COST := 200
 ## Random mode: new map after these wave clears (25, 50, 75…).
 const MAP_ROTATE_EVERY := 25
 ## Siege mode: move outer-rim spawn after these wave clears (5, 10, 15…).

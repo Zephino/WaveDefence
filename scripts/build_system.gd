@@ -74,11 +74,12 @@ func set_placing_enabled(enabled: bool) -> void:
 ## Returns the tower under the cursor, or null if none.
 func update_hover(world_pos: Vector2) -> Tower:
 	if grid == null or game_state.is_game_over:
-		grid.set_hover(Vector2i(-1, -1), false, false)
+		grid.set_hover(Vector2i(-1, -1), false, false, 1)
 		return null
 	var cell := grid.world_to_cell(world_pos)
 	var valid := can_place_at(cell)
-	grid.set_hover(cell, valid, placing_enabled and grid.in_bounds(cell))
+	var fp := TowerData.footprint_size(selected_tower_id) if placing_enabled else 1
+	grid.set_hover(cell, valid, placing_enabled and grid.in_bounds(cell), fp)
 	if not grid.in_bounds(cell):
 		return null
 	var existing := grid.get_tower_at(cell)
@@ -102,14 +103,23 @@ func can_place_at(cell: Vector2i) -> bool:
 	if not game_state.can_afford(cost):
 		return false
 
+	var footprint := TowerData.footprint_size(selected_tower_id)
 	var existing := grid.get_tower_at(cell)
 	if existing:
+		if footprint > 1:
+			# Multi-cell towers need a clear footprint; no wall overbuild.
+			return false
 		if not _tower_owned_by_human(existing as Tower):
 			return false
 		# Only real towers may replace walls. Never stack wall/tower on a tower.
 		return _can_replace_wall(existing)
 
+	if footprint > 1:
+		return _can_place_footprint_at(cell, footprint)
+
 	if not grid.is_buildable(cell):
+		return false
+	if grid.cell_adjacent_to_blocking_tower(cell):
 		return false
 	if _is_clash():
 		var spawn := grid.get_lane_spawn(human_lane)
@@ -117,6 +127,32 @@ func can_place_at(cell: Vector2i) -> bool:
 		if pathfinder.would_block_path_between(spawn, exit_c, cell):
 			return false
 	elif pathfinder.would_block_path(cell):
+		return false
+	return true
+
+
+func _can_place_footprint_at(cell: Vector2i, footprint: int) -> bool:
+	if not grid.footprint_in_bounds(cell, footprint):
+		return false
+	# 3×3 (and larger) towers cannot nest into map corners.
+	if grid.footprint_touches_map_corner(cell, footprint):
+		return false
+	for c in TowerData.footprint_cells(cell, footprint):
+		if grid.is_clash_spawn_or_exit(c):
+			return false
+		if not _cell_in_human_lane(c):
+			return false
+	if not grid.is_footprint_buildable(cell, footprint):
+		return false
+	if grid.has_adjacent_tower_outside_footprint(cell, footprint):
+		return false
+	var cells := TowerData.footprint_cells(cell, footprint)
+	if _is_clash():
+		var spawn := grid.get_lane_spawn(human_lane)
+		var exit_c := grid.get_lane_exit(human_lane)
+		if pathfinder.would_block_path_between_cells(spawn, exit_c, cells):
+			return false
+	elif pathfinder.would_block_path_cells(cells):
 		return false
 	return true
 
@@ -204,6 +240,8 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 ## Towers can be built on walls. Walls/towers cannot be built on towers (sell first).
 func _can_replace_wall(existing: Tower) -> bool:
 	if existing == null or not is_instance_valid(existing):
+		return false
+	if TowerData.footprint_size(selected_tower_id) > 1:
 		return false
 	return TowerData.is_wall(existing.tower_id) and not TowerData.is_wall(selected_tower_id)
 
@@ -414,8 +452,14 @@ func _refresh_path_preview() -> void:
 		grid.set_path_preview(pathfinder.get_world_path())
 
 
-func refresh_after_reset() -> void:
-	selected_towers.clear()
+func rebuild_paths() -> void:
+	if pathfinder == null:
+		return
 	pathfinder.rebuild()
 	_refresh_path_preview()
+
+
+func refresh_after_reset() -> void:
+	selected_towers.clear()
+	rebuild_paths()
 	_emit_selection()

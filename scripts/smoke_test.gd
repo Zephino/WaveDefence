@@ -829,7 +829,7 @@ func _run() -> void:
 	if ability_tip.find("Trap") < 0:
 		errors.append("trap ability tooltip should mention Trap")
 
-	# Vortex: no-damage aura; ground orbit for one lap (unlock wave 12).
+	# Vortex: no-damage aura; 3×3 footprint; ground orbit for one lap (unlock wave 12).
 	var vortex_def := TowerData.get_def("vortex")
 	if "vortex" not in TowerData.get_ids():
 		errors.append("vortex should be in tower id list")
@@ -839,6 +839,10 @@ func _run() -> void:
 		errors.append("vortex should deal no damage")
 	if TowerData.target_filter(vortex_def) != "ground":
 		errors.append("vortex should be ground-only")
+	if TowerData.footprint_size("vortex") != 3:
+		errors.append("vortex should occupy a 3x3 footprint")
+	if not TowerData.blocks_adjacent_placement("vortex"):
+		errors.append("vortex should block adjacent tower placement")
 	if TowerData.unlock_wave("vortex") != 12:
 		errors.append("vortex should unlock at wave 12")
 	if TowerData.is_unlocked("vortex", 11):
@@ -872,6 +876,40 @@ func _run() -> void:
 		errors.append("flying enemy should refuse vortex orbit")
 	orbit_enemy.queue_free()
 	flyer_orbit.queue_free()
+	# Vortex placement: 3×3, no map corner, no adjacent towers.
+	grid.reset(true)
+	build.pathfinder.rebuild()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	state.set_wave(12)
+	state_add_gold(build, 500)
+	build.select_tower_type("vortex")
+	var corner_center := Vector2i(1, 1)
+	if build.can_place_at(corner_center):
+		errors.append("vortex should refuse map-corner footprints")
+	var vortex_cell := Vector2i(10, 7)
+	if not build.can_place_at(vortex_cell):
+		errors.append("vortex should place on a clear interior 3x3")
+	elif not build.try_place_at(grid.cell_to_world_center(vortex_cell)):
+		errors.append("vortex place failed on clear interior cell")
+	else:
+		var vx := grid.get_tower_at(vortex_cell)
+		if vx == null or vx.tower_id != "vortex":
+			errors.append("vortex should register at anchor cell")
+		else:
+			var fp_cells := 0
+			for vc in TowerData.footprint_cells(vortex_cell, 3):
+				if grid.get_tower_at(vc) == vx:
+					fp_cells += 1
+			if fp_cells != 9:
+				errors.append("vortex should occupy all 9 footprint cells")
+			build.select_tower_type("gunner")
+			var adj := vortex_cell + Vector2i(2, 0)
+			if build.can_place_at(adj):
+				errors.append("gunner should not place adjacent to vortex")
+			grid.remove_tower_at(vortex_cell)
+			if is_instance_valid(vx):
+				vx.queue_free()
+			build.pathfinder.rebuild()
 
 	# Gatling: wave-30 unlock, expensive ultra-fast special.
 	var gatling_def := TowerData.get_def("gatling")
@@ -973,6 +1011,36 @@ func _run() -> void:
 				errors.append("burn tower should stay fire after ice final")
 			if not fire_tower.def.has("bonus_slow_factor"):
 				errors.append("ice final should add a slow buff")
+
+	# Portal slides: same-row ±X after wave 10, 200 gold (grid path rules).
+	if WaveScaler.PORTAL_SLIDE_COST != 200:
+		errors.append("portal slide should cost 200")
+	if WaveScaler.PORTAL_SLIDE_UNLOCK_WAVE != 10:
+		errors.append("portal slide should unlock at wave 10")
+	grid.reset(true)
+	build.pathfinder.rebuild()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	var spawn_before := grid.spawn_cell
+	if grid.can_slide_portal("spawn", -1, build.pathfinder):
+		errors.append("spawn should not slide off the left edge")
+	if grid.spawn_cell != spawn_before:
+		errors.append("failed can_slide should not move spawn")
+	if not grid.can_slide_portal("spawn", 1, build.pathfinder):
+		errors.append("spawn should be able to slide right on empty classic")
+	elif grid.spawn_cell != spawn_before:
+		errors.append("can_slide_portal should be a dry-run")
+	elif not grid.try_slide_portal("spawn", 1, build.pathfinder):
+		errors.append("try_slide_portal spawn right failed")
+	elif grid.spawn_cell != spawn_before + Vector2i(1, 0):
+		errors.append("spawn should move exactly one cell right on the same row")
+	elif grid.spawn_cell.y != spawn_before.y:
+		errors.append("spawn slide must keep the same row")
+	var exit_before := grid.exit_cell
+	if not grid.try_slide_portal("exit", -1, build.pathfinder):
+		errors.append("exit should slide left on empty classic")
+	elif grid.exit_cell != exit_before + Vector2i(-1, 0):
+		errors.append("exit should move exactly one cell left on the same row")
+	# Mid-wave / pre-unlock gates are enforced in main; grid always allows legal slides.
 
 	if errors.is_empty():
 		print("SMOKE_TEST_OK")

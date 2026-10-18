@@ -177,16 +177,18 @@ const TYPES := {
 	},
 	"vortex": {
 		"display_name": "Vortex",
-		"blurb": "No damage. Pulls ground enemies into a circle around itself for one lap, then releases them onto the path. Unlocks at wave 12.",
+		"blurb": "No damage. Occupies a 3×3 footprint (cannot sit in a map corner). No other tower may be placed next to it. Pulls ground enemies along the orbit ring for one lap, then releases them. Unlocks at wave 12.",
 		"cost": 90,
 		"damage": 0.0,
-		"range": 100.0,
+		"range": 120.0,
 		"fire_rate": 0.0,
 		"splash_radius": 0.0,
 		"color": Color(0.55, 0.35, 0.85),
 		"effect": "orbit",
 		"is_aura": true,
-		"orbit_radius": 48.0,
+		"footprint": 3,
+		"blocks_adjacent": true,
+		"orbit_radius": 88.0,
 		"orbit_laps": 1.0,
 		"orbit_immune": 1.5,
 		"target_filter": "ground",
@@ -227,6 +229,29 @@ static func is_command(tower_id: String) -> bool:
 
 static func is_aura(tower_id: String) -> bool:
 	return bool(get_def(tower_id).get("is_aura", false))
+
+
+## Odd cell count for multi-tile towers (1 = single cell). Center is the click cell.
+static func footprint_size(tower_id: String) -> int:
+	return maxi(int(get_def(tower_id).get("footprint", 1)), 1)
+
+
+## True when other towers cannot be placed on cells adjacent to this tower's footprint.
+static func blocks_adjacent_placement(tower_id: String) -> bool:
+	if bool(get_def(tower_id).get("blocks_adjacent", false)):
+		return true
+	return footprint_size(tower_id) > 1
+
+
+## All grid cells occupied when placing `tower_id` (or an explicit size) centered on `center`.
+static func footprint_cells(center: Vector2i, size: int = 1) -> Array[Vector2i]:
+	var fp := maxi(size, 1)
+	var half := fp / 2
+	var cells: Array[Vector2i] = []
+	for dy in range(-half, half + 1):
+		for dx in range(-half, half + 1):
+			cells.append(center + Vector2i(dx, dy))
+	return cells
 
 
 ## Wave number when the shop unlocks this tower (0 / missing = always available).
@@ -460,6 +485,9 @@ static func tooltip_for(tower_id: String, upgrade_level: int = 0, final_element:
 
 	lines.append("Upgrades: %d/%d stat + final elemental buff" % [upgrade_level, MAX_STAT_UPGRADES])
 	if bool(def.get("is_aura", false)) or str(def.get("effect", "none")) == "orbit":
+		var fp := footprint_size(tower_id)
+		if fp > 1:
+			lines.append("Footprint %d×%d (%d cells)  |  No adjacent towers  |  Not in corners" % [fp, fp, fp * fp])
 		lines.append("No damage  |  Pull range %.0f  |  Orbit radius %.0f" % [
 			float(def.get("range", 0.0)),
 			float(def.get("orbit_radius", 0.0)),

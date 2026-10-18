@@ -202,9 +202,12 @@ func _setup_ui() -> void:
 	hud.end_run_confirmed.connect(_on_end_run_confirmed)
 	game_state.game_over.connect(_on_game_over_to_leaderboard)
 	hud.pause_pressed.connect(_toggle_pause)
-	wave_manager.timer_updated.connect(hud.update_timer)
+	hud.portal_slide_pressed.connect(_on_portal_slide_pressed)
+	wave_manager.timer_updated.connect(_on_timer_updated)
 	wave_manager.enemies_remaining_changed.connect(hud.update_enemies_remaining)
 	wave_manager.skip_unlock_changed.connect(func(_u: bool) -> void: hud.set_skip_hint_ready())
+	game_state.gold_changed.connect(func(_g: int) -> void: _refresh_portal_slide_ui())
+	game_state.wave_changed.connect(func(_w: int) -> void: _refresh_portal_slide_ui())
 
 	debug_panel = DebugPanel.new()
 	add_child(debug_panel)
@@ -224,6 +227,7 @@ func _setup_ui() -> void:
 	hud.refresh_run_labels()
 	_set_start_status()
 	hud.update_timer(0.0, true, "prep")
+	_refresh_portal_slide_ui()
 	if clash_match != null:
 		_run_clash_bots()
 		hud.refresh_clash_panel()
@@ -957,6 +961,81 @@ func _on_final_element_selected(element_id: String) -> void:
 		hud.set_status("Not enough gold for final %s." % label)
 	else:
 		hud.set_status("Need +3 upgrades before choosing a final elemental buff.")
+
+
+func _on_timer_updated(seconds_left: float, can_skip: bool, mode: String) -> void:
+	hud.update_timer(seconds_left, can_skip, mode)
+	_refresh_portal_slide_ui()
+
+
+func _portal_slide_lane() -> int:
+	if clash_match != null and clash_match.human() != null:
+		return clash_match.human().lane_index
+	return build_system.human_lane if build_system != null else 0
+
+
+func _portal_slides_unlocked() -> bool:
+	if game_state == null or game_state.is_game_over:
+		return false
+	if game_state.wave < WaveScaler.PORTAL_SLIDE_UNLOCK_WAVE:
+		return false
+	if wave_manager == null:
+		return false
+	return wave_manager.phase != WaveManager.Phase.WAVE
+
+
+func _refresh_portal_slide_ui() -> void:
+	if hud == null or grid == null or build_system == null or build_system.pathfinder == null:
+		return
+	var unlocked := _portal_slides_unlocked()
+	var can_afford := game_state != null and game_state.can_afford(WaveScaler.PORTAL_SLIDE_COST)
+	if not unlocked:
+		hud.refresh_portal_slides(false, false, false, false, false, false)
+		return
+	var lane := _portal_slide_lane()
+	var pf: Pathfinder = build_system.pathfinder
+	hud.refresh_portal_slides(
+		true,
+		can_afford,
+		grid.can_slide_portal("spawn", -1, pf, lane),
+		grid.can_slide_portal("spawn", 1, pf, lane),
+		grid.can_slide_portal("exit", -1, pf, lane),
+		grid.can_slide_portal("exit", 1, pf, lane)
+	)
+
+
+func _on_portal_slide_pressed(which: String, dx: int) -> void:
+	if not _portal_slides_unlocked():
+		hud.set_status("Portal moves unlock after wave %d." % WaveScaler.PORTAL_SLIDE_UNLOCK_WAVE)
+		return
+	if not game_state.can_afford(WaveScaler.PORTAL_SLIDE_COST):
+		hud.set_status("Need %d gold to move a portal." % WaveScaler.PORTAL_SLIDE_COST)
+		return
+	var lane := _portal_slide_lane()
+	var pf: Pathfinder = build_system.pathfinder
+	if not grid.can_slide_portal(which, dx, pf, lane):
+		hud.set_status("Can't move that portal that way (edge, blocked, or would seal the path).")
+		_refresh_portal_slide_ui()
+		return
+	if not game_state.spend_gold(WaveScaler.PORTAL_SLIDE_COST):
+		hud.set_status("Need %d gold to move a portal." % WaveScaler.PORTAL_SLIDE_COST)
+		return
+	game_state.record_spend(WaveScaler.PORTAL_SLIDE_COST)
+	if clash_match != null:
+		clash_match.sync_human_gold_from_game_state()
+	if not grid.try_slide_portal(which, dx, pf, lane):
+		# Should be rare — refund if commit failed after the dry-run passed.
+		game_state.add_gold(WaveScaler.PORTAL_SLIDE_COST)
+		if clash_match != null:
+			clash_match.sync_human_gold_from_game_state()
+		hud.set_status("Portal move failed — gold refunded.")
+		_refresh_portal_slide_ui()
+		return
+	build_system.rebuild_paths()
+	_refresh_portal_slide_ui()
+	var label := "Spawn" if which == "spawn" else "Exit"
+	var dir := "left" if dx < 0 else "right"
+	hud.set_status("%s moved %s (−%d gold)." % [label, dir, WaveScaler.PORTAL_SLIDE_COST])
 
 
 func _on_skip_timer() -> void:

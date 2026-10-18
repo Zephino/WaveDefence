@@ -1,4 +1,28 @@
-﻿## Version 00.02.64
+﻿## Version 00.02.66
+Date: 10/18/2026
+Time: 2:33 AM
+
+### Changes
+- From wave **10** (prep/intermission), pay **200 gold** to slide Spawn or Exit one cell left/right on the same row
+- Moves stay on-map, cannot seal spawn→exit, and in Clash only affect the human lane
+- Sidebar **Move portals** buttons enable per direction when affordable and legal
+
+### Reason
+Players asked for a paid way to shift the start and end portals sideways after early waves without leaving their row.
+
+## Version 00.02.65
+Date: 10/18/2026
+Time: 2:22 AM
+
+### Changes
+- Vortex occupies a **3×3** footprint (9 cells), cannot sit in a map corner, and blocks other towers on adjacent cells
+- Vortex draws a visible orbit path ring showing where grabbed enemies walk
+- Placement hover previews the full 3×3; pathfinding treats all nine cells as blocked
+
+### Reason
+Vortex needed a clear orbit path and exclusive space so enemies can circle it without other towers crowding the ring.
+
+## Version 00.02.64
 Date: 10/18/2026
 Time: 2:15 AM
 

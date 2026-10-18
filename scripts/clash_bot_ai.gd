@@ -251,19 +251,21 @@ func _place_combat_towers(p: ClashPlayerState, wave: int, max_place: int = 20) -
 	var exit_c := grid.get_lane_exit(p.lane_index)
 	var placed := 0
 	var cap := maxi(max_place, 1)
-	while p.gold > reserve and placed < cap:
+	var attempts := 0
+	while p.gold > reserve and placed < cap and attempts < 48:
+		attempts += 1
 		var spendable := p.gold - reserve
 		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
 		if tower_id == "" or TowerData.is_wall(tower_id):
 			break
 		var path_cells := pathfinder.get_cell_path_between(spawn, exit_c)
 		var candidates := _build_combat_candidates(p.lane_index, path_cells)
-		var cell := _next_place_cell(candidates, spawn, exit_c)
+		var cell := _next_place_cell_for(tower_id, candidates, spawn, exit_c)
 		# Path-adjacent full after early rounds — keep spending on any empty lane cell.
 		if cell.x < 0:
-			cell = _next_open_lane_cell(p.lane_index, spawn, exit_c)
+			cell = _next_open_lane_cell_for(tower_id, p.lane_index, spawn, exit_c)
 		if cell.x < 0:
-			break
+			continue
 		var cost: int = int(TowerData.get_def(tower_id)["cost"])
 		if not p.spend_gold(cost):
 			break
@@ -295,6 +297,9 @@ func _replace_walls_with_towers(p: ClashPlayerState, wave: int) -> void:
 		var tower_id := _pick_affordable_tower_id(wave, p.bot_difficulty, spendable)
 		if tower_id == "" or TowerData.is_wall(tower_id):
 			break
+		# Multi-cell towers need a clear footprint — cannot overbuild a single wall.
+		if TowerData.footprint_size(tower_id) > 1:
+			continue
 		var cost: int = int(TowerData.get_def(tower_id)["cost"])
 		var wall_cell := _best_wall_to_overbuild(p.lane_index, path_cells)
 		if wall_cell.x < 0:
@@ -330,6 +335,8 @@ func _best_wall_to_overbuild(lane: int, path_cells: Array[Vector2i]) -> Vector2i
 			continue
 		if not TowerData.is_wall(tower.tower_id):
 			continue
+		if grid.cell_adjacent_to_blocking_tower(cell):
+			continue
 		var adj := 0
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if path_set.has(cell + d):
@@ -343,6 +350,10 @@ func _best_wall_to_overbuild(lane: int, path_cells: Array[Vector2i]) -> Vector2i
 
 
 func _next_open_lane_cell(lane: int, spawn: Vector2i, exit_c: Vector2i) -> Vector2i:
+	return _next_open_lane_cell_for("gunner", lane, spawn, exit_c)
+
+
+func _next_open_lane_cell_for(tower_id: String, lane: int, spawn: Vector2i, exit_c: Vector2i) -> Vector2i:
 	var r: Vector2i = grid.lane_col_ranges[lane]
 	var cells: Array[Vector2i] = []
 	for y in range(1, grid.rows - 1):
@@ -358,12 +369,45 @@ func _next_open_lane_cell(lane: int, spawn: Vector2i, exit_c: Vector2i) -> Vecto
 	)
 	while not cells.is_empty():
 		var cell2: Vector2i = cells.pop_back()
-		if not grid.is_buildable(cell2):
-			continue
-		if pathfinder.would_block_path_between(spawn, exit_c, cell2):
-			continue
-		return cell2
+		if _can_bot_place(cell2, tower_id, spawn, exit_c):
+			return cell2
 	return Vector2i(-1, -1)
+
+
+func _next_place_cell_for(
+	tower_id: String, candidates: Array[Vector2i], spawn: Vector2i, exit_c: Vector2i
+) -> Vector2i:
+	for cell in candidates:
+		if _can_bot_place(cell, tower_id, spawn, exit_c):
+			return cell
+	return Vector2i(-1, -1)
+
+
+func _can_bot_place(cell: Vector2i, tower_id: String, spawn: Vector2i, exit_c: Vector2i) -> bool:
+	var footprint := TowerData.footprint_size(tower_id)
+	if footprint > 1:
+		if not grid.footprint_in_bounds(cell, footprint):
+			return false
+		if grid.footprint_touches_map_corner(cell, footprint):
+			return false
+		var lane := grid.lane_index_for_cell(cell)
+		for c in TowerData.footprint_cells(cell, footprint):
+			if grid.lane_index_for_cell(c) != lane:
+				return false
+			if grid.is_clash_spawn_or_exit(c):
+				return false
+			if not grid.is_buildable(c):
+				return false
+		if grid.has_adjacent_tower_outside_footprint(cell, footprint):
+			return false
+		return not pathfinder.would_block_path_between_cells(
+			spawn, exit_c, TowerData.footprint_cells(cell, footprint)
+		)
+	if not grid.is_buildable(cell):
+		return false
+	if grid.cell_adjacent_to_blocking_tower(cell):
+		return false
+	return not pathfinder.would_block_path_between(spawn, exit_c, cell)
 
 
 func _place_owned(cell: Vector2i, tower_id: String) -> void:
@@ -485,13 +529,17 @@ func _upgrade_owned_towers(p: ClashPlayerState, force: bool = false) -> void:
 
 func _owned_towers_in_lane(lane: int) -> Array[Tower]:
 	var out: Array[Tower] = []
+	var seen: Dictionary = {}
 	for cell in grid.towers.keys():
 		if grid.lane_index_for_cell(cell) != lane:
 			continue
 		var node: Node = grid.towers[cell]
 		if node is Tower:
 			var tower := node as Tower
+			if seen.has(tower):
+				continue
 			if tower.has_meta("clash_owner") and int(tower.get_meta("clash_owner")) == player_id:
+				seen[tower] = true
 				out.append(tower)
 	return out
 

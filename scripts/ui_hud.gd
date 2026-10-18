@@ -15,6 +15,7 @@ signal multi_select_changed(enabled: bool)
 signal pan_mode_changed(enabled: bool)
 signal pause_pressed
 signal clash_send_requested(target_id: int, pack_id: String)
+signal portal_slide_pressed(which: String, dx: int)
 
 var game_state: GameState
 var clash_match: ClashMatch = null
@@ -43,6 +44,11 @@ var upgrade_button: Button
 var multi_select_button: Button
 var pan_mode_button: Button
 var end_run_button: Button
+var portal_slide_box: VBoxContainer
+var spawn_left_button: Button
+var spawn_right_button: Button
+var exit_left_button: Button
+var exit_right_button: Button
 var final_buttons: Dictionary = {}
 var tower_buttons: Dictionary = {}
 var ability_buttons: Dictionary = {}
@@ -565,6 +571,38 @@ func _fill_actions_column(sidebar: VBoxContainer) -> void:
 	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
 	sidebar.add_child(skip_button)
 
+	portal_slide_box = VBoxContainer.new()
+	portal_slide_box.visible = false
+	portal_slide_box.add_theme_constant_override("separation", 4)
+	portal_slide_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sidebar.add_child(portal_slide_box)
+	var portal_title := Label.new()
+	portal_title.text = "Move portals (%d)" % WaveScaler.PORTAL_SLIDE_COST
+	portal_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portal_title.modulate = Color(0.75, 0.85, 0.95)
+	portal_slide_box.add_child(portal_title)
+	var slide_h := GameLayout.button_height(26.0)
+	var spawn_row := HBoxContainer.new()
+	spawn_row.add_theme_constant_override("separation", 3)
+	spawn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	portal_slide_box.add_child(spawn_row)
+	spawn_left_button = _portal_slide_button("Spawn ◀", slide_h)
+	spawn_left_button.pressed.connect(func() -> void: portal_slide_pressed.emit("spawn", -1))
+	spawn_row.add_child(spawn_left_button)
+	spawn_right_button = _portal_slide_button("Spawn ▶", slide_h)
+	spawn_right_button.pressed.connect(func() -> void: portal_slide_pressed.emit("spawn", 1))
+	spawn_row.add_child(spawn_right_button)
+	var exit_row := HBoxContainer.new()
+	exit_row.add_theme_constant_override("separation", 3)
+	exit_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	portal_slide_box.add_child(exit_row)
+	exit_left_button = _portal_slide_button("Exit ◀", slide_h)
+	exit_left_button.pressed.connect(func() -> void: portal_slide_pressed.emit("exit", -1))
+	exit_row.add_child(exit_left_button)
+	exit_right_button = _portal_slide_button("Exit ▶", slide_h)
+	exit_right_button.pressed.connect(func() -> void: portal_slide_pressed.emit("exit", 1))
+	exit_row.add_child(exit_right_button)
+
 	_clash_send_box = VBoxContainer.new()
 	_clash_send_box.visible = false
 	_clash_send_box.add_theme_constant_override("separation", 4)
@@ -668,6 +706,39 @@ func _sidebar_button(text: String, height: float) -> Button:
 	btn.clip_text = true
 	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	return btn
+
+
+func _portal_slide_button(text: String, height: float) -> Button:
+	var btn := _sidebar_button(text, height)
+	btn.tooltip_text = (
+		"Pay %d gold to slide one cell left/right on the same row (unlocks after wave %d)."
+		% [WaveScaler.PORTAL_SLIDE_COST, WaveScaler.PORTAL_SLIDE_UNLOCK_WAVE]
+	)
+	return btn
+
+
+## Show spawn/exit slide controls when unlocked; enable each direction independently.
+func refresh_portal_slides(
+	unlocked: bool,
+	can_afford: bool,
+	can_spawn_left: bool,
+	can_spawn_right: bool,
+	can_exit_left: bool,
+	can_exit_right: bool
+) -> void:
+	if portal_slide_box == null:
+		return
+	portal_slide_box.visible = unlocked
+	if not unlocked:
+		return
+	if spawn_left_button:
+		spawn_left_button.disabled = not (can_afford and can_spawn_left)
+	if spawn_right_button:
+		spawn_right_button.disabled = not (can_afford and can_spawn_right)
+	if exit_left_button:
+		exit_left_button.disabled = not (can_afford and can_exit_left)
+	if exit_right_button:
+		exit_right_button.disabled = not (can_afford and can_exit_right)
 
 
 func _clear_gui_focus() -> void:

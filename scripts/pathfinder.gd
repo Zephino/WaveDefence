@@ -86,6 +86,34 @@ func would_block_path_between(from: Vector2i, to: Vector2i, cell: Vector2i) -> b
 	return not has_path_between(from, to, cell)
 
 
+func has_path_with_blocks(from: Vector2i, to: Vector2i, extra_blocks: Array[Vector2i]) -> bool:
+	var restored: Array[Vector2i] = []
+	for cell in extra_blocks:
+		if not grid.in_bounds(cell):
+			continue
+		if not astar.is_point_solid(cell):
+			astar.set_point_solid(cell, true)
+			restored.append(cell)
+	var path := astar.get_id_path(from, to)
+	for cell in restored:
+		astar.set_point_solid(cell, false)
+	return path.size() > 0
+
+
+func would_block_path_cells(cells: Array[Vector2i]) -> bool:
+	for cell in cells:
+		if not grid.is_buildable(cell):
+			return true
+	return not has_path_with_blocks(grid.spawn_cell, grid.exit_cell, cells)
+
+
+func would_block_path_between_cells(from: Vector2i, to: Vector2i, cells: Array[Vector2i]) -> bool:
+	for cell in cells:
+		if not grid.is_buildable(cell):
+			return true
+	return not has_path_with_blocks(from, to, cells)
+
+
 ## Path length after temporarily blocking `cell`. 0 if that would cut spawn→exit.
 func path_length_with_block(from: Vector2i, to: Vector2i, cell: Vector2i) -> int:
 	if not grid.in_bounds(cell):
