@@ -13,6 +13,8 @@ var pathfinder: Pathfinder
 var game_state: GameState
 var enemy_container: Node
 var projectile_container: Node
+var clash_match: ClashMatch = null
+var human_lane: int = 0
 
 var selected_tower_id: String = "gunner"
 var selected_towers: Array[Tower] = []
@@ -25,6 +27,33 @@ func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_ene
 	game_state = p_state
 	enemy_container = p_enemies
 	projectile_container = p_projectiles
+
+
+func set_clash_match(p_match: ClashMatch, p_human_lane: int = 0) -> void:
+	clash_match = p_match
+	human_lane = p_human_lane
+
+
+func _is_clash() -> bool:
+	return clash_match != null and grid != null and grid.is_clash_layout
+
+
+func _cell_in_human_lane(cell: Vector2i) -> bool:
+	if not _is_clash():
+		return true
+	return grid.lane_index_for_cell(cell) == human_lane
+
+
+func _tower_owned_by_human(tower: Tower) -> bool:
+	if tower == null or not is_instance_valid(tower):
+		return false
+	if not _is_clash():
+		return true
+	if tower.has_meta("clash_owner"):
+		return int(tower.get_meta("clash_owner")) == clash_match.human_id
+	# Untagged towers in human lane belong to human.
+	var cell := grid.world_to_cell(tower.position)
+	return _cell_in_human_lane(cell)
 
 
 ## Select the shop tower type to place. Does not replace existing towers — sell first.
@@ -56,7 +85,9 @@ func can_place_at(cell: Vector2i) -> bool:
 		return false
 	if not grid.in_bounds(cell):
 		return false
-	if cell == grid.spawn_cell or cell == grid.exit_cell:
+	if grid.is_clash_spawn_or_exit(cell):
+		return false
+	if not _cell_in_human_lane(cell):
 		return false
 	if not TowerData.is_unlocked(selected_tower_id, game_state.wave):
 		return false
@@ -66,12 +97,19 @@ func can_place_at(cell: Vector2i) -> bool:
 
 	var existing := grid.get_tower_at(cell)
 	if existing:
+		if not _tower_owned_by_human(existing as Tower):
+			return false
 		# Only real towers may replace walls. Never stack wall/tower on a tower.
 		return _can_replace_wall(existing)
 
 	if not grid.is_buildable(cell):
 		return false
-	if pathfinder.would_block_path(cell):
+	if _is_clash():
+		var spawn := grid.get_lane_spawn(human_lane)
+		var exit_c := grid.get_lane_exit(human_lane)
+		if pathfinder.would_block_path_between(spawn, exit_c, cell):
+			return false
+	elif pathfinder.would_block_path(cell):
 		return false
 	return true
 
@@ -85,6 +123,10 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
 
 	var existing := grid.get_tower_at(cell)
 	if existing and not _can_replace_wall(existing):
+		if not _tower_owned_by_human(existing as Tower):
+			if not additive_select:
+				_clear_placed_selection()
+			return false
 		if additive_select:
 			_toggle_selected(existing)
 		else:
@@ -100,6 +142,8 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
 	if not game_state.spend_gold(cost):
 		return false
 	game_state.record_spend(cost)
+	if clash_match != null:
+		clash_match.sync_human_gold_from_game_state()
 
 	if existing and _can_replace_wall(existing):
 		_replace_wall_with_tower(cell, existing)
@@ -109,6 +153,8 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false) -> bool:
 
 	var tower := Tower.new()
 	tower.setup(selected_tower_id, enemy_container, projectile_container)
+	if _is_clash() and clash_match != null:
+		tower.set_meta("clash_owner", clash_match.human_id)
 	grid.place_tower(cell, tower)
 	if TowerData.is_wall(selected_tower_id):
 		game_state.record_wall_placed()
@@ -157,6 +203,8 @@ func sell_selected() -> bool:
 	for tower in selected_towers:
 		if not is_instance_valid(tower):
 			continue
+		if not _tower_owned_by_human(tower):
+			continue
 		cells.append(grid.world_to_cell(tower.position))
 	selected_towers.clear()
 	for cell in cells:
@@ -167,6 +215,8 @@ func sell_selected() -> bool:
 		tower.queue_free()
 	game_state.add_gold(refund_total)
 	game_state.record_sell_refund(refund_total)
+	if clash_match != null:
+		clash_match.sync_human_gold_from_game_state()
 	pathfinder.rebuild()
 	_refresh_path_preview()
 	SoundHub.play_sell()
@@ -193,6 +243,8 @@ func upgrade_selected() -> Dictionary:
 			spent += cost
 		else:
 			failed_afford += 1
+	if clash_match != null and spent > 0:
+		clash_match.sync_human_gold_from_game_state()
 	_emit_selection()
 	return {"upgraded": upgraded, "failed_afford": failed_afford, "spent": spent}
 
@@ -219,6 +271,8 @@ func apply_final_selected(element_id: String) -> Dictionary:
 			spent += cost
 		else:
 			failed_afford += 1
+	if clash_match != null and spent > 0:
+		clash_match.sync_human_gold_from_game_state()
 	_emit_selection()
 	return {"applied": applied, "failed_afford": failed_afford, "spent": spent}
 
@@ -319,7 +373,12 @@ func _emit_selection() -> void:
 
 
 func _refresh_path_preview() -> void:
-	grid.set_path_preview(pathfinder.get_world_path())
+	if _is_clash():
+		var spawn := grid.get_lane_spawn(human_lane)
+		var exit_c := grid.get_lane_exit(human_lane)
+		grid.set_path_preview(pathfinder.get_world_path_between(spawn, exit_c))
+	else:
+		grid.set_path_preview(pathfinder.get_world_path())
 
 
 func refresh_after_reset() -> void:

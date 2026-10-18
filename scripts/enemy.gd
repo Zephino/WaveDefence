@@ -12,6 +12,9 @@ var is_boss: bool = false
 var is_flying: bool = false
 ## Wave this enemy belongs to (used so early-send leftovers don't inflate the new wave's kill % ).
 var wave_index: int = 0
+## Clash: defending player / lane (-1 = classic single board).
+var defender_id: int = -1
+var lane_id: int = -1
 ## Randomize-mode type id (empty in Classic monsters).
 var monster_type: String = ""
 ## Element id → damage reduction 0..1 (burn / freeze / poison / lightning).

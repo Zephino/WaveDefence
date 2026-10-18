@@ -35,19 +35,27 @@ func rebuild() -> void:
 
 
 func has_path(extra_block: Vector2i = Vector2i(-1, -1)) -> bool:
+	return has_path_between(grid.spawn_cell, grid.exit_cell, extra_block)
+
+
+func has_path_between(from: Vector2i, to: Vector2i, extra_block: Vector2i = Vector2i(-1, -1)) -> bool:
 	var blocked := false
 	if extra_block != Vector2i(-1, -1) and grid.in_bounds(extra_block):
 		blocked = not astar.is_point_solid(extra_block)
 		if blocked:
 			astar.set_point_solid(extra_block, true)
-	var path := astar.get_id_path(grid.spawn_cell, grid.exit_cell)
+	var path := astar.get_id_path(from, to)
 	if blocked:
 		astar.set_point_solid(extra_block, false)
 	return path.size() > 0
 
 
 func get_cell_path() -> Array[Vector2i]:
-	var ids := astar.get_id_path(grid.spawn_cell, grid.exit_cell)
+	return get_cell_path_between(grid.spawn_cell, grid.exit_cell)
+
+
+func get_cell_path_between(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var ids := astar.get_id_path(from, to)
 	var result: Array[Vector2i] = []
 	for id in ids:
 		result.append(id)
@@ -55,7 +63,11 @@ func get_cell_path() -> Array[Vector2i]:
 
 
 func get_world_path() -> PackedVector2Array:
-	var cells := get_cell_path()
+	return get_world_path_between(grid.spawn_cell, grid.exit_cell)
+
+
+func get_world_path_between(from: Vector2i, to: Vector2i) -> PackedVector2Array:
+	var cells := get_cell_path_between(from, to)
 	var points := PackedVector2Array()
 	for cell in cells:
 		points.append(grid.cell_to_world_center(cell))
@@ -66,3 +78,9 @@ func would_block_path(cell: Vector2i) -> bool:
 	if not grid.is_buildable(cell):
 		return true
 	return not has_path(cell)
+
+
+func would_block_path_between(from: Vector2i, to: Vector2i, cell: Vector2i) -> bool:
+	if not grid.is_buildable(cell):
+		return true
+	return not has_path_between(from, to, cell)

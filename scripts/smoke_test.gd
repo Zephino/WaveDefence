@@ -100,14 +100,22 @@ func _run() -> void:
 		errors.append("random mode label should be Random")
 	if WaveScaler.mode_label(WaveScaler.GameMode.SIEGE) != "Siege":
 		errors.append("siege mode label should be Siege")
+	if WaveScaler.mode_label(WaveScaler.GameMode.CLASH) != "Clash":
+		errors.append("clash mode label should be Clash")
 	if not WaveScaler.is_siege_mode(WaveScaler.GameMode.SIEGE):
 		errors.append("is_siege_mode should be true for SIEGE")
+	if not WaveScaler.is_clash_mode(WaveScaler.GameMode.CLASH):
+		errors.append("is_clash_mode should be true for CLASH")
 	if not WaveScaler.should_rotate_spawn_after_wave(WaveScaler.GameMode.SIEGE, 5):
 		errors.append("siege should rotate spawn after wave 5")
 	if WaveScaler.should_rotate_spawn_after_wave(WaveScaler.GameMode.CLASSIC, 5):
 		errors.append("classic should not rotate siege spawn")
 	if WaveScaler.should_rotate_map_after_wave(WaveScaler.GameMode.SIEGE, 25):
 		errors.append("siege should not use random map wipe")
+	if WaveScaler.should_rotate_map_after_wave(WaveScaler.GameMode.CLASH, 25):
+		errors.append("clash should not rotate maps")
+	if WaveScaler.should_rotate_spawn_after_wave(WaveScaler.GameMode.CLASH, 5):
+		errors.append("clash should not rotate siege spawn")
 	var rotate_gold := WaveScaler.map_rotate_gold(WaveScaler.Difficulty.MEDIUM, 80)
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
@@ -181,6 +189,39 @@ func _run() -> void:
 		errors.append("siege rim spawn should move to a new cell")
 	if build.pathfinder.get_world_path().size() < 2:
 		errors.append("siege path must remain after spawn relocate")
+
+	# Clash: side-by-side lanes with top→bottom paths.
+	grid.reset_clash(3)
+	if not grid.is_clash_layout:
+		errors.append("clash layout flag should be set")
+	if grid.clash_lane_count() != 3:
+		errors.append("clash should create 3 lanes")
+	build.pathfinder.sync_region()
+	build.pathfinder.rebuild()
+	for lane_i in 3:
+		var lsp := grid.get_lane_spawn(lane_i)
+		var lex := grid.get_lane_exit(lane_i)
+		if lsp.y != 0 or lex.y != grid.rows - 1:
+			errors.append("clash lane %d spawn/exit should be top/bottom" % lane_i)
+		if build.pathfinder.get_world_path_between(lsp, lex).size() < 2:
+			errors.append("clash lane %d must have a path" % lane_i)
+	var clash_match := ClashMatch.new()
+	main.add_child(clash_match)
+	clash_match.setup(state, 3, [WaveScaler.Difficulty.EASY, WaveScaler.Difficulty.HARD])
+	if clash_match.player_count() != 3:
+		errors.append("clash match should have 3 players")
+	if not clash_match.try_send_pack(0, 1, "scout"):
+		errors.append("clash human send scout should succeed with starting gold")
+	if clash_match.human().income_per_round <= WaveScaler.CLASH_BASE_INCOME:
+		errors.append("clash send should bump income")
+	var opp := clash_match.living_opponents_of(1)
+	if opp.size() != 2:
+		errors.append("bot living opponents should include human and other bot")
+	clash_match.queue_free()
+	grid.reset(true)
+	build.pathfinder.sync_region()
+	build.pathfinder.rebuild()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
 
 	# Large Controls settings persist round-trip.
 	var prev_lc := UserSettings.is_large_controls()

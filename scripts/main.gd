@@ -17,6 +17,10 @@ var build_system: BuildSystem
 var wave_manager: WaveManager
 var hud: UIHud
 var debug_panel: DebugPanel
+var clash_match: ClashMatch = null
+var _clash_bots: Array = [] ## ClashBotAI
+var _clash_result_place: int = 0
+var _clash_human_won: bool = false
 
 var enemies: Node2D
 var projectiles: Node2D
@@ -135,11 +139,41 @@ func _setup_systems() -> void:
 	wave_manager.map_rotate_requested.connect(_on_map_rotate_requested)
 	wave_manager.spawn_rotate_requested.connect(_on_spawn_rotate_requested)
 
+	_setup_clash_match()
+
 	grid.tower_removed.connect(func(_c: Vector2i) -> void: wave_manager.repath_living_enemies())
 	grid.tower_placed.connect(func(_c: Vector2i, t: Node) -> void:
 		wave_manager.repath_living_enemies()
 		_on_tower_placed_tutorial(t)
 	)
+
+
+func _setup_clash_match() -> void:
+	_clash_bots.clear()
+	if clash_match != null and is_instance_valid(clash_match):
+		clash_match.queue_free()
+	clash_match = null
+	if not WaveScaler.is_clash_mode(Session.game_mode):
+		return
+	clash_match = ClashMatch.new()
+	clash_match.name = "ClashMatch"
+	add_child(clash_match)
+	clash_match.setup(game_state, Session.clash_player_count, Session.clash_bot_difficulties)
+	wave_manager.set_clash_match(clash_match)
+	build_system.set_clash_match(clash_match, 0)
+	clash_match.match_over.connect(_on_clash_match_over)
+	clash_match.players_changed.connect(_on_clash_players_changed)
+	for p in clash_match.players:
+		var cp := p as ClashPlayerState
+		if cp == null or cp.is_human:
+			continue
+		var bot := ClashBotAI.new()
+		bot.setup(clash_match, grid, pathfinder, enemies, projectiles, cp.player_id)
+		_clash_bots.append(bot)
+	# Apply clash start gold to GameState after match sync.
+	game_state.gold = WaveScaler.clash_starting_gold()
+	game_state.lives = WaveScaler.CLASH_STARTING_LIVES
+	clash_match.sync_human_to_game_state()
 
 
 func _setup_ui() -> void:
@@ -182,10 +216,16 @@ func _setup_ui() -> void:
 	debug_panel.god_mode_toggled.connect(_debug_god_mode)
 	debug_panel.restart_requested.connect(restart_run)
 
+	if clash_match != null:
+		hud.setup_clash(clash_match)
+		hud.clash_send_requested.connect(_on_clash_send_requested)
 	wave_manager.begin_run()
 	hud.refresh_run_labels()
 	_set_start_status()
 	hud.update_timer(0.0, true, "prep")
+	if clash_match != null:
+		_run_clash_bots()
+		hud.refresh_clash_panel()
 	SoundHub.unlock()
 	if WaveScaler.is_siege_mode(game_state.game_mode):
 		SoundHub.set_music_context(SoundHub.MUSIC_GAME_SIEGE)
@@ -197,7 +237,9 @@ func _setup_ui() -> void:
 
 
 func _set_start_status() -> void:
-	if WaveScaler.is_random_mode(game_state.game_mode):
+	if WaveScaler.is_clash_mode(game_state.game_mode):
+		hud.set_status("Clash — build your lane (leftmost), buy sends for opponents, then Start Round.")
+	elif WaveScaler.is_random_mode(game_state.game_mode):
 		hud.set_status(
 			"Random map %d (seed %d) — build a path, then Start Round." % [
 				game_state.map_sector,
@@ -215,6 +257,53 @@ func _set_start_status() -> void:
 	else:
 		hud.set_status("Build your maze, then press Start Round.")
 	_refresh_pan_availability()
+
+
+func _run_clash_bots() -> void:
+	if clash_match == null or clash_match.finished:
+		return
+	var wave := maxi(game_state.wave, 1)
+	for bot in _clash_bots:
+		var ai := bot as ClashBotAI
+		if ai != null:
+			ai.run_prep_turn(wave)
+	wave_manager.invalidate_ground_path()
+	build_system.refresh_after_reset()
+	if hud != null:
+		hud.refresh_clash_panel()
+
+
+func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
+	if clash_match == null or clash_match.finished:
+		return
+	if wave_manager.phase != WaveManager.Phase.PREP and wave_manager.phase != WaveManager.Phase.INTERMISSION:
+		hud.set_status("Sends only during prep / build timer.")
+		return
+	if clash_match.try_send_pack(clash_match.human_id, target_id, pack_id):
+		var pack := WaveScaler.clash_send_pack(pack_id)
+		hud.set_status("Queued %s to %s (+%d income)." % [
+			str(pack.get("label", pack_id)),
+			clash_match.get_player(target_id).display_name if clash_match.get_player(target_id) else "opponent",
+			WaveScaler.CLASH_SEND_INCOME_BUMP,
+		])
+		hud.refresh_clash_panel()
+	else:
+		hud.set_status("Can't send that package.")
+
+
+func _on_clash_players_changed() -> void:
+	if hud != null:
+		hud.refresh_clash_panel()
+
+
+func _on_clash_match_over(winner_id: int, human_won: bool, place: int) -> void:
+	_clash_human_won = human_won
+	_clash_result_place = place
+	if human_won:
+		hud.set_status("Victory — last lane standing (wave %d)." % game_state.wave)
+	else:
+		hud.set_status("Defeated — place #%d (wave %d)." % [maxi(place, 2), game_state.wave])
+	wave_manager.clear_enemies()
 
 
 func _process(delta: float) -> void:
@@ -865,6 +954,13 @@ func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
 		_finish_tutorial()
 		return
 	hud.set_banner("")
+	if WaveScaler.is_clash_mode(game_state.game_mode):
+		if clash_match != null and clash_match.finished:
+			return
+		_run_clash_bots()
+		hud.set_status("Wave %d cleared — income paid. Build, send, then Start Round." % wave)
+		hud.refresh_clash_panel()
+		return
 	if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
 		# Full-clear rotate is handled by map_rotate_requested; early-send waits until the board empties.
 		if wave_manager.pending_map_rotate_wave > 0:
@@ -925,7 +1021,12 @@ func _apply_run_map(new_random: bool) -> void:
 		return
 	var mode := Session.game_mode if game_state == null else game_state.game_mode
 	var layout_mode := Session.map_layout_mode if game_state == null else game_state.map_layout_mode
-	if WaveScaler.is_siege_mode(mode):
+	if WaveScaler.is_clash_mode(mode):
+		var lanes := Session.clash_player_count
+		if new_random or not grid.is_clash_layout or grid.clash_lane_count() != lanes:
+			grid.reset_clash(lanes)
+		Session.current_map_seed = -1
+	elif WaveScaler.is_siege_mode(mode):
 		if new_random or not grid.is_siege_layout:
 			grid.reset_siege()
 		Session.current_map_seed = -1
@@ -957,7 +1058,7 @@ func _apply_run_map(new_random: bool) -> void:
 	map_pan = Vector2.ZERO
 	map_zoom = 1.0
 	_sync_world_positions()
-	if WaveScaler.is_siege_mode(mode):
+	if WaveScaler.is_siege_mode(mode) or WaveScaler.is_clash_mode(mode):
 		_focus_camera_on_map_center()
 	else:
 		_update_map_camera()
@@ -1019,6 +1120,12 @@ func _on_end_run_confirmed() -> void:
 	wave_manager.clear_enemies()
 	for child in projectiles.get_children():
 		child.queue_free()
+	if WaveScaler.is_clash_mode(game_state.game_mode):
+		_clash_human_won = false
+		_clash_result_place = clash_match.living_count() + 1 if clash_match else 2
+		hud.set_status("Clash ended early.")
+		call_deferred("_boot_clash_summary", wave_reached)
+		return
 	if game_state.debug_used:
 		hud.set_status("Run ended — debug used, leaderboard entry blocked.")
 	else:
@@ -1027,12 +1134,44 @@ func _on_end_run_confirmed() -> void:
 
 
 func _on_game_over_to_leaderboard(wave_reached: int) -> void:
+	wave_manager.phase = WaveManager.Phase.PREP
+	if WaveScaler.is_clash_mode(game_state.game_mode):
+		call_deferred("_boot_clash_summary", wave_reached)
+		return
 	if game_state.debug_used:
 		hud.set_status("Game over — debug used, leaderboard entry blocked.")
 	else:
 		hud.set_status("Game over — loading leaderboard...")
-	wave_manager.phase = WaveManager.Phase.PREP
 	call_deferred("_boot_leaderboard", wave_reached)
+
+
+func _boot_clash_summary(wave_reached: int) -> void:
+	SoundHub.play_game_over()
+	var coaching := {
+		"new_best": false,
+		"coaching_text": _clash_summary_text(wave_reached),
+		"screenshot_cb": _save_maze_screenshot,
+	}
+	if debug_panel:
+		debug_panel.visible = false
+	if build_system:
+		build_system.clear_selection()
+	var summary: Control = _RunSummaryOverlay.new()
+	summary.show_summary(game_state, coaching)
+	hud.attach_run_summary(summary)
+	summary.continued.connect(func() -> void:
+		Session.go_menu()
+	)
+
+
+func _clash_summary_text(wave_reached: int) -> String:
+	if _clash_human_won:
+		return "Clash victory! You were the last lane standing through wave %d." % wave_reached
+	var place := maxi(_clash_result_place, 2)
+	return "Clash defeat — finished #%d at wave %d. Send packs raise income; don't neglect your lane." % [
+		place,
+		wave_reached,
+	]
 
 
 func _boot_leaderboard(wave_reached: int) -> void:
@@ -1232,6 +1371,9 @@ func restart_run() -> void:
 	game_state.run_seed = Session.run_seed
 	game_state.current_map_seed = Session.current_map_seed
 	_apply_run_map(true)
+	_setup_clash_match()
+	if clash_match != null:
+		hud.setup_clash(clash_match)
 	build_system.refresh_after_reset()
 	hud.set_banner("")
 	hud.highlight_tower("gunner")
@@ -1240,3 +1382,6 @@ func restart_run() -> void:
 	wave_manager.begin_run()
 	_set_start_status()
 	hud.update_timer(0.0, true, "prep")
+	if clash_match != null:
+		_run_clash_bots()
+		hud.refresh_clash_panel()

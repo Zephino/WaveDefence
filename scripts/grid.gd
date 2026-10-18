@@ -6,6 +6,9 @@ const ROWS := 15
 const TILE_SIZE := 40
 const SIEGE_COLS := 32
 const SIEGE_ROWS := 32
+## Clash: buildable columns per lane (top→bottom path).
+const CLASH_LANE_COLS := 5
+const CLASH_ROWS := 15
 ## Share of buildable cells turned into permanent rocks on random maps.
 const RANDOM_BLOCK_RATIO := 0.14
 const RANDOM_GEN_ATTEMPTS := 40
@@ -28,6 +31,11 @@ var show_hover: bool = false
 var path_preview: PackedVector2Array = PackedVector2Array()
 var is_random_layout: bool = false
 var is_siege_layout: bool = false
+var is_clash_layout: bool = false
+## Clash lane spawns / exits / column ranges (inclusive left..right).
+var lane_spawns: Array = [] ## Array[Vector2i]
+var lane_exits: Array = [] ## Array[Vector2i]
+var lane_col_ranges: Array = [] ## Array[Vector2i] as (x0, x1)
 ## Seed actually used for the last generated random/siege layout (-1 if classic corridor).
 var last_layout_seed: int = -1
 
@@ -68,6 +76,10 @@ func _init_classic_tiles() -> void:
 	tiles[exit_cell.y][exit_cell.x] = Tile.EXIT
 	is_random_layout = false
 	is_siege_layout = false
+	is_clash_layout = false
+	lane_spawns.clear()
+	lane_exits.clear()
+	lane_col_ranges.clear()
 	last_layout_seed = -1
 
 
@@ -88,12 +100,127 @@ func reset_siege(seed_value: int = -1) -> void:
 	queue_redraw()
 
 
+func reset_clash(lane_count: int) -> void:
+	_clear_tower_nodes()
+	path_preview.clear()
+	generate_clash_layout(lane_count)
+	queue_redraw()
+
+
+## Side-by-side vertical lanes: spawn top → exit bottom, wall dividers between.
+func generate_clash_layout(lane_count: int) -> void:
+	var n := clampi(lane_count, WaveScaler.CLASH_MIN_PLAYERS, WaveScaler.CLASH_MAX_PLAYERS)
+	rows = CLASH_ROWS
+	cols = n * CLASH_LANE_COLS + (n - 1)
+	is_random_layout = false
+	is_siege_layout = false
+	is_clash_layout = true
+	last_layout_seed = -1
+	lane_spawns.clear()
+	lane_exits.clear()
+	lane_col_ranges.clear()
+	_blank_buildable_grid()
+
+	var x_cursor := 0
+	for lane in n:
+		var x0 := x_cursor
+		var x1 := x_cursor + CLASH_LANE_COLS - 1
+		lane_col_ranges.append(Vector2i(x0, x1))
+		var mid_x := x0 + CLASH_LANE_COLS / 2
+		var spawn := Vector2i(mid_x, 0)
+		var exit_c := Vector2i(mid_x, rows - 1)
+		lane_spawns.append(spawn)
+		lane_exits.append(exit_c)
+		tiles[spawn.y][spawn.x] = Tile.SPAWN
+		tiles[exit_c.y][exit_c.x] = Tile.EXIT
+		x_cursor = x1 + 1
+		if lane < n - 1:
+			for y in rows:
+				tiles[y][x_cursor] = Tile.BLOCKED
+			x_cursor += 1
+
+	# Human lane is primary for classic path preview helpers.
+	spawn_cell = lane_spawns[0] as Vector2i
+	exit_cell = lane_exits[0] as Vector2i
+	queue_redraw()
+
+
+func clash_lane_count() -> int:
+	return lane_spawns.size()
+
+
+func lane_index_for_cell(cell: Vector2i) -> int:
+	if not is_clash_layout:
+		return -1
+	for i in lane_col_ranges.size():
+		var r: Vector2i = lane_col_ranges[i]
+		if cell.x >= r.x and cell.x <= r.y:
+			return i
+	return -1
+
+
+func is_clash_spawn_or_exit(cell: Vector2i) -> bool:
+	if not is_clash_layout:
+		return cell == spawn_cell or cell == exit_cell
+	for s in lane_spawns:
+		if cell == s:
+			return true
+	for e in lane_exits:
+		if cell == e:
+			return true
+	return false
+
+
+func get_lane_spawn(lane: int) -> Vector2i:
+	if lane < 0 or lane >= lane_spawns.size():
+		return spawn_cell
+	return lane_spawns[lane] as Vector2i
+
+
+func get_lane_exit(lane: int) -> Vector2i:
+	if lane < 0 or lane >= lane_exits.size():
+		return exit_cell
+	return lane_exits[lane] as Vector2i
+
+
+## Air path for a Clash lane (top→bottom weave within lane bounds).
+func build_lane_air_s_path(lane: int, phase_offset: float = 0.0, segments: int = 16) -> PackedVector2Array:
+	if not is_clash_layout or lane < 0 or lane >= lane_spawns.size():
+		return build_air_s_path(phase_offset, segments)
+	var ts := float(tile_px())
+	var start := cell_to_world_center(get_lane_spawn(lane))
+	var end := cell_to_world_center(get_lane_exit(lane))
+	var r: Vector2i = lane_col_ranges[lane]
+	var min_x := (float(r.x) + 0.5) * ts
+	var max_x := (float(r.y) + 0.5) * ts
+	var min_y := ts * 0.5
+	var max_y := (float(rows) - 0.5) * ts
+	var path := PackedVector2Array()
+	path.append(start)
+	var delta := end - start
+	var amp := minf(float(CLASH_LANE_COLS) * 0.35, 2.5) * ts
+	var steps := maxi(segments, 4)
+	var perp := Vector2(-delta.y, delta.x).normalized()
+	for i in range(1, steps):
+		var t := float(i) / float(steps)
+		var base := start.lerp(end, t)
+		var offset := perp * (amp * sin(TAU * t + phase_offset))
+		var p := base + offset
+		path.append(Vector2(clampf(p.x, min_x, max_x), clampf(p.y, min_y, max_y)))
+	path.append(end)
+	return path
+
+
 ## Random spawn/exit on opposite short edges + scattered permanent blocked cells.
 ## Guarantees a spawn→exit path exists.
 func generate_random_layout(seed_value: int = -1) -> bool:
 	cols = COLS
 	rows = ROWS
 	is_siege_layout = false
+	is_clash_layout = false
+	lane_spawns.clear()
+	lane_exits.clear()
+	lane_col_ranges.clear()
 	var used_seed := seed_value if seed_value >= 0 else WaveScaler.roll_seed()
 	last_layout_seed = used_seed
 	var rng := RandomNumberGenerator.new()
@@ -123,6 +250,10 @@ func generate_siege_layout(seed_value: int = -1) -> bool:
 	cols = SIEGE_COLS
 	rows = SIEGE_ROWS
 	is_random_layout = false
+	is_clash_layout = false
+	lane_spawns.clear()
+	lane_exits.clear()
+	lane_col_ranges.clear()
 	var used_seed := seed_value if seed_value >= 0 else WaveScaler.roll_seed()
 	last_layout_seed = used_seed
 	var rng := RandomNumberGenerator.new()
@@ -286,7 +417,7 @@ func is_terrain_blocked(cell: Vector2i) -> bool:
 func is_buildable(cell: Vector2i) -> bool:
 	if not in_bounds(cell):
 		return false
-	if cell == spawn_cell or cell == exit_cell:
+	if is_clash_spawn_or_exit(cell):
 		return false
 	if towers.has(cell):
 		return false
@@ -345,11 +476,12 @@ func _draw() -> void:
 			var cell := Vector2i(x, y)
 			var rect := Rect2(x * ts, y * ts, ts, ts)
 			var color := Color(0.18, 0.22, 0.28)
-			if cell == spawn_cell:
+			var tile := get_tile(cell)
+			if tile == Tile.SPAWN:
 				color = Color(0.2, 0.45, 0.25)
-			elif cell == exit_cell:
+			elif tile == Tile.EXIT:
 				color = Color(0.45, 0.2, 0.2)
-			elif get_tile(cell) == Tile.BLOCKED:
+			elif tile == Tile.BLOCKED:
 				color = Color(0.12, 0.11, 0.1)
 			elif towers.has(cell):
 				color = Color(0.16, 0.18, 0.22)

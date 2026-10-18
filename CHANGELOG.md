@@ -1,4 +1,18 @@
-﻿## Version 00.02.38
+﻿## Version 00.02.39
+Date: 10/17/2026
+Time: 11:02 PM
+
+### Changes
+- New **Clash** map mode: 2–4 vertical lanes (you + AI bots), mobs spawn top→bottom, last standing wins
+- Clash setup: player count and per-bot Easy/Medium/Hard (tower placement + send aggressiveness)
+- Prep **Send** packs to living opponents; each send permanently raises your gold income per round
+- Bots pick send targets uniformly among living opponents (they do not gang up on the human)
+- Clash runs skip the leaderboard and return to the menu after a summary
+
+### Reason
+Add a multiplayer-style lane battle mode playable against AI until real multiplayer exists.
+
+## Version 00.02.38
 Date: 10/10/2026
 Time: 12:28 PM
 

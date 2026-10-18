@@ -62,8 +62,12 @@ func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -
 		game_mode = p_mode
 	if p_monster_mode >= 0:
 		monster_mode = p_monster_mode
-	gold = WaveScaler.starting_gold_for(difficulty)
-	lives = WaveScaler.STARTING_LIVES
+	if WaveScaler.is_clash_mode(game_mode):
+		gold = WaveScaler.clash_starting_gold()
+		lives = WaveScaler.CLASH_STARTING_LIVES
+	else:
+		gold = WaveScaler.starting_gold_for(difficulty)
+		lives = WaveScaler.STARTING_LIVES
 	wave = 0
 	highest_wave = 0
 	total_kills = 0

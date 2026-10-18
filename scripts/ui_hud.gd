@@ -14,10 +14,16 @@ signal end_run_confirmed
 signal multi_select_changed(enabled: bool)
 signal pan_mode_changed(enabled: bool)
 signal pause_pressed
+signal clash_send_requested(target_id: int, pack_id: String)
 
 var game_state: GameState
+var clash_match: ClashMatch = null
 var multi_select_enabled: bool = false
 var pan_mode_enabled: bool = false
+var _clash_status_label: Label
+var _clash_send_box: VBoxContainer
+var _clash_target_id: int = 1
+var _clash_root: Control
 
 var gold_label: Label
 var lives_label: Label
@@ -165,9 +171,125 @@ func _build_ui(version_text: String) -> void:
 	board_tooltip.add_child(board_tooltip_label)
 
 	_build_end_run_confirm(root)
+	_build_clash_panel(root)
 
 	highlight_tower("gunner")
 	update_upgrade_buttons(false, 0, false, 0)
+
+
+func setup_clash(p_match: ClashMatch) -> void:
+	clash_match = p_match
+	if _clash_root:
+		_clash_root.visible = clash_match != null
+	refresh_clash_panel()
+
+
+func _build_clash_panel(root: Control) -> void:
+	_clash_root = Control.new()
+	_clash_root.visible = false
+	_clash_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_clash_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_clash_root)
+
+	_clash_status_label = Label.new()
+	_clash_status_label.position = Vector2(GameLayout.board_origin().x, 76)
+	_clash_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_clash_status_label.modulate = Color(0.8, 0.85, 0.7)
+	_clash_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_clash_status_label.custom_minimum_size = Vector2(GameLayout.board_pixel_size().x, 0)
+	_clash_root.add_child(_clash_status_label)
+
+	_clash_send_box = VBoxContainer.new()
+	var board_origin := GameLayout.board_origin()
+	_clash_send_box.position = Vector2(board_origin.x, 100)
+	_clash_send_box.custom_minimum_size = Vector2(minf(280.0, GameLayout.board_pixel_size().x * 0.45), 0)
+	_clash_send_box.add_theme_constant_override("separation", 4)
+	_clash_send_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	_clash_root.add_child(_clash_send_box)
+
+
+func refresh_clash_panel() -> void:
+	if _clash_root == null:
+		return
+	var active := clash_match != null and game_state != null and WaveScaler.is_clash_mode(game_state.game_mode)
+	_clash_root.visible = active
+	if not active:
+		return
+	var parts: PackedStringArray = PackedStringArray()
+	for p in clash_match.players:
+		var cp := p as ClashPlayerState
+		if cp == null:
+			continue
+		if not cp.alive:
+			parts.append("%s: OUT" % cp.display_name)
+		else:
+			parts.append("%s L%d $%d +%d/rnd" % [cp.display_name, cp.lives, cp.gold, cp.income_per_round])
+	if _clash_status_label:
+		_clash_status_label.text = "  |  ".join(parts)
+	_rebuild_clash_send_box()
+
+
+func _rebuild_clash_send_box() -> void:
+	if _clash_send_box == null or clash_match == null:
+		return
+	while _clash_send_box.get_child_count() > 0:
+		var c := _clash_send_box.get_child(0)
+		_clash_send_box.remove_child(c)
+		c.queue_free()
+	var title := Label.new()
+	title.text = "Send to enemy"
+	title.modulate = Color(0.85, 0.9, 0.55)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_clash_send_box.add_child(title)
+
+	var living := clash_match.living_opponents_of(clash_match.human_id)
+	if living.is_empty():
+		var none := Label.new()
+		none.text = "No living opponents"
+		none.modulate = Color(0.6, 0.65, 0.7)
+		_clash_send_box.add_child(none)
+		return
+	# Keep target valid.
+	var valid_ids: Array = []
+	for p in living:
+		valid_ids.append((p as ClashPlayerState).player_id)
+	if not valid_ids.has(_clash_target_id):
+		_clash_target_id = int(valid_ids[0])
+
+	var target_row := HBoxContainer.new()
+	target_row.add_theme_constant_override("separation", 3)
+	_clash_send_box.add_child(target_row)
+	for p in living:
+		var cp := p as ClashPlayerState
+		var tbtn := Button.new()
+		tbtn.text = cp.display_name
+		tbtn.focus_mode = Control.FOCUS_NONE
+		tbtn.custom_minimum_size = Vector2(0, GameLayout.button_height(24.0))
+		tbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var tid := cp.player_id
+		tbtn.pressed.connect(func() -> void:
+			_clash_target_id = tid
+			refresh_clash_panel()
+		)
+		if tid == _clash_target_id:
+			tbtn.modulate = Color(0.75, 1.0, 0.8)
+		target_row.add_child(tbtn)
+
+	for pack_id in WaveScaler.clash_send_pack_ids():
+		var pack := WaveScaler.clash_send_pack(str(pack_id))
+		var cost: int = int(pack.get("cost", 0))
+		var pbtn := Button.new()
+		pbtn.text = "%s (%d)" % [str(pack.get("label", pack_id)), cost]
+		pbtn.focus_mode = Control.FOCUS_NONE
+		pbtn.custom_minimum_size = Vector2(0, GameLayout.button_height(26.0))
+		pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pbtn.disabled = game_state == null or not game_state.can_afford(cost)
+		pbtn.tooltip_text = "Send to selected opponent. Raises your income by %d." % WaveScaler.CLASH_SEND_INCOME_BUMP
+		var pid := str(pack_id)
+		pbtn.pressed.connect(func() -> void:
+			clash_send_requested.emit(_clash_target_id, pid)
+		)
+		_clash_send_box.add_child(pbtn)
 
 
 func _build_end_run_confirm(root: Control) -> void:
@@ -739,9 +861,16 @@ func refresh_run_labels() -> void:
 	if game_state == null:
 		return
 	if difficulty_label:
-		difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
+		if WaveScaler.is_clash_mode(game_state.game_mode):
+			difficulty_label.text = "Clash"
+		else:
+			difficulty_label.text = WaveScaler.difficulty_label(game_state.difficulty)
 	if mode_label:
-		if WaveScaler.is_random_mode(game_state.game_mode):
+		if WaveScaler.is_clash_mode(game_state.game_mode):
+			var n := Session.clash_player_count
+			mode_label.text = "Map: Clash (%d lanes)" % n
+			mode_label.tooltip_text = "Last standing wins. Send packs raise income."
+		elif WaveScaler.is_random_mode(game_state.game_mode):
 			mode_label.text = "Map: Random M%d  Seed: %d" % [
 				game_state.map_sector,
 				game_state.current_map_seed,
@@ -757,20 +886,29 @@ func refresh_run_labels() -> void:
 			mode_label.text = "Map: Classic"
 			mode_label.tooltip_text = ""
 	if monsters_label:
-		monsters_label.text = "Monsters: %s" % WaveScaler.monster_mode_label(game_state.monster_mode)
-		if WaveScaler.is_randomize_monsters(game_state.monster_mode):
-			monsters_label.tooltip_text = "Elemental resists grow with waves (all 4 by wave %d)" % MonsterTypes.RESISTS_AT_WAVE_4
+		if WaveScaler.is_clash_mode(game_state.game_mode):
+			monsters_label.text = "Send + defend"
+			monsters_label.tooltip_text = "Buy sends in prep; bots never gang up on you."
 		else:
-			monsters_label.tooltip_text = "Standard wave mix — no elemental resists"
+			monsters_label.text = "Monsters: %s" % WaveScaler.monster_mode_label(game_state.monster_mode)
+			if WaveScaler.is_randomize_monsters(game_state.monster_mode):
+				monsters_label.tooltip_text = "Elemental resists grow with waves (all 4 by wave %d)" % MonsterTypes.RESISTS_AT_WAVE_4
+			else:
+				monsters_label.tooltip_text = "Standard wave mix — no elemental resists"
+	refresh_clash_panel()
 
 
 func _on_gold_changed(gold: int) -> void:
 	gold_label.text = "Gold: %d" % gold
 	_refresh_command_ability_buttons()
+	if clash_match != null:
+		refresh_clash_panel()
 
 
 func _on_lives_changed(lives: int) -> void:
 	lives_label.text = "Lives: %d" % lives
+	if clash_match != null:
+		refresh_clash_panel()
 
 
 func _on_wave_changed(wave: int) -> void:

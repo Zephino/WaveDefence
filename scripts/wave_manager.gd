@@ -25,6 +25,8 @@ var grid: GameGrid
 var pathfinder: Pathfinder
 var game_state: GameState
 var enemy_container: Node
+## Optional Clash match — multi-lane spawn / gold / lives.
+var clash_match: ClashMatch = null
 
 var phase: Phase = Phase.PREP
 var wave_active: bool = false
@@ -44,11 +46,15 @@ var pending_map_rotate_wave: int = 0
 ## Cached ground path; rebuilt only when towers change (not every spawn).
 var _cached_ground_path: PackedVector2Array = PackedVector2Array()
 var _path_dirty: bool = true
+## Clash: per-lane cached ground paths.
+var _cached_lane_paths: Dictionary = {}
 var _spawn_rng := RandomNumberGenerator.new()
 ## Current wave is a ground snake chain (random boss-wave variant).
 var _wave_is_snake: bool = false
 ## Last spawned snake segment (used to link the next body piece).
 var _snake_tail: Enemy = null
+## Clash: last snake tail per lane.
+var _snake_tails_by_lane: Dictionary = {}
 var game_paused: bool = false
 var _leaks_this_wave: int = 0
 var _flying_boss_wave_active: bool = false
@@ -59,6 +65,14 @@ func setup(p_grid: GameGrid, p_pathfinder: Pathfinder, p_state: GameState, p_ene
 	pathfinder = p_pathfinder
 	game_state = p_state
 	enemy_container = p_enemies
+
+
+func set_clash_match(p_match: ClashMatch) -> void:
+	clash_match = p_match
+
+
+func _is_clash() -> bool:
+	return clash_match != null and game_state != null and WaveScaler.is_clash_mode(game_state.game_mode)
 
 
 func begin_run() -> void:
@@ -86,6 +100,7 @@ func _emit_enemies_remaining() -> void:
 
 func invalidate_ground_path() -> void:
 	_path_dirty = true
+	_cached_lane_paths.clear()
 
 
 func _ensure_ground_path() -> PackedVector2Array:
@@ -96,28 +111,53 @@ func _ensure_ground_path() -> PackedVector2Array:
 	return _cached_ground_path
 
 
+func _ensure_lane_ground_path(lane: int) -> PackedVector2Array:
+	if not _path_dirty and _cached_lane_paths.has(lane):
+		var cached: PackedVector2Array = _cached_lane_paths[lane]
+		if cached.size() >= 2:
+			return cached
+	pathfinder.rebuild()
+	_path_dirty = false
+	var spawn := grid.get_lane_spawn(lane)
+	var exit_c := grid.get_lane_exit(lane)
+	var path := pathfinder.get_world_path_between(spawn, exit_c)
+	_cached_lane_paths[lane] = path
+	return path
+
+
 func start_round() -> bool:
 	## Player pressed Start Round after free-build prep.
 	if phase != Phase.PREP or game_state.is_game_over:
 		return false
 	invalidate_ground_path()
-	if _ensure_ground_path().size() < 2:
+	if not has_open_path():
 		return false
 	_start_intermission(WaveScaler.INITIAL_BUILD_TIME, true)
 	return true
 
 
 func has_open_path() -> bool:
+	if _is_clash():
+		for p in clash_match.living_players():
+			var cp := p as ClashPlayerState
+			if _ensure_lane_ground_path(cp.lane_index).size() < 2:
+				return false
+		return clash_match.living_count() > 0
 	return _ensure_ground_path().size() >= 2
 
 
 func can_send_wave() -> bool:
 	if game_state.is_game_over or wave_active or spawning:
 		return false
+	if _is_clash() and clash_match.finished:
+		return false
 	return has_open_path()
 
 
 func can_send_wave_early() -> bool:
+	# Clash uses buy-sends instead of overlapping early waves.
+	if _is_clash():
+		return false
 	if game_state.is_game_over or phase != Phase.WAVE or not skip_unlocked:
 		return false
 	# Stacking early-sends with leftovers was freezing Classic around wave 50–60.
@@ -153,16 +193,21 @@ func try_skip_timer() -> bool:
 func send_next_wave() -> bool:
 	if not can_send_wave():
 		return false
-	var world_path := _ensure_ground_path()
-	if world_path.size() < 2:
-		return false
+	if not _is_clash():
+		var world_path := _ensure_ground_path()
+		if world_path.size() < 2:
+			return false
 
 	var wave := game_state.advance_wave()
 	_spawn_rng.randomize()
 	_snake_tail = null
-	_wave_is_snake = WaveScaler.roll_snake_boss(wave, _spawn_rng)
+	_snake_tails_by_lane.clear()
+	_wave_is_snake = false if _is_clash() else WaveScaler.roll_snake_boss(wave, _spawn_rng)
 	var banner := WaveScaler.boss_banner(wave, _wave_is_snake)
-	_build_spawn_queue(wave)
+	if _is_clash():
+		_build_clash_spawn_queue(wave)
+	else:
+		_build_spawn_queue(wave)
 	enemies_this_wave_total = spawn_queue.size()
 	phase = Phase.WAVE
 	wave_active = true
@@ -309,6 +354,104 @@ func _build_spawn_queue(wave: int) -> void:
 		))
 
 
+func _build_clash_spawn_queue(wave: int) -> void:
+	spawn_queue.clear()
+	_spawn_rng.randomize()
+	for p in clash_match.living_players():
+		var cp := p as ClashPlayerState
+		var lane := cp.lane_index
+		var defender := cp.player_id
+		var count := WaveScaler.clash_creep_count(wave)
+		var air_n := 0
+		if wave >= WaveScaler.EARLY_AIR_SCOUT_WAVE:
+			air_n = mini(1 + int(wave / 15), maxi(count / 4, 1))
+		var ground_n := maxi(count - air_n, 1)
+		for _i in ground_n:
+			var spec := _make_spawn_spec(
+				wave,
+				WaveScaler.creep_hp(wave),
+				WaveScaler.creep_speed(wave),
+				WaveScaler.creep_bounty(wave),
+				false,
+				false
+			)
+			spec["lane_id"] = lane
+			spec["defender_id"] = defender
+			spawn_queue.append(spec)
+		for _j in air_n:
+			var air := _make_spawn_spec(
+				wave,
+				WaveScaler.flying_creep_hp(wave),
+				WaveScaler.flying_creep_speed(wave),
+				WaveScaler.flying_creep_bounty(wave),
+				false,
+				true
+			)
+			air["lane_id"] = lane
+			air["defender_id"] = defender
+			spawn_queue.append(air)
+		if wave > 0 and wave % 10 == 0:
+			var boss := _make_spawn_spec(
+				wave,
+				WaveScaler.boss_hp(wave) * 0.85,
+				WaveScaler.boss_speed(wave),
+				WaveScaler.boss_bounty(wave),
+				true,
+				false
+			)
+			boss["lane_id"] = lane
+			boss["defender_id"] = defender
+			spawn_queue.append(boss)
+		for send in cp.take_incoming_sends():
+			_append_clash_send_specs(wave, lane, defender, str(send.get("pack_id", "scout")))
+	# Round-robin shuffle lightly so lanes interleave.
+	_interleave_clash_queue()
+
+
+func _append_clash_send_specs(wave: int, lane: int, defender: int, pack_id: String) -> void:
+	var pack := WaveScaler.clash_send_pack(pack_id)
+	var n: int = int(pack.get("count", 3))
+	var hp_m: float = float(pack.get("hp_mult", 1.0))
+	var sp_m: float = float(pack.get("speed_mult", 1.0))
+	var bo_m: float = float(pack.get("bounty_mult", 0.8))
+	for _k in n:
+		var spec := _make_spawn_spec(
+			wave,
+			WaveScaler.creep_hp(wave) * hp_m,
+			WaveScaler.creep_speed(wave) * sp_m,
+			maxi(int(round(float(WaveScaler.creep_bounty(wave)) * bo_m)), 1),
+			false,
+			false
+		)
+		spec["lane_id"] = lane
+		spec["defender_id"] = defender
+		spec["sent"] = true
+		spawn_queue.append(spec)
+
+
+func _interleave_clash_queue() -> void:
+	if spawn_queue.size() < 2:
+		return
+	var by_lane: Dictionary = {}
+	for spec in spawn_queue:
+		var lane := int(spec.get("lane_id", 0))
+		if not by_lane.has(lane):
+			by_lane[lane] = []
+		(by_lane[lane] as Array).append(spec)
+	spawn_queue.clear()
+	var lanes: Array = by_lane.keys()
+	lanes.sort()
+	var remaining := true
+	while remaining:
+		remaining = false
+		for lane in lanes:
+			var arr: Array = by_lane[lane]
+			if arr.is_empty():
+				continue
+			remaining = true
+			spawn_queue.append(arr.pop_front())
+
+
 func _build_snake_spawn_queue(wave: int) -> void:
 	var count := WaveScaler.snake_segment_count(wave)
 	for i in count:
@@ -404,15 +547,23 @@ func _process_spawning(delta: float) -> void:
 
 func _spawn_enemy(spec: Dictionary) -> bool:
 	var flying := bool(spec.get("flying", false))
+	var lane_id := int(spec.get("lane_id", -1))
+	var defender_id := int(spec.get("defender_id", -1))
 	var world_path: PackedVector2Array
 	if flying:
 		# Stagger phase so successive flyers weave on offset S lanes.
-		var phase := float(enemies_alive % 4) * (PI * 0.35)
+		var phase_off := float(enemies_alive % 4) * (PI * 0.35)
 		if bool(spec.get("boss", false)):
-			phase += 0.55
-		world_path = grid.build_air_s_path(phase)
+			phase_off += 0.55
+		if _is_clash() and lane_id >= 0:
+			world_path = grid.build_lane_air_s_path(lane_id, phase_off)
+		else:
+			world_path = grid.build_air_s_path(phase_off)
 	else:
-		world_path = _ensure_ground_path()
+		if _is_clash() and lane_id >= 0:
+			world_path = _ensure_lane_ground_path(lane_id)
+		else:
+			world_path = _ensure_ground_path()
 		if world_path.size() < 2:
 			return false
 	var enemy := Enemy.new()
@@ -428,12 +579,18 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 		str(spec.get("monster_type", "")),
 		spec.get("element_resists", MonsterTypes.empty_resists()) as Dictionary
 	)
+	enemy.lane_id = lane_id
+	enemy.defender_id = defender_id
 	if bool(spec.get("snake", false)):
 		var prev: Enemy = _snake_tail
+		if _is_clash() and lane_id >= 0:
+			prev = _snake_tails_by_lane.get(lane_id, null)
 		if prev != null and not is_instance_valid(prev):
 			prev = null
 		enemy.configure_snake(int(spec.get("snake_index", 0)), prev, WaveScaler.SNAKE_SPACING)
 		_snake_tail = enemy
+		if _is_clash() and lane_id >= 0:
+			_snake_tails_by_lane[lane_id] = enemy
 	enemy.died.connect(_on_enemy_died)
 	enemy.leaked.connect(_on_enemy_leaked)
 	enemies_alive += 1
@@ -443,8 +600,11 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 
 
 func _on_enemy_died(enemy: Enemy, bounty: int) -> void:
-	game_state.add_gold(bounty)
-	game_state.register_kill()
+	if _is_clash() and enemy.defender_id >= 0:
+		clash_match.credit_kill(enemy.defender_id, bounty)
+	else:
+		game_state.add_gold(bounty)
+		game_state.register_kill()
 	SoundHub.play_kill()
 	if enemy.wave_index == game_state.wave:
 		kills_this_wave += 1
@@ -455,6 +615,8 @@ func _on_enemy_died(enemy: Enemy, bounty: int) -> void:
 
 
 func _record_wave_milestones(wave: int) -> void:
+	if _is_clash():
+		return
 	if wave == 15 and game_state.gold >= 500:
 		game_state.peak_gold_wave15 = true
 	if _wave_is_snake and game_state.difficulty >= WaveScaler.Difficulty.MEDIUM and _leaks_this_wave == 0:
@@ -463,10 +625,13 @@ func _record_wave_milestones(wave: int) -> void:
 		game_state.flying_boss_wave_leaks = _leaks_this_wave
 
 
-func _on_enemy_leaked(_enemy: Enemy) -> void:
+func _on_enemy_leaked(enemy: Enemy) -> void:
 	_leaks_this_wave += 1
 	SoundHub.play_leak()
-	game_state.lose_life(1)
+	if _is_clash() and enemy.defender_id >= 0:
+		clash_match.credit_leak(enemy.defender_id)
+	else:
+		game_state.lose_life(1)
 	enemies_alive = maxi(enemies_alive - 1, 0)
 	_emit_enemies_remaining()
 	_check_wave_clear()
@@ -490,13 +655,23 @@ func _check_wave_clear() -> void:
 		wave_active = false
 		var wave := game_state.wave
 		var kills := kills_this_wave
-		var bonus := WaveScaler.wave_clear_bonus(kills, wave)
-		if bonus > 0:
-			game_state.add_gold(bonus)
+		var bonus := 0
+		if not _is_clash():
+			bonus = WaveScaler.wave_clear_bonus(kills, wave)
+			if bonus > 0:
+				game_state.add_gold(bonus)
 		_record_wave_milestones(wave)
 		wave_cleared.emit(wave, kills, bonus)
 		_emit_enemies_remaining()
-		if game_state.is_game_over:
+		if game_state.is_game_over or (_is_clash() and clash_match.finished):
+			return
+		if _is_clash():
+			# Income payout + prep for next round (bots act from main on wave_cleared).
+			clash_match.award_round_income()
+			phase = Phase.PREP
+			skip_unlocked = false
+			intermission_left = 0.0
+			_emit_timer()
 			return
 		var rotate_wave := 0
 		if pending_map_rotate_wave > 0:
@@ -565,6 +740,15 @@ func force_next_wave() -> bool:
 
 func repath_living_enemies() -> void:
 	invalidate_ground_path()
+	if _is_clash():
+		for child in enemy_container.get_children():
+			if child is Enemy:
+				var e := child as Enemy
+				if e.is_flying:
+					continue
+				if e.lane_id >= 0:
+					e.set_path(_ensure_lane_ground_path(e.lane_id))
+		return
 	var world_path := _ensure_ground_path()
 	for child in enemy_container.get_children():
 		if child is Enemy:

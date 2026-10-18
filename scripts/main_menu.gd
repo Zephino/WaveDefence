@@ -23,6 +23,7 @@ var _sfx_mute_check: CheckButton
 var _center: VBoxContainer
 var _touch_layout: bool = false
 var _map_setup_overlay: Control
+var _clash_setup_overlay: Control
 var _settings_overlay: Control
 var _seed_overlay: Control
 var _reopen_settings_after_rebuild: bool = false
@@ -32,6 +33,11 @@ var _setup_seed_edit: LineEdit
 var _setup_standard_btn: Button
 var _setup_custom_btn: Button
 var _setup_hint: Label
+var _clash_player_count: int = 2
+var _clash_bot_diffs: Array = [WaveScaler.Difficulty.MEDIUM]
+var _clash_count_label: Label
+var _clash_bot_host: VBoxContainer
+var _clash_bot_diff_buttons: Array = []
 ## View Seeds preview: 0 Classic Custom, 1 Random, 2 Siege.
 var _seed_preview_kind: int = 0
 var _seed_preview_buttons: Dictionary = {}
@@ -179,6 +185,11 @@ func _build_choice_columns(parent: VBoxContainer) -> void:
 		"Siege",
 		WaveScaler.GameMode.SIEGE,
 		"Large board, exit in the center. Pan and scroll-wheel zoom."
+	))
+	map_col.add_child(_mode_button(
+		"Clash",
+		WaveScaler.GameMode.CLASH,
+		"2–4 lanes vs AI. Build your lane, buy mobs to send at opponents."
 	))
 	_refresh_mode_buttons()
 
@@ -843,7 +854,151 @@ func _start_difficulty(difficulty: int) -> void:
 		Session.map_seed_text = ""
 		Session.go_game(difficulty, selected_mode, selected_monster_mode)
 		return
+	if WaveScaler.is_clash_mode(selected_mode):
+		_show_clash_setup(difficulty)
+		return
 	_show_map_setup(difficulty)
+
+
+func _show_clash_setup(difficulty: int) -> void:
+	_setup_difficulty = difficulty
+	_clash_player_count = clampi(Session.clash_player_count, WaveScaler.CLASH_MIN_PLAYERS, WaveScaler.CLASH_MAX_PLAYERS)
+	_clash_bot_diffs = Session.clash_bot_difficulties.duplicate()
+	_ensure_clash_bot_diffs()
+	if _clash_setup_overlay != null and is_instance_valid(_clash_setup_overlay):
+		_clash_setup_overlay.queue_free()
+	var modal := _make_modal_overlay(20)
+	_clash_setup_overlay = modal["overlay"]
+	var box: VBoxContainer = modal["box"]
+
+	var title := Label.new()
+	title.text = "Clash setup"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	box.add_child(title)
+
+	var note := Label.new()
+	note.text = "You plus AI bots. Pick 2–4 players and each bot’s difficulty (tower placement + sends)."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(360, 0)
+	note.modulate = Color(0.7, 0.75, 0.8)
+	box.add_child(note)
+
+	var count_row := HBoxContainer.new()
+	count_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	count_row.add_theme_constant_override("separation", 10)
+	box.add_child(count_row)
+	count_row.add_child(_menu_button("−", func() -> void:
+		_clash_player_count = maxi(_clash_player_count - 1, WaveScaler.CLASH_MIN_PLAYERS)
+		_ensure_clash_bot_diffs()
+		_refresh_clash_setup_ui()
+	, true))
+	_clash_count_label = Label.new()
+	_clash_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_clash_count_label.custom_minimum_size = Vector2(120, 0)
+	count_row.add_child(_clash_count_label)
+	count_row.add_child(_menu_button("+", func() -> void:
+		_clash_player_count = mini(_clash_player_count + 1, WaveScaler.CLASH_MAX_PLAYERS)
+		_ensure_clash_bot_diffs()
+		_refresh_clash_setup_ui()
+	, true))
+
+	_clash_bot_host = VBoxContainer.new()
+	_clash_bot_host.add_theme_constant_override("separation", 8)
+	box.add_child(_clash_bot_host)
+	_clash_bot_diff_buttons.clear()
+	_refresh_clash_setup_ui()
+
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 12)
+	box.add_child(actions)
+	actions.add_child(_menu_button("Back", _hide_clash_setup, true))
+	actions.add_child(_menu_button("Start", _confirm_clash_setup, true))
+	call_deferred("_finalize_modal_size", modal["panel"], box, modal["max_size"])
+
+
+func _ensure_clash_bot_diffs() -> void:
+	var needed := _clash_player_count - 1
+	while _clash_bot_diffs.size() < needed:
+		_clash_bot_diffs.append(WaveScaler.Difficulty.MEDIUM)
+	while _clash_bot_diffs.size() > needed:
+		_clash_bot_diffs.pop_back()
+
+
+func _refresh_clash_setup_ui() -> void:
+	if _clash_count_label:
+		_clash_count_label.text = "%d players" % _clash_player_count
+	if _clash_bot_host == null:
+		return
+	while _clash_bot_host.get_child_count() > 0:
+		var child := _clash_bot_host.get_child(0)
+		_clash_bot_host.remove_child(child)
+		child.queue_free()
+	_clash_bot_diff_buttons.clear()
+	for i in _clash_bot_diffs.size():
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		var lab := Label.new()
+		lab.text = "Bot %d difficulty" % (i + 1)
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lab.modulate = Color(0.75, 0.8, 0.85)
+		row.add_child(lab)
+		var diff_row := HBoxContainer.new()
+		diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		diff_row.add_theme_constant_override("separation", 6)
+		row.add_child(diff_row)
+		var bot_i := i
+		var btns: Dictionary = {}
+		for item in [
+			{"d": WaveScaler.Difficulty.EASY, "t": "Easy"},
+			{"d": WaveScaler.Difficulty.MEDIUM, "t": "Medium"},
+			{"d": WaveScaler.Difficulty.HARD, "t": "Hard"},
+		]:
+			var diff: int = int(item["d"])
+			var btn := _menu_button(str(item["t"]), func() -> void:
+				_clash_bot_diffs[bot_i] = diff
+				_style_clash_bot_diffs()
+			, true)
+			btn.custom_minimum_size = Vector2(90, GameLayout.button_height(32.0))
+			diff_row.add_child(btn)
+			btns[diff] = btn
+		_clash_bot_diff_buttons.append(btns)
+		_clash_bot_host.add_child(row)
+	_style_clash_bot_diffs()
+
+
+func _style_clash_bot_diffs() -> void:
+	for i in _clash_bot_diff_buttons.size():
+		var btns: Dictionary = _clash_bot_diff_buttons[i]
+		var selected: int = int(_clash_bot_diffs[i])
+		for diff in btns.keys():
+			_apply_choice_style(btns[diff] as Button, int(diff) == selected)
+
+
+func _hide_clash_setup() -> void:
+	if _clash_setup_overlay != null and is_instance_valid(_clash_setup_overlay):
+		_clash_setup_overlay.queue_free()
+	_clash_setup_overlay = null
+	_clash_count_label = null
+	_clash_bot_host = null
+	_clash_bot_diff_buttons.clear()
+
+
+func _confirm_clash_setup() -> void:
+	_ensure_clash_bot_diffs()
+	Session.set_clash_setup(_clash_player_count, _clash_bot_diffs)
+	Session.map_layout_mode = WaveScaler.MapLayoutMode.STANDARD
+	Session.run_seed = -1
+	Session.current_map_seed = -1
+	Session.map_seed_text = ""
+	# Clash uses a shared start-gold pool; difficulty click is ignored for gold.
+	Session.go_game(
+		WaveScaler.Difficulty.MEDIUM,
+		WaveScaler.GameMode.CLASH,
+		WaveScaler.MonsterMode.CLASSIC
+	)
+	_hide_clash_setup()
 
 
 func _show_map_setup(difficulty: int) -> void:

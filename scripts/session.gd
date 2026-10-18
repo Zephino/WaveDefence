@@ -28,6 +28,10 @@ var current_map_seed: int = -1
 var map_seed_text: String = ""
 ## Guided tutorial practice run (leaderboard + achievements off).
 var tutorial_active: bool = false
+## Clash: total players including the human (2–4).
+var clash_player_count: int = 2
+## Clash: bot difficulties (WaveScaler.Difficulty), length = clash_player_count - 1.
+var clash_bot_difficulties: Array = [WaveScaler.Difficulty.MEDIUM]
 
 ## Pending worldwide push (set when the player submits a name after a match).
 var global_push_name: String = ""
@@ -67,6 +71,17 @@ func go_menu() -> void:
 	pending_debug_used = false
 	tutorial_active = false
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+func set_clash_setup(player_count: int, bot_difficulties: Array) -> void:
+	clash_player_count = clampi(player_count, WaveScaler.CLASH_MIN_PLAYERS, WaveScaler.CLASH_MAX_PLAYERS)
+	clash_bot_difficulties.clear()
+	var bots_needed := clash_player_count - 1
+	for i in bots_needed:
+		var diff := WaveScaler.Difficulty.MEDIUM
+		if i < bot_difficulties.size():
+			diff = int(bot_difficulties[i])
+		clash_bot_difficulties.append(diff)
 
 
 func go_game(

@@ -69,10 +69,11 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
   - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with the **Pan** sidebar toggle (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
-- **Monsters** — independent of map:
+  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Build only in your lane. During prep, **buy send packs** aimed at one living opponent; each send permanently raises your **income** paid after every cleared wave. **Last standing** wins (20 lives). Per-bot Easy/Medium/Hard controls how well bots place towers and how often they send. Bots choose send targets at random among all living opponents (they do not pile onto you). No leaderboard for Clash yet.
+- **Monsters** — independent of map (Clash always uses Classic monsters for v1):
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
-- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately (starting gold **350 / 200 / 100**)
+- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot difficulties). Starting gold **350 / 200 / 100** (Clash uses Medium gold for everyone)
 - **Leaderboard** — separate top 10 boards for **Easy / Medium / Hard**. Each score can show the **map seed** used (or **Seeds ×N** — click to list every sector seed on Random). Online boards load from the **Cloudflare Worker** (then cache locally); empty remotes no longer wipe your device scores. Runs that opened/used the debug menu cannot be submitted.
 - **Settings** — opens a popup:
   - **Large Controls**, **Effects**, **Performance mode**, **Show tower range**, **High contrast**, **Show enemy HP bars**, **Show grid coordinates**, **Screenshot watermark**

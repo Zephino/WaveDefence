@@ -4,7 +4,7 @@ extends RefCounted
 ## Endless wave formulas. Tune freely, then re-run (F5).
 
 enum Difficulty { EASY, MEDIUM, HARD }
-enum GameMode { CLASSIC, RANDOM, SIEGE }
+enum GameMode { CLASSIC, RANDOM, SIEGE, CLASH }
 ## Independent of map mode: Classic spawns (no resists) vs Randomize elemental types.
 enum MonsterMode { CLASSIC, RANDOMIZE }
 ## Classic map setup: fixed corridor vs seeded random layout (fixed for the run).
@@ -50,6 +50,8 @@ static func mode_label(mode: int) -> String:
 			return "Random"
 		GameMode.SIEGE:
 			return "Siege"
+		GameMode.CLASH:
+			return "Clash"
 		_:
 			return "Classic"
 
@@ -68,6 +70,10 @@ static func is_random_mode(mode: int) -> bool:
 
 static func is_siege_mode(mode: int) -> bool:
 	return mode == GameMode.SIEGE
+
+
+static func is_clash_mode(mode: int) -> bool:
+	return mode == GameMode.CLASH
 
 
 static func is_randomize_monsters(mode: int) -> bool:
@@ -370,3 +376,37 @@ static func early_send_bonus_from_timer(seconds_left: float) -> int:
 	if secs <= 0:
 		return 0
 	return maxi(secs * EARLY_SEND_GOLD_PER_TIMER_SEC, EARLY_SEND_BASE_GOLD)
+
+
+## --- Clash mode (lanes vs AI) ---
+const CLASH_MIN_PLAYERS := 2
+const CLASH_MAX_PLAYERS := 4
+const CLASH_STARTING_GOLD := STARTING_GOLD_MEDIUM
+const CLASH_STARTING_LIVES := STARTING_LIVES
+const CLASH_BASE_INCOME := 10
+const CLASH_SEND_INCOME_BUMP := 2
+## Slightly lighter base packs so multi-lane boards stay readable.
+const CLASH_CREEP_COUNT_MULT := 0.75
+
+## Send package ids → cost / creep count / HP mult (vs current wave creep).
+const CLASH_SEND_PACKS := {
+	"scout": {"label": "Scout x3", "cost": 40, "count": 3, "hp_mult": 0.7, "speed_mult": 1.15, "bounty_mult": 0.6},
+	"pack": {"label": "Pack x6", "cost": 80, "count": 6, "hp_mult": 1.0, "speed_mult": 1.0, "bounty_mult": 0.8},
+	"brute": {"label": "Brute x2", "cost": 120, "count": 2, "hp_mult": 2.2, "speed_mult": 0.85, "bounty_mult": 1.2},
+}
+
+
+static func clash_starting_gold() -> int:
+	return CLASH_STARTING_GOLD
+
+
+static func clash_send_pack_ids() -> Array:
+	return CLASH_SEND_PACKS.keys()
+
+
+static func clash_send_pack(pack_id: String) -> Dictionary:
+	return CLASH_SEND_PACKS.get(pack_id, CLASH_SEND_PACKS["scout"])
+
+
+static func clash_creep_count(wave: int) -> int:
+	return maxi(int(round(float(creep_count(wave)) * CLASH_CREEP_COUNT_MULT)), 4)
