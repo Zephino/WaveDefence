@@ -4,16 +4,19 @@ extends RefCounted
 ## Mob sprite sheets under res://assets/sprites/<id>/
 ## Supports *_ground_*, *_flier_*, and *_boss_* sheet naming.
 
+## Ground creeps — WaveDefence_mobs_ground rework (no _plus pack yet).
 const BASE_SPECIES: PackedStringArray = [
 	"slime", "beetle", "spider", "crab", "crawler",
 	"pillbug", "tortoise", "urchin", "mole", "scarab",
 	"tick", "slug", "jelly", "armadillo", "roller",
 ]
+## Until a ground _plus pack arrives, late waves reuse base ground art.
 const PLUS_SPECIES: PackedStringArray = [
-	"slime_plus", "beetle_plus", "spider_plus", "crab_plus", "crawler_plus",
-	"pillbug_plus", "tortoise_plus", "urchin_plus", "mole_plus", "scarab_plus",
-	"tick_plus", "slug_plus", "jelly_plus", "armadillo_plus", "roller_plus",
+	"slime", "beetle", "spider", "crab", "crawler",
+	"pillbug", "tortoise", "urchin", "mole", "scarab",
+	"tick", "slug", "jelly", "armadillo", "roller",
 ]
+## Kept from prior packs until Claude’s flier / boss reworks land.
 const FLYING_SPECIES: PackedStringArray = [
 	"bat", "wasp", "moth", "hornet", "dragonfly",
 	"firefly", "hoverbot", "propeller", "stingray", "sky_jelly",
@@ -47,9 +50,10 @@ static func pick_species(
 	rng: RandomNumberGenerator = null
 ) -> String:
 	if is_wrecker:
-		return WRECKER_SPECIES if not is_boss else "armadillo_plus"
+		# armadillo_plus archived with legacy ground; use base until plus rework.
+		return WRECKER_SPECIES
 	if is_snake:
-		return SNAKE_SPECIES if not is_boss else "crawler_plus"
+		return SNAKE_SPECIES
 	if is_flying:
 		var fly_pool: PackedStringArray = (
 			FLYING_PLUS_SPECIES if is_boss or wave >= 20 else FLYING_SPECIES

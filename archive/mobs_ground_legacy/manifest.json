@@ -1,0 +1,124 @@
+{
+  "sprites": [
+    {
+      "name": "wasp_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "wasp_plus/wasp_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 1.147,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "moth_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "moth_plus/moth_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 2.326,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "dragonfly_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "dragonfly_plus/dragonfly_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 3.176,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "hoverbot_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "hoverbot_plus/hoverbot_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 1.0,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "bat_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "bat_plus/bat_plus_flier_sheet.png",
+      "color_count": 4,
+      "max_jitter_px": 4.09,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "firefly_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "firefly_plus/firefly_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 1.111,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "hornet_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "hornet_plus/hornet_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 1.119,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "stingray_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "stingray_plus/stingray_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 0.835,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "sky_jelly_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "sky_jelly_plus/sky_jelly_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 2.778,
+      "dimensions": "160x120"
+    },
+    {
+      "name": "propeller_plus",
+      "class": "flier",
+      "facing_mode": "round",
+      "version": 1,
+      "date_built": "2026-10-19",
+      "approved": false,
+      "sheet": "propeller_plus/propeller_plus_flier_sheet.png",
+      "color_count": 5,
+      "max_jitter_px": 0.0,
+      "dimensions": "160x120"
+    }
+  ]
+}

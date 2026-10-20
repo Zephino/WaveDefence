@@ -1,3 +1,15 @@
+## Version 00.02.85
+Date: 10/20/2026
+Time: 11:22 AM
+
+### Changes
+- Ground mob rework: live sheets replaced from **WaveDefence_mobs_ground**; previous base + `_plus` ground folders moved to `archive/mobs_ground_legacy/` (not deleted)
+- Late-wave ground / wrecker / snake reuse the new base art until a `_plus` pack arrives
+- **Fliers and bosses** still use the previous packs
+
+### Reason
+Start Claude’s mob art refresh for ground creeps while keeping old air/boss sprites until their replacements are ready.
+
 ## Version 00.02.84
 Date: 10/20/2026
 Time: 11:12 AM
