@@ -15,6 +15,8 @@ signal timer_updated(seconds_left: float, can_skip: bool, mode: String)
 signal skip_unlock_changed(unlocked: bool)
 ## remaining = alive on map + still waiting to spawn (until the board clears).
 signal enemies_remaining_changed(remaining: int, alive: int, queued: int)
+## Clash wrecker smashed a structure at this cell (after repath).
+signal tower_wrecked(cell: Vector2i)
 
 enum Phase { PREP, INTERMISSION, WAVE }
 
@@ -626,9 +628,10 @@ func _spawn_enemy(spec: Dictionary) -> bool:
 	return true
 
 
-func _on_wrecker_wrecked(_cell: Vector2i) -> void:
+func _on_wrecker_wrecked(cell: Vector2i) -> void:
 	invalidate_ground_path()
 	repath_living_enemies()
+	tower_wrecked.emit(cell)
 
 
 func _on_enemy_died(enemy: Enemy, bounty: int) -> void:

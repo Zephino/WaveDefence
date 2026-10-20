@@ -680,13 +680,14 @@ func _show_seed_browser() -> void:
 
 	_seed_view_edit = LineEdit.new()
 	_seed_view_edit.placeholder_text = "Seed"
-	_seed_view_edit.text = Session.map_seed_text
+	_seed_view_edit.text = InputSanitize.sanitize_seed_text(Session.map_seed_text)
 	_seed_view_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_seed_view_edit.custom_minimum_size = Vector2(200, btn_h)
 	_seed_view_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_seed_view_edit.focus_mode = Control.FOCUS_CLICK
 	_seed_view_edit.text_submitted.connect(func(_t: String) -> void: _refresh_seed_preview())
 	seed_row.add_child(_seed_view_edit)
+	InputSanitize.bind_line_edit(_seed_view_edit, "seed")
 
 	var rnd_btn := _menu_button("Randomize", _randomize_seed_preview, true)
 	rnd_btn.custom_minimum_size = Vector2(110, btn_h)
@@ -1061,11 +1062,12 @@ func _show_map_setup(difficulty: int) -> void:
 
 	_setup_seed_edit = LineEdit.new()
 	_setup_seed_edit.placeholder_text = "Leave blank for a random seed"
-	_setup_seed_edit.text = Session.map_seed_text
+	_setup_seed_edit.text = InputSanitize.sanitize_seed_text(Session.map_seed_text)
 	_setup_seed_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_setup_seed_edit.custom_minimum_size = Vector2(360, GameLayout.button_height(40.0))
 	_setup_seed_edit.focus_mode = Control.FOCUS_CLICK
 	box.add_child(_setup_seed_edit)
+	InputSanitize.bind_line_edit(_setup_seed_edit, "seed")
 
 	_setup_hint = Label.new()
 	_setup_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1118,7 +1120,7 @@ func _hide_map_setup() -> void:
 func _confirm_map_setup() -> void:
 	var seed_text := ""
 	if _setup_seed_edit:
-		seed_text = _setup_seed_edit.text.strip_edges()
+		seed_text = InputSanitize.sanitize_seed_text(_setup_seed_edit.text)
 	var layout_mode := _setup_layout_mode
 	if WaveScaler.is_random_mode(selected_mode):
 		layout_mode = WaveScaler.MapLayoutMode.CUSTOM

@@ -139,6 +139,7 @@ func _setup_systems() -> void:
 	wave_manager.wave_cleared.connect(_on_wave_cleared)
 	wave_manager.map_rotate_requested.connect(_on_map_rotate_requested)
 	wave_manager.spawn_rotate_requested.connect(_on_spawn_rotate_requested)
+	wave_manager.tower_wrecked.connect(_on_clash_tower_wrecked)
 
 	_setup_clash_match()
 
@@ -340,6 +341,32 @@ func _run_clash_bot_sends() -> void:
 	wave_manager.flush_pending_clash_sends()
 	if hud != null:
 		hud.refresh_clash_panel()
+
+
+## Wrecker smashed a cell — tell that lane's bot to patch walls/towers mid-wave.
+func _on_clash_tower_wrecked(cell: Vector2i) -> void:
+	if clash_match == null or clash_match.finished or grid == null:
+		return
+	var lane := grid.lane_index_for_cell(cell)
+	if lane < 0:
+		return
+	var wave := maxi(game_state.wave, 1)
+	var repaired := false
+	for bot in _clash_bots:
+		var ai := bot as ClashBotAI
+		if ai == null:
+			continue
+		var p := clash_match.get_player(ai.player_id)
+		if p == null or not p.alive or p.is_human or p.lane_index != lane:
+			continue
+		if ai.repair_lane(wave):
+			repaired = true
+		break
+	if repaired:
+		wave_manager.invalidate_ground_path()
+		build_system.refresh_after_reset()
+		if hud != null:
+			hud.refresh_clash_panel()
 
 
 func _on_clash_players_changed() -> void:
@@ -1322,6 +1349,7 @@ func _on_end_run_confirmed() -> void:
 
 func _on_game_over_to_leaderboard(wave_reached: int) -> void:
 	wave_manager.phase = WaveManager.Phase.PREP
+	_snap_board_for_leaderboard()
 	if WaveScaler.is_clash_mode(game_state.game_mode):
 		call_deferred("_boot_clash_summary", wave_reached)
 		return
@@ -1330,6 +1358,20 @@ func _on_game_over_to_leaderboard(wave_reached: int) -> void:
 	else:
 		hud.set_status("Game over — loading leaderboard...")
 	call_deferred("_boot_leaderboard", wave_reached)
+
+
+func _snap_board_for_leaderboard() -> void:
+	# Hide transient UI so the crop is mostly the maze.
+	if debug_panel:
+		debug_panel.visible = false
+	if build_system:
+		build_system.clear_selection()
+	if _range_overlay:
+		_range_overlay.show_ring = false
+		_range_overlay.queue_redraw()
+	if hud:
+		hud.hide_end_run_confirm()
+	Session.pending_board_png = _BoardScreenshot.capture_board_b64(self)
 
 
 func _boot_clash_summary(wave_reached: int) -> void:
@@ -1347,7 +1389,13 @@ func _boot_clash_summary(wave_reached: int) -> void:
 	summary.show_summary(game_state, coaching)
 	hud.attach_run_summary(summary)
 	summary.continued.connect(func() -> void:
-		Session.go_menu()
+		Session.go_leaderboard(
+			wave_reached,
+			game_state.debug_used or game_state.tutorial_run,
+			game_state.difficulty,
+			game_state.seeds_for_leaderboard(),
+			game_state.game_mode
+		)
 	)
 
 
@@ -1398,7 +1446,8 @@ func _show_run_summary(wave_reached: int) -> void:
 			wave_reached,
 			game_state.debug_used or game_state.tutorial_run,
 			game_state.difficulty,
-			game_state.seeds_for_leaderboard()
+			game_state.seeds_for_leaderboard(),
+			game_state.game_mode
 		)
 	)
 

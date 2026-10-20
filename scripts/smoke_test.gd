@@ -120,6 +120,18 @@ func _run() -> void:
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
 
+	# Input sanitizers (names / seeds / injection markers).
+	if InputSanitize.sanitize_name("Bob!!") != "Bob":
+		errors.append("name sanitize should strip punctuation")
+	# Quotes/semicolons stripped, then capped at 12 chars.
+	if InputSanitize.sanitize_name("Robert'; DROP TABLE students;--") != "Robert DROP":
+		errors.append("name sanitize should strip SQL quotes/semicolons and cap length")
+	if not InputSanitize.looks_like_injection("1' OR '1'='1"):
+		errors.append("injection detector should flag SQL quotes")
+	if InputSanitize.sanitize_seed_text("12; DROP--") != "12 DROP--":
+		errors.append("seed sanitize should strip semicolons")
+	if WaveScaler.parse_seed_text("'; DROP") != WaveScaler.parse_seed_text(" DROP"):
+		errors.append("seed parse should ignore stripped injection chars")
 	# Seed helpers + deterministic random layouts.
 	if WaveScaler.parse_seed_text("") != -1:
 		errors.append("empty seed text should parse to -1")
@@ -464,6 +476,28 @@ func _run() -> void:
 		errors.append("clash bot should keep spending on later prep turns")
 	if combat_later < combat_mid:
 		errors.append("clash bot should not lose combat towers on later prep")
+	# Mid-wave repair: smash a blueprint cell, bot should refill it.
+	var repair_cell := Vector2i(-1, -1)
+	var bp_repair := bot_ai._maze_blueprint(2, style_locked)
+	for cell_r in bp_repair:
+		var tr: Node = grid.get_tower_at(cell_r)
+		if tr is Tower and tr.has_meta("clash_owner") and int(tr.get_meta("clash_owner")) == 2:
+			repair_cell = cell_r
+			break
+	if repair_cell.x >= 0:
+		var smashed := grid.remove_tower_at(repair_cell)
+		if is_instance_valid(smashed):
+			smashed.queue_free()
+		build.pathfinder.rebuild()
+		bot_p.gold = maxi(bot_p.gold, 200)
+		bot_ai._last_repair_msec = -99999
+		var did_repair := bot_ai.repair_lane(2)
+		if not did_repair:
+			errors.append("clash bot repair_lane should place after wrecker damage")
+		elif grid.get_tower_at(repair_cell) == null:
+			errors.append("clash bot should rebuild a smashed maze/tower cell")
+	else:
+		errors.append("clash smoke could not find a bot blueprint tower to smash for repair check")
 	var nxt := clash_match.next_living_after_lane(0)
 	if nxt == null or nxt.lane_index != 1:
 		errors.append("clash overflow should wrap to the next living lane")

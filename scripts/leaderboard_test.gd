@@ -35,17 +35,26 @@ func _run() -> void:
 	if str(hard[0]["name"]) != "Hardy":
 		errors.append("Hardy should be on hard board")
 
-	# Legacy flat array migrates into Medium.
+	# Legacy flat array migrates into classic Medium.
 	var file := FileAccess.open(LeaderboardStore.SAVE_PATH, FileAccess.WRITE)
 	file.store_string("[{\"name\":\"Old\",\"wave\":12}]")
 	file.close()
 	file = null
 	var migrated := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM)
 	if migrated.is_empty() or str(migrated[0]["name"]) != "Old":
-		errors.append("legacy leaderboard should migrate to medium")
+		errors.append("legacy leaderboard should migrate to classic medium")
 	var boards := LeaderboardStore.load_boards()
-	if typeof(boards.get("medium", null)) != TYPE_ARRAY:
-		errors.append("migrated save should use per-difficulty boards")
+	if typeof(boards.get("classic_medium", null)) != TYPE_ARRAY:
+		errors.append("migrated save should use classic_medium key")
+
+	# Legacy difficulty-only keys migrate to classic_*.
+	file = FileAccess.open(LeaderboardStore.SAVE_PATH, FileAccess.WRITE)
+	file.store_string("{\"easy\":[{\"name\":\"LegE\",\"wave\":3}],\"medium\":[],\"hard\":[]}")
+	file.close()
+	file = null
+	var leg_easy := LeaderboardStore.load_entries(WaveScaler.Difficulty.EASY, WaveScaler.GameMode.CLASSIC)
+	if leg_easy.is_empty() or str(leg_easy[0]["name"]) != "LegE":
+		errors.append("legacy easy board should migrate to classic_easy")
 
 	for i in 10:
 		LeaderboardStore.add_score("P%d" % i, 20 + i, WaveScaler.Difficulty.EASY)
@@ -59,10 +68,30 @@ func _run() -> void:
 	if not LeaderboardStore.qualifies(int(easy[LeaderboardStore.MAX_ENTRIES - 1]["wave"]), WaveScaler.Difficulty.EASY):
 		errors.append("tie with last place should qualify")
 
-	# Seeds persist on entries; multi-seed summary helpers.
-	LeaderboardStore.add_score("Seedy", 33, WaveScaler.Difficulty.MEDIUM, [111, 222, 333])
+	# Per-mode boards stay separate.
+	LeaderboardStore.add_score("SiegeA", 15, WaveScaler.Difficulty.MEDIUM, [], WaveScaler.GameMode.SIEGE)
+	var siege_m := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.SIEGE)
+	var classic_m := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	var siege_ok := false
+	for e in siege_m:
+		if str(e.get("name", "")) == "SiegeA":
+			siege_ok = true
+			break
+	if not siege_ok:
+		errors.append("siege score should land on siege_medium")
+	for e2 in classic_m:
+		if str(e2.get("name", "")) == "SiegeA":
+			errors.append("siege score should not appear on classic board")
+			break
+
+	# Seeds + board snapshot persist.
+	var tiny_png := Marshalls.raw_to_base64(PackedByteArray([137, 80, 78, 71, 13, 10, 26, 10]))
+	LeaderboardStore.add_score(
+		"Seedy", 33, WaveScaler.Difficulty.MEDIUM, [111, 222, 333], WaveScaler.GameMode.CLASSIC, tiny_png
+	)
 	var with_seeds := LeaderboardStore.load_entries(WaveScaler.Difficulty.MEDIUM)
 	var found_seeds := false
+	var found_png := false
 	for e in with_seeds:
 		if str(e.get("name", "")) == "Seedy":
 			var seeds: Array = LeaderboardStore.normalize_seeds(e.get("seeds", []))
@@ -70,9 +99,13 @@ func _run() -> void:
 				found_seeds = true
 			if LeaderboardStore.format_seeds_summary(seeds) != "Seeds ×3":
 				errors.append("multi-seed summary wrong: %s" % LeaderboardStore.format_seeds_summary(seeds))
+			if not str(e.get("board_png", "")).is_empty():
+				found_png = true
 			break
 	if not found_seeds:
 		errors.append("leaderboard entry should keep seeds array")
+	if not found_png:
+		errors.append("leaderboard entry should keep board_png")
 	if LeaderboardStore.format_seeds_summary([9]) != "Seed 9":
 		errors.append("single seed summary wrong")
 

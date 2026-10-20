@@ -102,8 +102,9 @@ static func is_custom_layout(layout_mode: int) -> bool:
 
 
 ## Parse a seed field. Empty → -1 (caller should roll). Digits → int. Other text → stable hash.
+## Input is allowlist-sanitized first (no quotes/SQL metacharacters reach the hash).
 static func parse_seed_text(text: String) -> int:
-	var t := text.strip_edges()
+	var t := InputSanitize.sanitize_seed_text(text)
 	if t.is_empty():
 		return -1
 	if t.is_valid_int():

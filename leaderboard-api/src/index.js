@@ -10,9 +10,15 @@
 const MAX_ENTRIES = 10;
 const MAX_NAME_LENGTH = 12;
 const MAX_WAVE = 100000;
-const BOARD_KEYS = ["easy", "medium", "hard"];
+const MAX_BODY_BYTES = 100000;
+const MAX_BOARD_PNG = 48000;
+const MODES = ["classic", "random", "siege", "clash"];
+const DIFFS = ["easy", "medium", "hard"];
+const BOARD_KEYS = MODES.flatMap((m) => DIFFS.map((d) => `${m}_${d}`));
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
+/** SQL / script metacharacters — Worker stores JSON/KV only (no SQL), but reject these anyway. */
+const INJECTION_MARKERS = ["'", '"', ";", "--", "/*", "*/", "\\", "`", "<", ">"];
 
 function corsHeaders() {
   return {
@@ -28,7 +34,21 @@ function jsonResponse(body, status = 200) {
 }
 
 function emptyBoards() {
-  return { easy: [], medium: [], hard: [] };
+  const boards = {};
+  for (const key of BOARD_KEYS) boards[key] = [];
+  return boards;
+}
+
+function looksLikeInjection(raw) {
+  const s = String(raw ?? "");
+  for (const marker of INJECTION_MARKERS) {
+    if (s.includes(marker)) return true;
+  }
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) return true;
+  }
+  return false;
 }
 
 function sanitizeName(raw) {
@@ -65,6 +85,29 @@ function normalizeSeeds(raw) {
   return out;
 }
 
+function normalizeBoardPng(raw) {
+  let s = String(raw ?? "").trim();
+  if (s.startsWith("data:image")) {
+    const comma = s.indexOf(",");
+    if (comma >= 0) s = s.slice(comma + 1);
+  }
+  if (s.length > MAX_BOARD_PNG) return "";
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = ch.charCodeAt(0);
+    const ok =
+      (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122) ||
+      (code >= 48 && code <= 57) ||
+      ch === "+" ||
+      ch === "/" ||
+      ch === "=";
+    if (ok) out += ch;
+  }
+  return out.length > MAX_BOARD_PNG ? "" : out;
+}
+
 function normalizeEntry(item) {
   if (!item || typeof item !== "object") return null;
   const name = sanitizeName(item.name);
@@ -73,6 +116,8 @@ function normalizeEntry(item) {
   const seeds = normalizeSeeds(item.seeds);
   const entry = { name, wave };
   if (seeds.length) entry.seeds = seeds;
+  const png = normalizeBoardPng(item.board_png);
+  if (png) entry.board_png = png;
   return entry;
 }
 
@@ -86,11 +131,25 @@ function sortAndTrim(entries) {
   return cleaned.slice(0, MAX_ENTRIES);
 }
 
+function migrateLegacyBoards(raw) {
+  if (!raw || typeof raw !== "object") return raw || {};
+  const out = { ...raw };
+  for (const diff of DIFFS) {
+    if (Array.isArray(out[diff])) {
+      const dest = `classic_${diff}`;
+      if (!Array.isArray(out[dest]) || out[dest].length === 0) {
+        out[dest] = out[diff];
+      }
+    }
+  }
+  return out;
+}
+
 function normalizeBoards(raw) {
   const boards = emptyBoards();
-  if (!raw || typeof raw !== "object") return boards;
+  const migrated = migrateLegacyBoards(raw);
   for (const key of BOARD_KEYS) {
-    boards[key] = sortAndTrim(raw[key]);
+    boards[key] = sortAndTrim(migrated[key]);
   }
   return boards;
 }
@@ -100,6 +159,18 @@ function difficultyKey(value) {
   if (s === "easy" || s === "0") return "easy";
   if (s === "hard" || s === "2") return "hard";
   return "medium";
+}
+
+function modeKey(value) {
+  const s = String(value ?? "classic").toLowerCase();
+  if (MODES.includes(s)) return s;
+  return "classic";
+}
+
+function boardKeyFromBody(body) {
+  const direct = String(body?.board ?? "").toLowerCase();
+  if (BOARD_KEYS.includes(direct)) return direct;
+  return `${modeKey(body?.mode)}_${difficultyKey(body?.difficulty)}`;
 }
 
 async function rateLimit(env, ip) {
@@ -216,16 +287,31 @@ export default {
       }
 
       if (request.method === "POST") {
+        const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
+        if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+          return jsonResponse({ error: "payload too large" }, 413);
+        }
         let body;
         try {
-          body = await request.json();
+          const text = await request.text();
+          if (text.length > MAX_BODY_BYTES) {
+            return jsonResponse({ error: "payload too large" }, 413);
+          }
+          body = JSON.parse(text);
         } catch {
           return jsonResponse({ error: "invalid json" }, 400);
         }
+        if (!body || typeof body !== "object") {
+          return jsonResponse({ error: "invalid json" }, 400);
+        }
+        if (looksLikeInjection(body.name)) {
+          return jsonResponse({ error: "invalid name" }, 400);
+        }
         const name = sanitizeName(body.name);
         const wave = parseInt(body.wave, 10) || 0;
-        const key = difficultyKey(body.difficulty);
+        const key = boardKeyFromBody(body);
         const seeds = normalizeSeeds(body.seeds);
+        const boardPng = normalizeBoardPng(body.board_png);
         if (!name) return jsonResponse({ error: "invalid name" }, 400);
         if (wave <= 0 || wave > MAX_WAVE) return jsonResponse({ error: "invalid wave" }, 400);
 
@@ -238,6 +324,7 @@ export default {
         }
         const row = { name, wave };
         if (seeds.length) row.seeds = seeds;
+        if (boardPng) row.board_png = boardPng;
         entries.push(row);
         boards[key] = sortAndTrim(entries);
         const saved = await saveBoards(env, boards);

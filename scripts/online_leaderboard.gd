@@ -52,7 +52,9 @@ func flush_pending_if_online() -> bool:
 		str(pending.get("name", "")),
 		int(pending.get("wave", 0)),
 		int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM)),
-		LeaderboardStore.normalize_seeds(pending.get("seeds", []))
+		LeaderboardStore.normalize_seeds(pending.get("seeds", [])),
+		int(pending.get("mode", WaveScaler.GameMode.CLASSIC)),
+		str(pending.get("board_png", ""))
 	)
 
 
@@ -60,17 +62,22 @@ func queue_pending_score(
 	player_name: String,
 	wave: int,
 	difficulty: int,
-	seeds: Array = []
+	seeds: Array = [],
+	mode: int = WaveScaler.GameMode.CLASSIC,
+	board_png: String = ""
 ) -> void:
 	var name := LeaderboardStore.sanitize_name(player_name)
 	if name.is_empty() or wave <= 0:
 		return
 	var cleaned_seeds := LeaderboardStore.normalize_seeds(seeds)
+	var png := LeaderboardStore.normalize_board_png(board_png)
 	var data := {
 		"name": name,
 		"wave": wave,
 		"difficulty": difficulty,
+		"mode": mode,
 		"seeds": cleaned_seeds,
+		"board_png": png,
 		"needed": true,
 		"done": false,
 	}
@@ -78,7 +85,9 @@ func queue_pending_score(
 	Session.global_push_name = name
 	Session.global_push_wave = wave
 	Session.global_push_difficulty = difficulty
+	Session.global_push_game_mode = mode
 	Session.global_push_seeds = cleaned_seeds.duplicate()
+	Session.global_push_board_png = png
 	Session.global_push_needed = true
 	Session.global_push_done = false
 
@@ -89,6 +98,7 @@ func clear_pending() -> void:
 	Session.global_push_name = ""
 	Session.global_push_wave = -1
 	Session.global_push_seeds.clear()
+	Session.global_push_board_png = ""
 	Session.global_push_needed = false
 	Session.global_push_done = false
 
@@ -109,7 +119,9 @@ func push_score(
 	player_name: String,
 	wave: int,
 	difficulty: int,
-	seeds: Array = []
+	seeds: Array = [],
+	mode: int = WaveScaler.GameMode.CLASSIC,
+	board_png: String = ""
 ) -> bool:
 	if not OnlineConfig.can_post():
 		push_finished.emit(false)
@@ -119,13 +131,18 @@ func push_score(
 		push_finished.emit(false)
 		return false
 	var cleaned_seeds := LeaderboardStore.normalize_seeds(seeds)
+	var png := LeaderboardStore.normalize_board_png(board_png)
 	var body := {
 		"name": name,
 		"wave": wave,
 		"difficulty": LeaderboardStore.difficulty_key(difficulty),
+		"mode": LeaderboardStore.mode_key(mode),
+		"board": LeaderboardStore.board_key(mode, difficulty),
 	}
 	if not cleaned_seeds.is_empty():
 		body["seeds"] = cleaned_seeds
+	if not png.is_empty():
+		body["board_png"] = png
 	var ok := await _enqueue_and_wait({"kind": "post", "body": body, "difficulty": difficulty})
 	return ok
 
@@ -268,7 +285,9 @@ func _reapply_pending_local() -> void:
 	var name := LeaderboardStore.sanitize_name(str(pending.get("name", "")))
 	var wave := int(pending.get("wave", 0))
 	var difficulty := int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM))
+	var mode := int(pending.get("mode", WaveScaler.GameMode.CLASSIC))
 	var seeds := LeaderboardStore.normalize_seeds(pending.get("seeds", []))
+	var png := LeaderboardStore.normalize_board_png(pending.get("board_png", ""))
 	if name.is_empty() or wave <= 0:
 		return
-	LeaderboardStore.add_score(name, wave, difficulty, seeds)
+	LeaderboardStore.add_score(name, wave, difficulty, seeds, mode, png)

@@ -1,4 +1,37 @@
-﻿## Version 00.02.76
+## Version 00.02.79
+Date: 10/19/2026
+Time: 9:55 PM
+
+### Changes
+- Leaderboards for **all modes × difficulties** (Classic / Random / Siege / Clash)
+- Game over **snaps the board**; qualifying submits store the image so others can **View** it
+- Clash runs now go to the leaderboard (not only the summary)
+
+### Reason
+Players wanted per-mode rankings and to study how top runs laid out their mazes.
+
+## Version 00.02.78
+Date: 10/19/2026
+Time: 9:45 PM
+
+### Changes
+- Shared **InputSanitize** allowlists every LineEdit (leaderboard name, map seeds) as you type
+- Leaderboard Worker rejects injection metacharacters and oversized POSTs (JSON/KV — no SQL)
+
+### Reason
+Harden all text-box input against injection-style payloads before local save or cloud submit.
+
+## Version 00.02.77
+Date: 10/18/2026
+Time: 1:05 PM
+
+### Changes
+- Clash bots **repair mid-wave** when a wrecker smashes their lane (walls first, then combat)
+
+### Reason
+Bots only rebuilt on prep, so wrecker holes leaked lives until the next round.
+
+## Version 00.02.76
 Date: 10/18/2026
 Time: 12:45 PM
 

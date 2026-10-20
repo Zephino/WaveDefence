@@ -9,12 +9,17 @@ var entry_box: VBoxContainer
 var name_input: LineEdit
 var submit_button: Button
 var diff_buttons: Dictionary = {}
+var mode_buttons: Dictionary = {}
 var wave_score: int = -1
 var view_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var score_difficulty: int = WaveScaler.Difficulty.MEDIUM
+var view_mode: int = WaveScaler.GameMode.CLASSIC
+var score_mode: int = WaveScaler.GameMode.CLASSIC
 var can_enter: bool = false
 var _leaving: bool = false
 var _seed_popup: AcceptDialog
+var _board_popup: AcceptDialog
+var _board_preview: TextureRect
 
 
 func _ready() -> void:
@@ -22,12 +27,15 @@ func _ready() -> void:
 	var debug_used := Session.pending_debug_used
 	score_difficulty = Session.pending_difficulty
 	view_difficulty = score_difficulty
+	score_mode = Session.pending_game_mode
+	view_mode = score_mode
 	can_enter = (
 		wave_score > 0
 		and not debug_used
-		and LeaderboardStore.qualifies(wave_score, score_difficulty)
+		and LeaderboardStore.qualifies(wave_score, score_difficulty, score_mode)
 	)
 	_build_ui()
+	_refresh_mode_buttons()
 	_refresh_diff_buttons()
 	_refresh_list()
 	_refresh_status(debug_used)
@@ -44,7 +52,7 @@ func _on_boards_updated(_ok: bool) -> void:
 	can_enter = (
 		wave_score > 0
 		and not Session.pending_debug_used
-		and LeaderboardStore.qualifies(wave_score, score_difficulty)
+		and LeaderboardStore.qualifies(wave_score, score_difficulty, score_mode)
 		and not Session.global_push_done
 		and Session.global_push_name.is_empty()
 	)
@@ -79,11 +87,29 @@ func _build_ui() -> void:
 	source_label.modulate = Color(0.55, 0.65, 0.7)
 	root.add_child(source_label)
 
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 8)
+	mode_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	root.add_child(mode_row)
+	var tab_h := 44.0 if GameLayout.use_touch_ui() else 34.0
+	for mode in [
+		WaveScaler.GameMode.CLASSIC,
+		WaveScaler.GameMode.RANDOM,
+		WaveScaler.GameMode.SIEGE,
+		WaveScaler.GameMode.CLASH,
+	]:
+		var mbtn := Button.new()
+		mbtn.text = WaveScaler.mode_label(mode)
+		mbtn.focus_mode = Control.FOCUS_NONE
+		mbtn.custom_minimum_size = Vector2(110, tab_h)
+		mbtn.pressed.connect(_on_mode_tab.bind(mode))
+		mode_row.add_child(mbtn)
+		mode_buttons[mode] = mbtn
+
 	var diff_row := HBoxContainer.new()
 	diff_row.add_theme_constant_override("separation", 8)
 	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(diff_row)
-	var tab_h := 44.0 if GameLayout.use_touch_ui() else 34.0
 	for diff in [WaveScaler.Difficulty.EASY, WaveScaler.Difficulty.MEDIUM, WaveScaler.Difficulty.HARD]:
 		var btn := Button.new()
 		btn.text = WaveScaler.difficulty_label(diff)
@@ -126,6 +152,16 @@ func _build_ui() -> void:
 	_seed_popup.ok_button_text = "Close"
 	add_child(_seed_popup)
 
+	_board_popup = AcceptDialog.new()
+	_board_popup.title = "Board at game over"
+	_board_popup.ok_button_text = "Close"
+	_board_preview = TextureRect.new()
+	_board_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_board_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_board_preview.custom_minimum_size = Vector2(420, 280)
+	_board_popup.add_child(_board_preview)
+	add_child(_board_popup)
+
 	entry_box = VBoxContainer.new()
 	entry_box.add_theme_constant_override("separation", 8)
 	entry_box.visible = false
@@ -141,10 +177,10 @@ func _build_ui() -> void:
 
 	name_input = LineEdit.new()
 	name_input.custom_minimum_size = Vector2(220, 32)
-	name_input.max_length = LeaderboardStore.MAX_NAME_LENGTH
 	name_input.placeholder_text = "Player"
 	name_input.text_submitted.connect(func(_t: String) -> void: _on_submit())
 	name_row.add_child(name_input)
+	InputSanitize.bind_line_edit(name_input, "name")
 
 	submit_button = Button.new()
 	submit_button.text = "Submit Score"
@@ -189,11 +225,24 @@ func _refresh_source_label() -> void:
 			source_label.text = "Local boards"
 
 
+func _on_mode_tab(mode: int) -> void:
+	view_mode = mode
+	_refresh_mode_buttons()
+	_refresh_list()
+	_refresh_entry_visibility()
+
+
 func _on_diff_tab(diff: int) -> void:
 	view_difficulty = diff
 	_refresh_diff_buttons()
 	_refresh_list()
 	_refresh_entry_visibility()
+
+
+func _refresh_mode_buttons() -> void:
+	for mode in mode_buttons.keys():
+		var btn: Button = mode_buttons[mode]
+		btn.modulate = Color(1.2, 1.15, 0.7) if int(mode) == view_mode else Color.WHITE
 
 
 func _refresh_diff_buttons() -> void:
@@ -203,28 +252,39 @@ func _refresh_diff_buttons() -> void:
 
 
 func _refresh_status(debug_used: bool = Session.pending_debug_used) -> void:
-	var diff_name := WaveScaler.difficulty_label(score_difficulty)
+	var board_name := "%s / %s" % [
+		WaveScaler.mode_label(score_mode),
+		WaveScaler.difficulty_label(score_difficulty),
+	]
 	title_label.text = "LEADERBOARD"
 	if debug_used and wave_score > 0:
-		status_label.text = "Game over — wave %d (%s). Debug was used — not eligible." % [wave_score, diff_name]
+		status_label.text = "Game over — wave %d (%s). Debug was used — not eligible." % [wave_score, board_name]
 	elif can_enter:
-		status_label.text = "Game over — wave %d qualifies on %s! Enter your name." % [wave_score, diff_name]
+		status_label.text = "Game over — wave %d qualifies on %s! Enter your name." % [wave_score, board_name]
 	elif wave_score > 0:
-		status_label.text = "Game over — wave %d (%s). Not enough for that board." % [wave_score, diff_name]
+		status_label.text = "Game over — wave %d (%s). Not enough for that board." % [wave_score, board_name]
 	else:
-		status_label.text = "Top runs by difficulty. Showing %s." % WaveScaler.difficulty_label(view_difficulty)
+		status_label.text = "Top runs by mode and difficulty. Showing %s / %s." % [
+			WaveScaler.mode_label(view_mode),
+			WaveScaler.difficulty_label(view_difficulty),
+		]
 	_refresh_entry_visibility()
 
 
 func _refresh_entry_visibility() -> void:
-	entry_box.visible = can_enter and view_difficulty == score_difficulty
+	entry_box.visible = (
+		can_enter
+		and view_difficulty == score_difficulty
+		and view_mode == score_mode
+	)
 	if entry_box.visible and name_input:
 		name_input.grab_focus()
 
 
 func _refresh_list() -> void:
+	var mode_name := WaveScaler.mode_label(view_mode)
 	var diff_name := WaveScaler.difficulty_label(view_difficulty)
-	title_label.text = "%s LEADERBOARD" % diff_name.to_upper()
+	title_label.text = "%s · %s" % [mode_name.to_upper(), diff_name.to_upper()]
 	if seed_detail_label:
 		seed_detail_label.visible = false
 		seed_detail_label.text = ""
@@ -233,10 +293,10 @@ func _refresh_list() -> void:
 		list_host.remove_child(child)
 		child.free()
 
-	var entries := LeaderboardStore.load_entries(view_difficulty)
+	var entries := LeaderboardStore.load_entries(view_difficulty, view_mode)
 	if entries.is_empty():
 		var empty := Label.new()
-		empty.text = "No %s scores yet. Survive waves to earn a spot." % diff_name
+		empty.text = "No %s / %s scores yet. Survive waves to earn a spot." % [mode_name, diff_name]
 		empty.modulate = Color(0.7, 0.75, 0.8)
 		list_host.add_child(empty)
 		return
@@ -245,9 +305,10 @@ func _refresh_list() -> void:
 	header.add_theme_constant_override("separation", 8)
 	list_host.add_child(header)
 	header.add_child(_list_cell("#", 36))
-	header.add_child(_list_cell("Name", 140))
-	header.add_child(_list_cell("Wave", 70))
-	header.add_child(_list_cell("Seed", 180))
+	header.add_child(_list_cell("Name", 120))
+	header.add_child(_list_cell("Wave", 60))
+	header.add_child(_list_cell("Seed", 140))
+	header.add_child(_list_cell("Board", 80))
 
 	for i in entries.size():
 		var e: Dictionary = entries[i]
@@ -255,9 +316,10 @@ func _refresh_list() -> void:
 		row.add_theme_constant_override("separation", 8)
 		list_host.add_child(row)
 		row.add_child(_list_cell("%d." % (i + 1), 36))
-		row.add_child(_list_cell(str(e["name"]), 140))
-		row.add_child(_list_cell(str(int(e["wave"])), 70))
+		row.add_child(_list_cell(str(e["name"]), 120))
+		row.add_child(_list_cell(str(int(e["wave"])), 60))
 		row.add_child(_make_seed_cell(LeaderboardStore.normalize_seeds(e.get("seeds", []))))
+		row.add_child(_make_board_cell(str(e.get("board_png", "")), str(e.get("name", ""))))
 
 
 func _list_cell(text: String, width: float) -> Label:
@@ -273,20 +335,37 @@ func _make_seed_cell(seeds: Array) -> Control:
 		var none := Label.new()
 		none.text = "—"
 		none.modulate = Color(0.5, 0.55, 0.6)
-		none.custom_minimum_size = Vector2(180, 0)
+		none.custom_minimum_size = Vector2(140, 0)
 		return none
 	if seeds.size() == 1:
 		var one := Label.new()
 		one.text = summary
-		one.custom_minimum_size = Vector2(180, 0)
+		one.custom_minimum_size = Vector2(140, 0)
 		one.tooltip_text = "Map seed: %d" % int(seeds[0])
 		return one
 	var btn := Button.new()
 	btn.text = summary
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.custom_minimum_size = Vector2(180, GameLayout.button_height(28.0))
+	btn.custom_minimum_size = Vector2(140, GameLayout.button_height(28.0))
 	btn.tooltip_text = LeaderboardStore.format_seeds_detail(seeds) + "\n(Click to view)"
 	btn.pressed.connect(_on_seeds_clicked.bind(seeds.duplicate()))
+	return btn
+
+
+func _make_board_cell(board_png: String, player_name: String) -> Control:
+	var png := LeaderboardStore.normalize_board_png(board_png)
+	if png.is_empty():
+		var none := Label.new()
+		none.text = "—"
+		none.modulate = Color(0.5, 0.55, 0.6)
+		none.custom_minimum_size = Vector2(80, 0)
+		return none
+	var btn := Button.new()
+	btn.text = "View"
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(80, GameLayout.button_height(28.0))
+	btn.tooltip_text = "See %s's board at game over" % player_name
+	btn.pressed.connect(_on_board_clicked.bind(png, player_name))
 	return btn
 
 
@@ -300,39 +379,67 @@ func _on_seeds_clicked(seeds: Array) -> void:
 		_seed_popup.popup_centered()
 
 
+func _on_board_clicked(board_png: String, player_name: String) -> void:
+	var tex := BoardScreenshot.texture_from_b64(board_png)
+	if tex == null or _board_popup == null:
+		if status_label:
+			status_label.text = "Could not load that board image."
+		return
+	_board_popup.title = "%s — board" % player_name
+	_board_preview.texture = tex
+	_board_popup.popup_centered()
+
+
 func _on_submit() -> void:
 	if not can_enter or Session.pending_debug_used:
 		return
-	if view_difficulty != score_difficulty:
-		status_label.text = "Switch back to the %s tab to submit." % WaveScaler.difficulty_label(score_difficulty)
+	if view_difficulty != score_difficulty or view_mode != score_mode:
+		status_label.text = "Switch back to %s / %s to submit." % [
+			WaveScaler.mode_label(score_mode),
+			WaveScaler.difficulty_label(score_difficulty),
+		]
+		return
+	if InputSanitize.looks_like_injection(name_input.text):
+		status_label.text = "That name isn't allowed."
+		name_input.text = InputSanitize.filter_name_typing(name_input.text)
 		return
 	var cleaned := LeaderboardStore.sanitize_name(name_input.text)
 	if cleaned.is_empty():
 		status_label.text = "Enter a valid name (letters, numbers, spaces)."
 		return
 	var seeds: Array = Session.pending_map_seeds.duplicate()
-	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty, seeds)
+	var board_png := Session.pending_board_png
+	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty, seeds, score_mode, board_png)
 	can_enter = false
 	entry_box.visible = false
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
 	Session.pending_map_seeds.clear()
+	Session.pending_board_png = ""
 	_refresh_list()
+	var board_label := "%s / %s" % [
+		WaveScaler.mode_label(score_mode),
+		WaveScaler.difficulty_label(score_difficulty),
+	]
 	if OnlineConfig.can_post():
-		OnlineLeaderboard.queue_pending_score(cleaned, wave_score, score_difficulty, seeds)
+		OnlineLeaderboard.queue_pending_score(
+			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png
+		)
 		status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
 			cleaned,
 			wave_score,
-			WaveScaler.difficulty_label(score_difficulty),
+			board_label,
 		]
-		var ok := await OnlineLeaderboard.push_score(cleaned, wave_score, score_difficulty, seeds)
+		var ok := await OnlineLeaderboard.push_score(
+			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png
+		)
 		if not is_inside_tree():
 			return
 		if ok:
 			status_label.text = "Saved %s — wave %d (%s) on the global board." % [
 				cleaned,
 				wave_score,
-				WaveScaler.difficulty_label(score_difficulty),
+				board_label,
 			]
 		else:
 			status_label.text = "Saved %s locally — upload will retry when you leave." % cleaned
@@ -342,7 +449,7 @@ func _on_submit() -> void:
 		status_label.text = "Saved %s — wave %d (%s) on this device." % [
 			cleaned,
 			wave_score,
-			WaveScaler.difficulty_label(score_difficulty),
+			board_label,
 		]
 
 
@@ -352,8 +459,12 @@ func _on_skip_entry() -> void:
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
 	Session.pending_map_seeds.clear()
+	Session.pending_board_png = ""
 	OnlineLeaderboard.clear_pending()
-	status_label.text = "Score discarded. Showing %s board." % WaveScaler.difficulty_label(view_difficulty)
+	status_label.text = "Score discarded. Showing %s / %s." % [
+		WaveScaler.mode_label(view_mode),
+		WaveScaler.difficulty_label(view_difficulty),
+	]
 	_refresh_list()
 
 

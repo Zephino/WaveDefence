@@ -2,11 +2,13 @@
 
 Cloudflare Worker that:
 
-- Serves `GET /leaderboard` (Easy / Medium / Hard top 10)
-- Accepts `POST /leaderboard` with `{ "name", "wave", "difficulty" }`
+- Serves `GET /leaderboard` (mode×difficulty top 10s: `classic_medium`, `siege_hard`, `clash_easy`, …)
+- Accepts `POST /leaderboard` with `{ "name", "wave", "difficulty", "mode", "board", "seeds?", "board_png?" }`
 - Saves to Workers KV (fast) and commits `leaderboard.json` on the **`data`** branch of [Zephino/WaveDefence](https://github.com/Zephino/WaveDefence) (not `main`)
 
 Apps never hold a GitHub token. Only this Worker does.
+
+**Input safety:** there is no SQL database (JSON + KV only). Names are **allowlist**-sanitized (letters, digits, space, `_`, `-`; max 12). Optional `board_png` is base64 PNG (capped). Quotes/semicolons and other injection metacharacters are rejected. POST bodies over 100 KB are refused. Legacy `easy`/`medium`/`hard` keys migrate into `classic_*`.
 
 ## One-time setup
 

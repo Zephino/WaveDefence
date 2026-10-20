@@ -18,6 +18,9 @@ var _rng := RandomNumberGenerator.new()
 var _maze_strategy: String = ""
 ## Economy / build intent for this match.
 var _build_plan: int = BuildPlan.HYBRID
+## Coalesce multi-cell wrecker smashes into one repair burst.
+var _last_repair_msec: int = -99999
+const REPAIR_THROTTLE_MSEC := 400
 
 
 func setup(
@@ -128,6 +131,55 @@ func run_send_turn(wave: int) -> void:
 		return
 	_try_sends(p, wave, true)
 	_use_command_abilities(p, true)
+
+
+## Mid-wave: refill smashed blueprint walls, then a few combat towers. Returns true if anything placed.
+func repair_lane(wave: int) -> bool:
+	if clash_match == null or clash_match.finished:
+		return false
+	var p := clash_match.get_player(player_id)
+	if p == null or not p.alive or p.is_human:
+		return false
+	var now := Time.get_ticks_msec()
+	if now - _last_repair_msec < REPAIR_THROTTLE_MSEC:
+		return false
+	_last_repair_msec = now
+	if _maze_strategy == "":
+		_maze_strategy = _pick_maze_for_plan(_build_plan)
+	var placed_any := false
+	if _build_plan != BuildPlan.DPS:
+		placed_any = _repair_blueprint_walls(p) or placed_any
+	var gold_before := p.gold
+	_place_combat_towers(p, wave, 6)
+	if p.gold < gold_before:
+		placed_any = true
+	if placed_any and clash_match != null:
+		clash_match.players_changed.emit()
+	return placed_any
+
+
+## Patch empty maze-blueprint cells with cheap walls (emergency reserve = one send).
+func _repair_blueprint_walls(p: ClashPlayerState) -> bool:
+	var wall_cost: int = int(TowerData.get_def("wall")["cost"])
+	var reserve := _cheapest_send_cost()
+	var blueprint := _maze_blueprint(p.lane_index, _maze_strategy)
+	var placed := 0
+	const MAX_REPAIR_WALLS := 12
+	for cell in blueprint:
+		if placed >= MAX_REPAIR_WALLS:
+			break
+		var spendable := p.gold - reserve
+		if spendable < wall_cost:
+			break
+		if not grid.is_buildable(cell):
+			continue
+		if not p.spend_gold(wall_cost):
+			break
+		_place_owned(cell, "wall")
+		placed += 1
+	if placed > 0:
+		pathfinder.rebuild()
+	return placed > 0
 
 
 func _cheapest_send_cost() -> int:

@@ -12,6 +12,10 @@ var pending_wave_score: int = -1
 var pending_debug_used: bool = false
 ## Difficulty board for a pending score / leaderboard view.
 var pending_difficulty: int = WaveScaler.Difficulty.MEDIUM
+## Game mode board for a pending score / leaderboard view.
+var pending_game_mode: int = WaveScaler.GameMode.CLASSIC
+## Base64 PNG of the board at run end (attached on submit if they qualify).
+var pending_board_png: String = ""
 ## Selected run difficulty (WaveScaler.Difficulty). Kept across Play Again.
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
 ## Classic / Random / Siege map mode. Kept across Play Again.
@@ -37,12 +41,14 @@ var clash_bot_difficulties: Array = [WaveScaler.Difficulty.MEDIUM]
 var global_push_name: String = ""
 var global_push_wave: int = -1
 var global_push_difficulty: int = WaveScaler.Difficulty.MEDIUM
+var global_push_game_mode: int = WaveScaler.GameMode.CLASSIC
 var global_push_needed: bool = false
 var global_push_done: bool = false
 ## Map seeds from the finished run (for leaderboard submit).
 var pending_map_seeds: Array = []
 ## Seeds attached to the pending global push payload.
 var global_push_seeds: Array = []
+var global_push_board_png: String = ""
 
 ## True on mobile web (CSS landscape helper applies).
 var _web_mobile_play: bool = false
@@ -69,6 +75,7 @@ func _notification(what: int) -> void:
 func go_menu() -> void:
 	pending_wave_score = -1
 	pending_debug_used = false
+	pending_board_png = ""
 	tutorial_active = false
 	get_tree().change_scene_to_file(MENU_SCENE)
 
@@ -115,7 +122,9 @@ func go_leaderboard(
 	wave_score: int = -1,
 	debug_used: bool = false,
 	run_difficulty: int = -1,
-	map_seeds: Array = []
+	map_seeds: Array = [],
+	run_mode: int = -1,
+	board_png: String = "\u0001"
 ) -> void:
 	pending_wave_score = wave_score
 	pending_debug_used = debug_used and wave_score > 0
@@ -126,6 +135,15 @@ func go_leaderboard(
 		pending_difficulty = difficulty
 	else:
 		pending_difficulty = difficulty
+	if run_mode >= 0:
+		pending_game_mode = run_mode
+	elif wave_score > 0:
+		pending_game_mode = game_mode
+	else:
+		pending_game_mode = game_mode
+	# "\u0001" = leave pending_board_png unchanged (already snapped at game over).
+	if board_png != "\u0001":
+		pending_board_png = BoardScreenshot.sanitize_board_b64(board_png)
 	get_tree().change_scene_to_file(LEADERBOARD_SCENE)
 
 
