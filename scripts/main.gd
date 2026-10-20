@@ -1249,11 +1249,11 @@ func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
 			rate = clash_match.human().income_per_round
 		if bonus_gold > 0:
 			hud.set_status(
-				"Wave %d cleared — +%d income (%d/rnd). Build, send, then Start Round."
+				"Wave %d cleared — +%d income (%d/rnd). Next round on timer — build and buy sends."
 				% [wave, bonus_gold, rate]
 			)
 		else:
-			hud.set_status("Wave %d cleared — build, send, then Start Round." % wave)
+			hud.set_status("Wave %d cleared — next round on timer. Build and buy sends." % wave)
 		hud.refresh_clash_panel()
 		return
 	if WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):

@@ -921,27 +921,24 @@ func _check_wave_clear() -> void:
 		_emit_enemies_remaining()
 		if game_state.is_game_over or (_is_clash() and clash_match.finished):
 			return
-		if _is_clash():
-			phase = Phase.PREP
-			skip_unlocked = false
-			intermission_left = 0.0
-			_emit_timer()
-			return
+		# Clash: after the first Start Round, use the same intermission countdown as Classic
+		# (no per-wave return to free prep / Start Round).
 		var rotate_wave := 0
-		if pending_map_rotate_wave > 0:
-			rotate_wave = pending_map_rotate_wave
-			pending_map_rotate_wave = 0
-		elif WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
-			rotate_wave = wave
-		if rotate_wave > 0:
-			phase = Phase.PREP
-			skip_unlocked = false
-			intermission_left = 0.0
-			_emit_timer()
-			map_rotate_requested.emit(rotate_wave)
-			return
-		if WaveScaler.should_rotate_spawn_after_wave(game_state.game_mode, wave):
-			spawn_rotate_requested.emit(wave)
+		if not _is_clash():
+			if pending_map_rotate_wave > 0:
+				rotate_wave = pending_map_rotate_wave
+				pending_map_rotate_wave = 0
+			elif WaveScaler.should_rotate_map_after_wave(game_state.game_mode, wave):
+				rotate_wave = wave
+			if rotate_wave > 0:
+				phase = Phase.PREP
+				skip_unlocked = false
+				intermission_left = 0.0
+				_emit_timer()
+				map_rotate_requested.emit(rotate_wave)
+				return
+			if WaveScaler.should_rotate_spawn_after_wave(game_state.game_mode, wave):
+				spawn_rotate_requested.emit(wave)
 		_start_intermission(WaveScaler.INTERMISSION_TIME, true)
 
 

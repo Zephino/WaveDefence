@@ -31,19 +31,24 @@ var _towers_panel: PanelContainer
 var _send_panel: PanelContainer
 var _towers_toggle: Button
 var _send_toggle: Button
+var _actions_toggle: Button
 var _towers_pin_btn: Button
 var _send_pin_btn: Button
-var _towers_open: bool = true
+var _towers_open: bool = false
 var _send_open: bool = false
+var _actions_open: bool = false
 var _towers_pinned: bool = false
 var _send_pinned: bool = false
 var _send_upgrade_btn: Button
 var _towers_float_pos: Vector2 = Vector2(-1, -1)
 var _send_float_pos: Vector2 = Vector2(-1, -1)
+var _actions_float_pos: Vector2 = Vector2(-1, -1)
 var _drag_shop: String = ""
 var _drag_grab: Vector2 = Vector2.ZERO
 var _towers_drag_bar: Control
 var _send_drag_bar: Control
+var _actions_drag_bar: Control
+var _launcher_shell: PanelContainer
 
 var gold_label: Label
 var lives_label: Label
@@ -173,17 +178,19 @@ func _build_ui(version_text: String) -> void:
 	_send_pinned = UserSettings.is_send_shop_pinned()
 	_towers_float_pos = UserSettings.get_towers_shop_pos()
 	_send_float_pos = UserSettings.get_send_shop_pos()
-	_towers_open = true
+	_towers_open = false
 	_send_open = false
+	_actions_open = false
 
+	_build_launcher_panel(root)
 	var action_parent := _make_actions_panel(root)
 	_fill_actions_column(action_parent)
 
 	_build_towers_shop_panel(root)
 	_build_send_shop_panel(root)
-	_build_shop_edge_toggles(root)
 	_apply_towers_shop_layout()
 	_apply_send_shop_layout()
+	_apply_actions_layout()
 	_build_portal_slide_bar(root)
 
 	board_tooltip = PanelContainer.new()
@@ -233,8 +240,7 @@ func refresh_clash_panel() -> void:
 		return
 	var active := clash_match != null and game_state != null and WaveScaler.is_clash_mode(game_state.game_mode)
 	_clash_root.visible = active
-	if _send_toggle:
-		_send_toggle.visible = active and not (_end_run_overlay != null and _end_run_overlay.visible)
+	_refresh_launcher_send_visibility()
 	if not active:
 		if _send_panel:
 			_send_panel.visible = false
@@ -541,18 +547,11 @@ func set_run_summary_presented(on: bool) -> void:
 		next_wave_brief_label.visible = not on
 	if boss_hp_label:
 		boss_hp_label.visible = not on and boss_hp_label.text != ""
-	if _actions_shell:
-		_actions_shell.visible = not on
-	if _towers_toggle:
-		_towers_toggle.visible = not on
-	if _send_toggle:
-		var clash_on := (
-			clash_match != null
-			and game_state != null
-			and WaveScaler.is_clash_mode(game_state.game_mode)
-		)
-		_send_toggle.visible = not on and clash_on
+	if _launcher_shell:
+		_launcher_shell.visible = not on
 	if on:
+		if _actions_shell:
+			_actions_shell.visible = false
 		if _towers_panel:
 			_towers_panel.visible = false
 		if _send_panel:
@@ -560,6 +559,8 @@ func set_run_summary_presented(on: bool) -> void:
 	else:
 		_apply_towers_shop_layout()
 		_apply_send_shop_layout()
+		_apply_actions_layout()
+		_refresh_launcher_send_visibility()
 	if _clash_root:
 		_clash_root.visible = not on and clash_match != null
 	hide_board_tower_tooltip()
@@ -585,19 +586,107 @@ func _attach_fullscreen_overlay(overlay: Control, z: int) -> void:
 
 
 func _make_actions_panel(root: Control) -> VBoxContainer:
-	var rect := GameLayout.right_sidebar_rect()
-	var side_panel := PanelContainer.new()
-	side_panel.position = rect.position
-	side_panel.size = rect.size
-	side_panel.custom_minimum_size = rect.size
-	side_panel.clip_contents = true
-	root.add_child(side_panel)
-	_actions_shell = side_panel
+	_actions_shell = PanelContainer.new()
+	_actions_shell.visible = false
+	_actions_shell.z_index = 26
+	_actions_shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_actions_shell.clip_contents = true
+	_actions_shell.add_theme_stylebox_override("panel", _popup_panel_style())
+	root.add_child(_actions_shell)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_actions_shell.add_child(scroll)
+
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 5)
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	side_panel.add_child(column)
+	scroll.add_child(column)
+
+	_actions_drag_bar = HBoxContainer.new()
+	_actions_drag_bar.add_theme_constant_override("separation", 6)
+	_actions_drag_bar.gui_input.connect(_on_actions_header_gui_input)
+	column.add_child(_actions_drag_bar)
+	var actions_title := Label.new()
+	actions_title.text = "Actions"
+	actions_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_actions_drag_bar.add_child(actions_title)
+	var close_btn := Button.new()
+	close_btn.text = "X"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.custom_minimum_size = Vector2(28, GameLayout.button_height(24.0))
+	close_btn.tooltip_text = "Close actions"
+	close_btn.pressed.connect(func() -> void:
+		_actions_open = false
+		_apply_actions_layout()
+	)
+	_actions_drag_bar.add_child(close_btn)
 	return column
+
+
+## Compact launcher under gold/lives: Towers / Send / Actions + always-visible Start/Skip.
+func _build_launcher_panel(root: Control) -> void:
+	_launcher_shell = PanelContainer.new()
+	_launcher_shell.z_index = 28
+	_launcher_shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_launcher_shell.position = Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
+	_launcher_shell.add_theme_stylebox_override("panel", _popup_panel_style())
+	root.add_child(_launcher_shell)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 4)
+	_launcher_shell.add_child(column)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 4)
+	column.add_child(btn_row)
+
+	var btn_h := GameLayout.button_height(26.0)
+	_towers_toggle = Button.new()
+	_towers_toggle.text = "Towers"
+	_towers_toggle.focus_mode = Control.FOCUS_NONE
+	_towers_toggle.custom_minimum_size = Vector2(64, btn_h)
+	_towers_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_towers_toggle.tooltip_text = "Open tower shop"
+	_towers_toggle.pressed.connect(_toggle_towers_popup)
+	btn_row.add_child(_towers_toggle)
+
+	_send_toggle = Button.new()
+	_send_toggle.text = "Send"
+	_send_toggle.visible = false
+	_send_toggle.focus_mode = Control.FOCUS_NONE
+	_send_toggle.custom_minimum_size = Vector2(56, btn_h)
+	_send_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_toggle.tooltip_text = "Open Clash send shop"
+	_send_toggle.pressed.connect(_toggle_send_popup)
+	btn_row.add_child(_send_toggle)
+
+	_actions_toggle = Button.new()
+	_actions_toggle.text = "Actions"
+	_actions_toggle.focus_mode = Control.FOCUS_NONE
+	_actions_toggle.custom_minimum_size = Vector2(64, btn_h)
+	_actions_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_actions_toggle.tooltip_text = "Upgrade, sell, multi-select, pause…"
+	_actions_toggle.pressed.connect(_toggle_actions_popup)
+	btn_row.add_child(_actions_toggle)
+
+	timer_label = Label.new()
+	timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer_label.text = ""
+	timer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	timer_label.modulate = Color(0.85, 0.9, 0.7)
+	column.add_child(timer_label)
+
+	skip_button = _sidebar_button("Start Round", GameLayout.button_height(28.0))
+	skip_button.disabled = false
+	skip_button.tooltip_text = "Start the build timer, then waves begin"
+	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
+	column.add_child(skip_button)
+
+	_launcher_shell.custom_minimum_size = Vector2(maxf(GameLayout.sidebar_width(), 200.0), 0)
 
 
 func _popup_panel_style() -> StyleBoxFlat:
@@ -728,36 +817,11 @@ func _build_send_shop_panel(root: Control) -> void:
 	_refresh_send_pin_button()
 
 
-func _build_shop_edge_toggles(root: Control) -> void:
-	var board := GameLayout.board_origin()
-	var board_sz := GameLayout.board_pixel_size()
-	_towers_toggle = Button.new()
-	_towers_toggle.text = "Towers"
-	_towers_toggle.focus_mode = Control.FOCUS_NONE
-	_towers_toggle.z_index = 27
-	_towers_toggle.custom_minimum_size = Vector2(72, GameLayout.button_height(28.0))
-	_towers_toggle.position = Vector2(board.x + 6.0, board.y + board_sz.y - 40.0)
-	_towers_toggle.pressed.connect(_toggle_towers_popup)
-	root.add_child(_towers_toggle)
-
-	_send_toggle = Button.new()
-	_send_toggle.text = "Send"
-	_send_toggle.visible = false
-	_send_toggle.focus_mode = Control.FOCUS_NONE
-	_send_toggle.z_index = 27
-	_send_toggle.custom_minimum_size = Vector2(64, GameLayout.button_height(28.0))
-	_send_toggle.position = Vector2(
-		board.x + board_sz.x - 70.0,
-		board.y + board_sz.y - 40.0
-	)
-	_send_toggle.pressed.connect(_toggle_send_popup)
-	root.add_child(_send_toggle)
-
-
 func _toggle_towers_popup() -> void:
 	if _towers_pinned:
 		_towers_open = true
 		_towers_panel.visible = true
+		_apply_towers_shop_layout()
 		return
 	_towers_open = not _towers_open
 	_apply_towers_shop_layout()
@@ -772,6 +836,23 @@ func _toggle_send_popup() -> void:
 		return
 	_send_open = not _send_open
 	_apply_send_shop_layout()
+
+
+func _toggle_actions_popup() -> void:
+	_actions_open = not _actions_open
+	_apply_actions_layout()
+
+
+func _refresh_launcher_send_visibility() -> void:
+	if _send_toggle == null:
+		return
+	var clash_on := (
+		clash_match != null
+		and game_state != null
+		and WaveScaler.is_clash_mode(game_state.game_mode)
+	)
+	var overlay_on := _end_run_overlay != null and _end_run_overlay.visible
+	_send_toggle.visible = clash_on and not overlay_on
 
 
 func _toggle_towers_pin() -> void:
@@ -810,15 +891,23 @@ func _refresh_send_pin_button() -> void:
 	)
 
 
+func _launcher_bottom_y() -> float:
+	if _launcher_shell == null:
+		return 34.0
+	return _launcher_shell.position.y + maxf(_launcher_shell.size.y, 88.0) + 4.0
+
+
 func _apply_towers_shop_layout() -> void:
 	if _towers_panel == null:
 		return
 	_refresh_towers_pin_button()
 	if _towers_pinned:
 		var rect := GameLayout.sidebar_rect()
-		_towers_panel.position = rect.position
-		_towers_panel.size = rect.size
-		_towers_panel.custom_minimum_size = rect.size
+		var top_y := maxf(rect.position.y, _launcher_bottom_y())
+		var height := maxf(GameLayout.VIEW_HEIGHT - top_y - 8.0, 160.0)
+		_towers_panel.position = Vector2(rect.position.x, top_y)
+		_towers_panel.size = Vector2(rect.size.x, height)
+		_towers_panel.custom_minimum_size = Vector2(rect.size.x, height)
 		_towers_panel.visible = true
 		_towers_open = true
 	elif _towers_open:
@@ -830,7 +919,7 @@ func _apply_towers_shop_layout() -> void:
 			_towers_panel.position = _clamp_shop_pos(_towers_float_pos, _towers_panel.size)
 		else:
 			var board := GameLayout.board_origin()
-			_towers_panel.position = Vector2(board.x + 6.0, board.y + 52.0)
+			_towers_panel.position = Vector2(board.x + 6.0, board.y + 8.0)
 		_towers_panel.visible = true
 	else:
 		_towers_panel.visible = false
@@ -849,11 +938,9 @@ func _apply_send_shop_layout() -> void:
 	)
 	if not clash_on:
 		_send_panel.visible = false
-		if _send_toggle:
-			_send_toggle.visible = false
+		_refresh_launcher_send_visibility()
 		return
-	if _send_toggle:
-		_send_toggle.visible = true
+	_refresh_launcher_send_visibility()
 	if _send_pinned:
 		var rect := GameLayout.right_sidebar_rect()
 		var h := minf(rect.size.y * 0.48, 340.0)
@@ -872,12 +959,33 @@ func _apply_send_shop_layout() -> void:
 			_send_panel.position = _clamp_shop_pos(_send_float_pos, _send_panel.size)
 		else:
 			var board := GameLayout.board_origin()
-			_send_panel.position = Vector2(board.x + board_sz.x - w - 6.0, board.y + 52.0)
+			_send_panel.position = Vector2(board.x + board_sz.x - w - 6.0, board.y + 8.0)
 		_send_panel.visible = true
 	else:
 		_send_panel.visible = false
 	if _send_toggle:
 		_send_toggle.modulate = Color(0.75, 1.15, 1.1) if _send_panel.visible else Color.WHITE
+
+
+func _apply_actions_layout() -> void:
+	if _actions_shell == null:
+		return
+	if _actions_open:
+		var w := maxf(GameLayout.right_sidebar_min(), 160.0)
+		var h := minf(GameLayout.board_pixel_size().y - 24.0, 480.0)
+		_actions_shell.size = Vector2(w, h)
+		_actions_shell.custom_minimum_size = Vector2(w, h)
+		if _actions_float_pos.x >= 0.0:
+			_actions_shell.position = _clamp_shop_pos(_actions_float_pos, _actions_shell.size)
+		else:
+			var board := GameLayout.board_origin()
+			var board_sz := GameLayout.board_pixel_size()
+			_actions_shell.position = Vector2(board.x + board_sz.x - w - 6.0, board.y + 8.0)
+		_actions_shell.visible = true
+	else:
+		_actions_shell.visible = false
+	if _actions_toggle:
+		_actions_toggle.modulate = Color(0.75, 1.15, 1.1) if _actions_shell.visible else Color.WHITE
 
 
 func _clamp_shop_pos(pos: Vector2, size: Vector2) -> Vector2:
@@ -895,9 +1003,24 @@ func _on_send_header_gui_input(event: InputEvent) -> void:
 	_handle_shop_drag(event, "send")
 
 
+func _on_actions_header_gui_input(event: InputEvent) -> void:
+	_handle_shop_drag(event, "actions")
+
+
 func _handle_shop_drag(event: InputEvent, which: String) -> void:
-	var pinned := _towers_pinned if which == "towers" else _send_pinned
-	var panel := _towers_panel if which == "towers" else _send_panel
+	var pinned := false
+	if which == "towers":
+		pinned = _towers_pinned
+	elif which == "send":
+		pinned = _send_pinned
+	var panel: Control = null
+	match which:
+		"towers":
+			panel = _towers_panel
+		"send":
+			panel = _send_panel
+		"actions":
+			panel = _actions_shell
 	if pinned or panel == null or not panel.visible:
 		return
 	if event is InputEventMouseButton:
@@ -905,7 +1028,14 @@ func _handle_shop_drag(event: InputEvent, which: String) -> void:
 		if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 			return
 		# Don't steal clicks from Pin/X — only drag from title/empty header space.
-		var bar := _towers_drag_bar if which == "towers" else _send_drag_bar
+		var bar: Control = null
+		match which:
+			"towers":
+				bar = _towers_drag_bar
+			"send":
+				bar = _send_drag_bar
+			"actions":
+				bar = _actions_drag_bar
 		if bar != null:
 			for child in bar.get_children():
 				if child is BaseButton:
@@ -919,7 +1049,14 @@ func _handle_shop_drag(event: InputEvent, which: String) -> void:
 func _input(event: InputEvent) -> void:
 	if _drag_shop == "":
 		return
-	var panel := _towers_panel if _drag_shop == "towers" else _send_panel
+	var panel: Control = null
+	match _drag_shop:
+		"towers":
+			panel = _towers_panel
+		"send":
+			panel = _send_panel
+		"actions":
+			panel = _actions_shell
 	if panel == null:
 		_drag_shop = ""
 		return
@@ -927,10 +1064,13 @@ func _input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		var next := _clamp_shop_pos(mm.global_position - _drag_grab, panel.size)
 		panel.position = next
-		if _drag_shop == "towers":
-			_towers_float_pos = next
-		else:
-			_send_float_pos = next
+		match _drag_shop:
+			"towers":
+				_towers_float_pos = next
+			"send":
+				_send_float_pos = next
+			"actions":
+				_actions_float_pos = next
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -943,7 +1083,7 @@ func _input(event: InputEvent) -> void:
 func _persist_shop_float_pos(which: String) -> void:
 	if which == "towers":
 		UserSettings.set_towers_shop_pos(_towers_float_pos)
-	else:
+	elif which == "send":
 		UserSettings.set_send_shop_pos(_send_float_pos)
 
 
@@ -959,24 +1099,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				_send_open = false
 				_apply_send_shop_layout()
 				closed = true
+			if _actions_open:
+				_actions_open = false
+				_apply_actions_layout()
+				closed = true
 			if closed:
 				get_viewport().set_input_as_handled()
 
 
 func _fill_actions_column(sidebar: VBoxContainer) -> void:
-	timer_label = Label.new()
-	timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	timer_label.text = "Next wave: --"
-	timer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	timer_label.modulate = Color(0.85, 0.9, 0.7)
-	sidebar.add_child(timer_label)
-
+	# Timer + Start/Skip live on the left launcher (always visible).
 	var action_h := GameLayout.button_height(28.0)
-	skip_button = _sidebar_button("Skip Timer", action_h)
-	skip_button.disabled = true
-	skip_button.tooltip_text = "Skip the countdown when unlocked"
-	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
-	sidebar.add_child(skip_button)
 
 	upgrade_button = _sidebar_button("Upgrade", action_h)
 	upgrade_button.disabled = true

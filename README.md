@@ -68,8 +68,8 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
   - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
-  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with the **Pan** sidebar toggle (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
-  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Each lane starts empty (no rock handicaps; **7×15** one-tile maze space matching the reference sheets). Build only in your lane. Towers only attack mobs in **their own lane**. Brown lane dividers **neutralize any shot** that crosses them (so fire doesn't chase leaks into the next column). **Send shop** (floating **Send** popup, or Pin to dock): start at **Lv1** with Scout/Pack/Brute; upgrade for **1500 / 5000 / 15000** gold to unlock stronger packs for **everyone** in the match (bosses, fliers, **Wrecker** that hunts and destroys defender towers/walls, then exits). Every pack permanently raises income — newer tiers pay **clearly more** (+2…+35/rnd). Each wave clear pays your **+X/rnd** income into spendable gold. Leaks overflow to the next living lane. **Last standing** wins. Each bot picks a **match-long plan** (full maze, DPS-first, or hybrid) and a maze style, then sticks to that plan every prep — DPS bots skip wall spam and buy damage; maze bots lock corridors then overbuild. If a **Wrecker** smashes their lane mid-round, they **repair immediately** (walls first, then a few combat towers). They may buy any combat tower they can afford (no unlock-wave gates), including **Command** (they cast Air Strike / Supply / Barricade / Flare). **Melee** towers stay path-adjacent; bots also finish the **final elemental** upgrade after three stats. Bot difficulty includes **Cheater** (+500 gold, +100 lives, slowly heals back toward 50 after dropping to 10) for long endless fights. No leaderboard for Clash yet.
+  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with **Actions → Pan** (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
+  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Each lane starts empty (no rock handicaps; **7×15** one-tile maze space matching the reference sheets). Build only in your lane. Towers only attack mobs in **their own lane**. Brown lane dividers **neutralize any shot** that crosses them (so fire doesn't chase leaks into the next column). After the first **Start Round**, later rounds use the intermission countdown. **Send shop** (left launcher **Send** popup, or Pin to dock): start at **Lv1** with Scout/Pack/Brute; upgrade for **1500 / 5000 / 15000** gold to unlock stronger packs for **everyone** in the match (bosses, fliers, **Wrecker** that hunts and destroys defender towers/walls, then exits). Every pack permanently raises income — newer tiers pay **clearly more** (+2…+35/rnd). Each wave clear pays your **+X/rnd** income into spendable gold. Leaks overflow to the next living lane. **Last standing** wins. Each bot picks a **match-long plan** (full maze, DPS-first, or hybrid) and a maze style, then sticks to that plan every prep — DPS bots skip wall spam and buy damage; maze bots lock corridors then overbuild. If a **Wrecker** smashes their lane mid-round, they **repair immediately** (walls first, then a few combat towers). They may buy any combat tower they can afford (no unlock-wave gates), including **Command** (they cast Air Strike / Supply / Barricade / Flare). **Melee** towers stay path-adjacent; bots also finish the **final elemental** upgrade after three stats. Bot difficulty includes **Cheater** (+500 gold, +100 lives, slowly heals back toward 50 after dropping to 10) for long endless fights. No leaderboard for Clash yet.
 - **Monsters** — independent of map (Clash always uses Classic monsters for v1). Ground creeps use the **mobs_ground** rework sheets (slime, beetle, crab, …); fliers still use bat/wasp/moth/…; bosses still use colossus/iron maw/…; wreckers use armadillo. Legacy ground art is kept in `archive/mobs_ground_legacy/`.
 
 - **Towers** — animated sheets under `assets/sprites/towers/` (data-driven via `TowerSprites` + `*_frames.json`). Walls use a **16-tile fortress autotile**; Vortex uses a **120×120** sheet. Replace PNGs with the same names/layout without changing code — see [`docs/TOWER_SPRITES.md`](docs/TOWER_SPRITES.md).
@@ -105,7 +105,8 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 
 - **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), **Settings** (Master / Music / SFX volume + Mute music / Mute sounds; swipe to scroll without changing controls), save maze image, quit to menu (no mid-run save).
 - **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
-- Select a tower from the left shop, then **left-click** the grid to place it.
+- Under gold/lives, open **Towers**, **Send** (Clash only), or **Actions** from the left launcher. **Start Round** / **Skip Timer** and the countdown stay on that launcher. Esc/X closes popups.
+- Select a tower from **Towers**, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
 - **Click or hover a living mob** to inspect it (name, HP left/max, gold bounty) on the same board tooltip as towers. Clears on death, empty click, Esc/deselect, or selecting a tower. Clicks that hit a mob inspect it instead of placing.
 - **Hold left-click and drag** to paint-place many walls/towers in a row.
@@ -113,11 +114,12 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 - You **cannot** build a wall or tower on top of an existing tower — **sell it first**.
 - Towers **block the path**. Placement still refuses a seal, but if the path is already blocked when you press **Start Round** (or when the intermission timer tries to start a wave), blocking towers/walls are removed, sell value is refunded, and the round continues.
 - Click a placed tower to select it; **Ctrl+click** or **Shift+click** to select multiple.
-- **Deselect** (sidebar), **Esc**, or **right-click** the board clears the selection.
-- Select towers and press **Upgrade** (or **U**): each tower can take **3** stat upgrades (damage/range/rate). Yellow pips show progress.
-- After +3, choose a **final** elemental buff: **Fire / Ice / Poison / Lightning** (sidebar buttons). One per tower — keeps the tower’s type and adds a light extra effect (e.g. Burn + Ice still burns, with a mild slow).
-- **Sell Selected** sells every selected tower/wall (~50% refund of base + upgrade gold).
-- After the main menu, build freely with **no timer**. Press **Start Round** when ready.
+- **Deselect** (Actions), **Esc**, or **right-click** the board clears the selection.
+- Select towers and open **Actions** → **Upgrade** (or **U**): each tower can take **3** stat upgrades (damage/range/rate). Yellow pips show progress.
+- After +3, choose a **final** elemental buff: **Fire / Ice / Poison / Lightning** (Actions). One per tower — keeps the tower’s type and adds a light extra effect (e.g. Burn + Ice still burns, with a mild slow).
+- **Sell Selected** (Actions) sells every selected tower/wall (~50% refund of base + upgrade gold).
+- After the main menu, build freely with **no timer**. Press **Start Round** when ready. In **Clash**, later rounds use the intermission countdown automatically (you only press Start Round once at the beginning).
+
 - From **wave 10** onward (prep / intermission only), a cyan **Move start / end** bar appears on the **top-left of the map**. Pay **200 gold** per click to slide start or end one cell left/right on the same row. Cannot leave the map or seal the path. Clash: your lane only.
 - That starts a **build countdown**, then waves auto-run with intermissions between them.
 - After **Start Round**, the build countdown is always skippable (small gold bonus for time left).
@@ -188,14 +190,14 @@ Expect `SMOKE_TEST_OK`.
 
 The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
 
-**HUD (PC and mobile):** **Towers** and Clash **Send** are floating popups (map-edge toggles; Esc/X closes). Drag the title bar to move them; **Pin** docks Towers on the left and Send atop the right controls. Right column keeps timer / upgrade / sell / End Run (no filler labels).
+**HUD (PC and mobile):** Left launcher under gold/lives opens **Towers**, Clash **Send**, and **Actions** as floating popups (Esc/X closes). Start Round / Skip and the timer stay on the launcher. Drag popup title bars to move them; **Pin** can dock Towers left / Send right.
 
 Mobile extras:
 
 - **Drag** on the board to paint-place
 - **Tap** a tower to select + show its info card
-- **Long-press** a tower to multi-select (or use right-side **Multi: On**)
-- **Deselect** button, or tap empty/unplaceable cells / outside the board
+- **Long-press** a tower to multi-select (or Actions → **Multi: On**)
+- **Deselect** (Actions), or tap empty/unplaceable cells / outside the board
 - Larger touch buttons
 
 **Debug (F1 / ~):** opens a floating panel over the board (does not cover the sidebars). Using debug makes the run ineligible for the leaderboard.

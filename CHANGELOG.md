@@ -1,3 +1,15 @@
+## Version 00.02.87
+Date: 10/20/2026
+Time: 12:20 PM
+
+### Changes
+- Clash: after the first Start Round, wave clears use the intermission countdown (Skip Timer) instead of waiting for Start Round every round
+- HUD: compact left launcher under gold/lives with **Towers**, **Send** (Clash), and **Actions** popups; Start Round / Skip + timer stay on the launcher
+- Removed board-corner shop toggles and the always-docked right actions strip
+
+### Reason
+Speed up Clash pacing between rounds and keep shop/action UI out of the way while round controls stay one tap away.
+
 ## Version 00.02.86
 Date: 10/20/2026
 Time: 12:07 PM

@@ -632,6 +632,12 @@ func _run() -> void:
 	# Floating shops: pin towers and select a type still arms placement.
 	var hud: UIHud = main.hud
 	if hud != null:
+		if hud._launcher_shell == null or not hud._launcher_shell.visible:
+			errors.append("left HUD launcher should be visible under gold/lives")
+		if hud.skip_button == null or hud.timer_label == null:
+			errors.append("launcher should keep Start Round / timer always visible")
+		if hud._actions_shell != null and hud._actions_shell.visible and not hud._actions_open:
+			errors.append("actions popup should start closed")
 		var prev_pin := UserSettings.is_towers_shop_pinned()
 		hud._towers_pinned = true
 		hud._towers_open = true
@@ -644,7 +650,25 @@ func _run() -> void:
 		hud._towers_pinned = prev_pin
 		UserSettings.set_towers_shop_pinned(prev_pin)
 		hud._apply_towers_shop_layout()
+	# Clash wave clear should start an intermission countdown (not return to free prep).
+	waves.set_clash_match(clash_match)
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASH)
+	waves.begin_run()
+	waves.phase = WaveManager.Phase.WAVE
+	waves.wave_active = true
+	waves.spawning = false
+	waves.enemies_alive = 0
+	waves.spawn_queue.clear()
+	waves.enemies_this_wave_total = 1
+	waves.kills_this_wave = 1
+	state.set_wave(1)
+	waves._check_wave_clear()
+	if waves.phase != WaveManager.Phase.INTERMISSION:
+		errors.append("clash wave clear should enter intermission countdown")
+	elif waves.intermission_left <= 0.0:
+		errors.append("clash intermission should have time remaining")
 	clash_match.queue_free()
+	waves.set_clash_match(null)
 	# Drop any leftover smoke enemies before classic targeting checks.
 	for leftover in main.enemies.get_children():
 		main.enemies.remove_child(leftover)
