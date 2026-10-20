@@ -305,10 +305,13 @@ func _refresh_list() -> void:
 	header.add_theme_constant_override("separation", 8)
 	list_host.add_child(header)
 	header.add_child(_list_cell("#", 36))
-	header.add_child(_list_cell("Name", 120))
-	header.add_child(_list_cell("Wave", 60))
-	header.add_child(_list_cell("Seed", 140))
-	header.add_child(_list_cell("Board", 80))
+	header.add_child(_list_cell("Name", 100))
+	header.add_child(_list_cell("Wave", 50))
+	if view_mode == WaveScaler.GameMode.CLASH:
+		header.add_child(_list_cell("Match", 160))
+	else:
+		header.add_child(_list_cell("Seed", 120))
+	header.add_child(_list_cell("Board", 70))
 
 	for i in entries.size():
 		var e: Dictionary = entries[i]
@@ -316,9 +319,15 @@ func _refresh_list() -> void:
 		row.add_theme_constant_override("separation", 8)
 		list_host.add_child(row)
 		row.add_child(_list_cell("%d." % (i + 1), 36))
-		row.add_child(_list_cell(str(e["name"]), 120))
-		row.add_child(_list_cell(str(int(e["wave"])), 60))
-		row.add_child(_make_seed_cell(LeaderboardStore.normalize_seeds(e.get("seeds", []))))
+		row.add_child(_list_cell(str(e["name"]), 100))
+		row.add_child(_list_cell(str(int(e["wave"])), 50))
+		if view_mode == WaveScaler.GameMode.CLASH:
+			row.add_child(_make_clash_cell(
+				int(e.get("clash_players", 0)),
+				e.get("clash_bots", [])
+			))
+		else:
+			row.add_child(_make_seed_cell(LeaderboardStore.normalize_seeds(e.get("seeds", []))))
 		row.add_child(_make_board_cell(str(e.get("board_png", "")), str(e.get("name", ""))))
 
 
@@ -335,21 +344,34 @@ func _make_seed_cell(seeds: Array) -> Control:
 		var none := Label.new()
 		none.text = "—"
 		none.modulate = Color(0.5, 0.55, 0.6)
-		none.custom_minimum_size = Vector2(140, 0)
+		none.custom_minimum_size = Vector2(120, 0)
 		return none
 	if seeds.size() == 1:
 		var one := Label.new()
 		one.text = summary
-		one.custom_minimum_size = Vector2(140, 0)
+		one.custom_minimum_size = Vector2(120, 0)
 		one.tooltip_text = "Map seed: %d" % int(seeds[0])
 		return one
 	var btn := Button.new()
 	btn.text = summary
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.custom_minimum_size = Vector2(140, GameLayout.button_height(28.0))
+	btn.custom_minimum_size = Vector2(120, GameLayout.button_height(28.0))
 	btn.tooltip_text = LeaderboardStore.format_seeds_detail(seeds) + "\n(Click to view)"
 	btn.pressed.connect(_on_seeds_clicked.bind(seeds.duplicate()))
 	return btn
+
+
+func _make_clash_cell(players: int, bots) -> Control:
+	var summary := LeaderboardStore.format_clash_summary(players, bots if typeof(bots) == TYPE_ARRAY else [])
+	var label := Label.new()
+	label.custom_minimum_size = Vector2(160, 0)
+	if summary.is_empty():
+		label.text = "—"
+		label.modulate = Color(0.5, 0.55, 0.6)
+	else:
+		label.text = summary
+		label.tooltip_text = summary
+	return label
 
 
 func _make_board_cell(board_png: String, player_name: String) -> Control:
@@ -409,13 +431,21 @@ func _on_submit() -> void:
 		return
 	var seeds: Array = Session.pending_map_seeds.duplicate()
 	var board_png := Session.pending_board_png
-	LeaderboardStore.add_score(cleaned, wave_score, score_difficulty, seeds, score_mode, board_png)
+	var clash_players := Session.pending_clash_players if score_mode == WaveScaler.GameMode.CLASH else 0
+	var clash_bots: Array = (
+		Session.pending_clash_bots.duplicate() if score_mode == WaveScaler.GameMode.CLASH else []
+	)
+	LeaderboardStore.add_score(
+		cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
+	)
 	can_enter = false
 	entry_box.visible = false
 	Session.pending_wave_score = -1
 	Session.pending_debug_used = false
 	Session.pending_map_seeds.clear()
 	Session.pending_board_png = ""
+	Session.pending_clash_players = 0
+	Session.pending_clash_bots.clear()
 	_refresh_list()
 	var board_label := "%s / %s" % [
 		WaveScaler.mode_label(score_mode),
@@ -423,7 +453,7 @@ func _on_submit() -> void:
 	]
 	if OnlineConfig.can_post():
 		OnlineLeaderboard.queue_pending_score(
-			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png
+			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
 		)
 		status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
 			cleaned,
@@ -431,7 +461,7 @@ func _on_submit() -> void:
 			board_label,
 		]
 		var ok := await OnlineLeaderboard.push_score(
-			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png
+			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
 		)
 		if not is_inside_tree():
 			return
@@ -460,6 +490,8 @@ func _on_skip_entry() -> void:
 	Session.pending_debug_used = false
 	Session.pending_map_seeds.clear()
 	Session.pending_board_png = ""
+	Session.pending_clash_players = 0
+	Session.pending_clash_bots.clear()
 	OnlineLeaderboard.clear_pending()
 	status_label.text = "Score discarded. Showing %s / %s." % [
 		WaveScaler.mode_label(view_mode),

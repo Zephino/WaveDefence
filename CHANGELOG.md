@@ -1,3 +1,13 @@
+## Version 00.02.80
+Date: 10/19/2026
+Time: 10:35 PM
+
+### Changes
+- Clash leaderboard entries store **player count** and **each bot’s difficulty** (shown as e.g. `4p · Easy / Hard / Cheater`)
+
+### Reason
+Clash scores need context for how many bots and which difficulties were used.
+
 ## Version 00.02.79
 Date: 10/19/2026
 Time: 9:55 PM

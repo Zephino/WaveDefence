@@ -47,6 +47,8 @@ static func difficulty_key(difficulty: int) -> String:
 			return "easy"
 		WaveScaler.Difficulty.HARD:
 			return "hard"
+		WaveScaler.Difficulty.CHEATER:
+			return "cheater"
 		_:
 			return "medium"
 
@@ -57,12 +59,18 @@ static func difficulty_from_key(key: String) -> int:
 			return WaveScaler.Difficulty.EASY
 		"hard":
 			return WaveScaler.Difficulty.HARD
+		"cheater":
+			return WaveScaler.Difficulty.CHEATER
 		_:
 			return WaveScaler.Difficulty.MEDIUM
 
 
 static func board_key(mode: int, difficulty: int) -> String:
-	return "%s_%s" % [mode_key(mode), difficulty_key(difficulty)]
+	# Board tabs are Easy/Medium/Hard only; Cheater is a bot tier, not a board.
+	var d := difficulty
+	if d == WaveScaler.Difficulty.CHEATER:
+		d = WaveScaler.Difficulty.HARD
+	return "%s_%s" % [mode_key(mode), difficulty_key(d)]
 
 
 static func parse_board_key(key: String) -> Dictionary:
@@ -100,6 +108,48 @@ static func normalize_board_png(raw) -> String:
 	return BoardScreenshot.sanitize_board_b64(str(raw))
 
 
+## Clash match makeup: total players (2–4) + bot difficulty keys.
+static func normalize_clash_players(raw) -> int:
+	var n := int(raw)
+	if n < WaveScaler.CLASH_MIN_PLAYERS or n > WaveScaler.CLASH_MAX_PLAYERS:
+		return 0
+	return n
+
+
+static func normalize_clash_bots(raw) -> Array:
+	var out: Array = []
+	if typeof(raw) != TYPE_ARRAY:
+		return out
+	for item in raw:
+		var key := ""
+		if typeof(item) == TYPE_STRING:
+			key = str(item).to_lower().strip_edges()
+		else:
+			key = difficulty_key(int(item))
+		if key != "easy" and key != "medium" and key != "hard" and key != "cheater":
+			continue
+		out.append(key)
+		if out.size() >= WaveScaler.CLASH_MAX_PLAYERS - 1:
+			break
+	return out
+
+
+static func format_clash_summary(players: int, bots: Array) -> String:
+	var p := normalize_clash_players(players)
+	var b := normalize_clash_bots(bots)
+	if p <= 0:
+		return ""
+	var bot_n := maxi(p - 1, 0)
+	if b.size() > bot_n:
+		b.resize(bot_n)
+	var labels: PackedStringArray = PackedStringArray()
+	for key in b:
+		labels.append(WaveScaler.difficulty_label(difficulty_from_key(str(key))))
+	if labels.is_empty():
+		return "%dp · %d bot%s" % [p, bot_n, "" if bot_n == 1 else "s"]
+	return "%dp · %s" % [p, " / ".join(labels)]
+
+
 static func _normalize_entry(item) -> Dictionary:
 	if typeof(item) != TYPE_DICTIONARY:
 		return {}
@@ -116,6 +166,12 @@ static func _normalize_entry(item) -> Dictionary:
 	var png := normalize_board_png(entry.get("board_png", ""))
 	if not png.is_empty():
 		normalized["board_png"] = png
+	var clash_p := normalize_clash_players(entry.get("clash_players", 0))
+	var clash_b := normalize_clash_bots(entry.get("clash_bots", []))
+	if clash_p > 0:
+		normalized["clash_players"] = clash_p
+		if not clash_b.is_empty():
+			normalized["clash_bots"] = clash_b
 	return normalized
 
 
@@ -224,7 +280,9 @@ static func add_score(
 	difficulty: int = WaveScaler.Difficulty.MEDIUM,
 	seeds: Array = [],
 	mode: int = WaveScaler.GameMode.CLASSIC,
-	board_png: String = ""
+	board_png: String = "",
+	clash_players: int = 0,
+	clash_bots: Array = []
 ) -> Array:
 	var name := sanitize_name(player_name)
 	if name.is_empty() or wave <= 0:
@@ -239,6 +297,13 @@ static func add_score(
 	var png := normalize_board_png(board_png)
 	if not png.is_empty():
 		row["board_png"] = png
+	if mode == WaveScaler.GameMode.CLASH:
+		var cp := normalize_clash_players(clash_players)
+		var cb := normalize_clash_bots(clash_bots)
+		if cp > 0:
+			row["clash_players"] = cp
+			if not cb.is_empty():
+				row["clash_bots"] = cb
 	entries.append(row)
 	entries = _sort_and_trim(entries)
 	save_entries(entries, difficulty, mode)
@@ -321,6 +386,10 @@ static func _dedupe_sort_and_trim(entries: Array) -> Array:
 				existing["seeds"] = entry["seeds"]
 			if not existing.has("board_png") and entry.has("board_png"):
 				existing["board_png"] = entry["board_png"]
+			if not existing.has("clash_players") and entry.has("clash_players"):
+				existing["clash_players"] = entry["clash_players"]
+			if not existing.has("clash_bots") and entry.has("clash_bots"):
+				existing["clash_bots"] = entry["clash_bots"]
 			unique[idx] = existing
 			continue
 		seen[sig] = unique.size()

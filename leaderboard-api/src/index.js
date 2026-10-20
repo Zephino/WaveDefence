@@ -108,6 +108,33 @@ function normalizeBoardPng(raw) {
   return out.length > MAX_BOARD_PNG ? "" : out;
 }
 
+const BOT_DIFFS = ["easy", "medium", "hard", "cheater"];
+
+function normalizeClashPlayers(raw) {
+  const n = parseInt(raw, 10) || 0;
+  if (n < 2 || n > 4) return 0;
+  return n;
+}
+
+function normalizeClashBots(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    let key = "";
+    if (typeof item === "string") key = item.toLowerCase().trim();
+    else if (typeof item === "number") {
+      if (item === 0) key = "easy";
+      else if (item === 2) key = "hard";
+      else if (item === 3) key = "cheater";
+      else key = "medium";
+    }
+    if (!BOT_DIFFS.includes(key)) continue;
+    out.push(key);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function normalizeEntry(item) {
   if (!item || typeof item !== "object") return null;
   const name = sanitizeName(item.name);
@@ -118,6 +145,12 @@ function normalizeEntry(item) {
   if (seeds.length) entry.seeds = seeds;
   const png = normalizeBoardPng(item.board_png);
   if (png) entry.board_png = png;
+  const clashPlayers = normalizeClashPlayers(item.clash_players);
+  const clashBots = normalizeClashBots(item.clash_bots);
+  if (clashPlayers > 0) {
+    entry.clash_players = clashPlayers;
+    if (clashBots.length) entry.clash_bots = clashBots;
+  }
   return entry;
 }
 
@@ -312,6 +345,8 @@ export default {
         const key = boardKeyFromBody(body);
         const seeds = normalizeSeeds(body.seeds);
         const boardPng = normalizeBoardPng(body.board_png);
+        const clashPlayers = normalizeClashPlayers(body.clash_players);
+        const clashBots = normalizeClashBots(body.clash_bots);
         if (!name) return jsonResponse({ error: "invalid name" }, 400);
         if (wave <= 0 || wave > MAX_WAVE) return jsonResponse({ error: "invalid wave" }, 400);
 
@@ -325,6 +360,10 @@ export default {
         const row = { name, wave };
         if (seeds.length) row.seeds = seeds;
         if (boardPng) row.board_png = boardPng;
+        if (key.startsWith("clash_") && clashPlayers > 0) {
+          row.clash_players = clashPlayers;
+          if (clashBots.length) row.clash_bots = clashBots;
+        }
         entries.push(row);
         boards[key] = sortAndTrim(entries);
         const saved = await saveBoards(env, boards);

@@ -54,7 +54,9 @@ func flush_pending_if_online() -> bool:
 		int(pending.get("difficulty", WaveScaler.Difficulty.MEDIUM)),
 		LeaderboardStore.normalize_seeds(pending.get("seeds", [])),
 		int(pending.get("mode", WaveScaler.GameMode.CLASSIC)),
-		str(pending.get("board_png", ""))
+		str(pending.get("board_png", "")),
+		int(pending.get("clash_players", 0)),
+		pending.get("clash_bots", []) if typeof(pending.get("clash_bots", [])) == TYPE_ARRAY else []
 	)
 
 
@@ -64,13 +66,17 @@ func queue_pending_score(
 	difficulty: int,
 	seeds: Array = [],
 	mode: int = WaveScaler.GameMode.CLASSIC,
-	board_png: String = ""
+	board_png: String = "",
+	clash_players: int = 0,
+	clash_bots: Array = []
 ) -> void:
 	var name := LeaderboardStore.sanitize_name(player_name)
 	if name.is_empty() or wave <= 0:
 		return
 	var cleaned_seeds := LeaderboardStore.normalize_seeds(seeds)
 	var png := LeaderboardStore.normalize_board_png(board_png)
+	var cp := LeaderboardStore.normalize_clash_players(clash_players) if mode == WaveScaler.GameMode.CLASH else 0
+	var cb := LeaderboardStore.normalize_clash_bots(clash_bots) if mode == WaveScaler.GameMode.CLASH else []
 	var data := {
 		"name": name,
 		"wave": wave,
@@ -78,6 +84,8 @@ func queue_pending_score(
 		"mode": mode,
 		"seeds": cleaned_seeds,
 		"board_png": png,
+		"clash_players": cp,
+		"clash_bots": cb,
 		"needed": true,
 		"done": false,
 	}
@@ -88,6 +96,8 @@ func queue_pending_score(
 	Session.global_push_game_mode = mode
 	Session.global_push_seeds = cleaned_seeds.duplicate()
 	Session.global_push_board_png = png
+	Session.global_push_clash_players = cp
+	Session.global_push_clash_bots = cb.duplicate()
 	Session.global_push_needed = true
 	Session.global_push_done = false
 
@@ -99,6 +109,8 @@ func clear_pending() -> void:
 	Session.global_push_wave = -1
 	Session.global_push_seeds.clear()
 	Session.global_push_board_png = ""
+	Session.global_push_clash_players = 0
+	Session.global_push_clash_bots.clear()
 	Session.global_push_needed = false
 	Session.global_push_done = false
 
@@ -121,7 +133,9 @@ func push_score(
 	difficulty: int,
 	seeds: Array = [],
 	mode: int = WaveScaler.GameMode.CLASSIC,
-	board_png: String = ""
+	board_png: String = "",
+	clash_players: int = 0,
+	clash_bots: Array = []
 ) -> bool:
 	if not OnlineConfig.can_post():
 		push_finished.emit(false)
@@ -143,6 +157,13 @@ func push_score(
 		body["seeds"] = cleaned_seeds
 	if not png.is_empty():
 		body["board_png"] = png
+	if mode == WaveScaler.GameMode.CLASH:
+		var cp := LeaderboardStore.normalize_clash_players(clash_players)
+		var cb := LeaderboardStore.normalize_clash_bots(clash_bots)
+		if cp > 0:
+			body["clash_players"] = cp
+			if not cb.is_empty():
+				body["clash_bots"] = cb
 	var ok := await _enqueue_and_wait({"kind": "post", "body": body, "difficulty": difficulty})
 	return ok
 
@@ -288,6 +309,10 @@ func _reapply_pending_local() -> void:
 	var mode := int(pending.get("mode", WaveScaler.GameMode.CLASSIC))
 	var seeds := LeaderboardStore.normalize_seeds(pending.get("seeds", []))
 	var png := LeaderboardStore.normalize_board_png(pending.get("board_png", ""))
+	var clash_players := int(pending.get("clash_players", 0))
+	var clash_bots: Array = (
+		pending.get("clash_bots", []) if typeof(pending.get("clash_bots", [])) == TYPE_ARRAY else []
+	)
 	if name.is_empty() or wave <= 0:
 		return
-	LeaderboardStore.add_score(name, wave, difficulty, seeds, mode, png)
+	LeaderboardStore.add_score(name, wave, difficulty, seeds, mode, png, clash_players, clash_bots)

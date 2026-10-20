@@ -16,6 +16,9 @@ var pending_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var pending_game_mode: int = WaveScaler.GameMode.CLASSIC
 ## Base64 PNG of the board at run end (attached on submit if they qualify).
 var pending_board_png: String = ""
+## Clash: players (incl. you) and bot difficulty keys for the pending score.
+var pending_clash_players: int = 0
+var pending_clash_bots: Array = []
 ## Selected run difficulty (WaveScaler.Difficulty). Kept across Play Again.
 var difficulty: int = WaveScaler.Difficulty.MEDIUM
 ## Classic / Random / Siege map mode. Kept across Play Again.
@@ -49,6 +52,8 @@ var pending_map_seeds: Array = []
 ## Seeds attached to the pending global push payload.
 var global_push_seeds: Array = []
 var global_push_board_png: String = ""
+var global_push_clash_players: int = 0
+var global_push_clash_bots: Array = []
 
 ## True on mobile web (CSS landscape helper applies).
 var _web_mobile_play: bool = false
@@ -76,6 +81,8 @@ func go_menu() -> void:
 	pending_wave_score = -1
 	pending_debug_used = false
 	pending_board_png = ""
+	pending_clash_players = 0
+	pending_clash_bots.clear()
 	tutorial_active = false
 	get_tree().change_scene_to_file(MENU_SCENE)
 
@@ -144,6 +151,14 @@ func go_leaderboard(
 	# "\u0001" = leave pending_board_png unchanged (already snapped at game over).
 	if board_png != "\u0001":
 		pending_board_png = BoardScreenshot.sanitize_board_b64(board_png)
+	if pending_game_mode == WaveScaler.GameMode.CLASH and wave_score > 0:
+		pending_clash_players = clash_player_count
+		pending_clash_bots.clear()
+		for d in clash_bot_difficulties:
+			pending_clash_bots.append(LeaderboardStore.difficulty_key(int(d)))
+	else:
+		pending_clash_players = 0
+		pending_clash_bots.clear()
 	get_tree().change_scene_to_file(LEADERBOARD_SCENE)
 
 

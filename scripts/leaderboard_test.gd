@@ -84,6 +84,36 @@ func _run() -> void:
 			errors.append("siege score should not appear on classic board")
 			break
 
+	# Clash records player count + bot difficulties.
+	LeaderboardStore.add_score(
+		"Clashy",
+		21,
+		WaveScaler.Difficulty.MEDIUM,
+		[],
+		WaveScaler.GameMode.CLASH,
+		"",
+		4,
+		["easy", "hard", "cheater"]
+	)
+	var clash_entries := LeaderboardStore.load_entries(
+		WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASH
+	)
+	var clash_ok := false
+	for ce in clash_entries:
+		if str(ce.get("name", "")) != "Clashy":
+			continue
+		if int(ce.get("clash_players", 0)) != 4:
+			errors.append("clash entry should store player count")
+		var bots: Array = LeaderboardStore.normalize_clash_bots(ce.get("clash_bots", []))
+		if bots.size() != 3 or str(bots[2]) != "cheater":
+			errors.append("clash entry should store bot difficulties")
+		if LeaderboardStore.format_clash_summary(4, bots) != "4p · Easy / Hard / Cheater":
+			errors.append("clash summary format wrong: %s" % LeaderboardStore.format_clash_summary(4, bots))
+		clash_ok = true
+		break
+	if not clash_ok:
+		errors.append("clash score should appear on clash board")
+
 	# Seeds + board snapshot persist.
 	var tiny_png := Marshalls.raw_to_base64(PackedByteArray([137, 80, 78, 71, 13, 10, 26, 10]))
 	LeaderboardStore.add_score(
