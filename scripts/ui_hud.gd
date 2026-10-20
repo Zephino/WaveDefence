@@ -440,6 +440,23 @@ func show_board_tower_tooltip_for(tower: Tower, screen_pos: Vector2) -> void:
 		board_tooltip.visible = false
 		return
 	board_tooltip_label.text = TowerData.tooltip_for_tower(tower)
+	_place_board_tooltip(screen_pos)
+	_tooltip_hide_at_msec = 0
+
+
+func show_board_enemy_tooltip_for(enemy: Enemy, screen_pos: Vector2) -> void:
+	if board_tooltip == null:
+		return
+	if enemy == null or not is_instance_valid(enemy) or not enemy.alive:
+		board_tooltip.visible = false
+		return
+	board_tooltip_label.text = enemy.inspect_summary()
+	_place_board_tooltip(screen_pos)
+	# Main owns inspect pin (keeps HP live); do not auto-hide on timer.
+	_tooltip_hide_at_msec = 0
+
+
+func _place_board_tooltip(screen_pos: Vector2) -> void:
 	board_tooltip.reset_size()
 	var tip_size := board_tooltip.get_combined_minimum_size()
 	var pos := screen_pos + Vector2(18, 18)
@@ -448,7 +465,6 @@ func show_board_tower_tooltip_for(tower: Tower, screen_pos: Vector2) -> void:
 	pos.y = minf(pos.y, view.y - tip_size.y - 8.0)
 	board_tooltip.position = pos
 	board_tooltip.visible = true
-	_tooltip_hide_at_msec = 0
 
 
 ## Touch-friendly inspect: pin tooltip near the board for a few seconds.

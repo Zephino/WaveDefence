@@ -51,6 +51,8 @@ var _pan_mode: bool = false
 ## Command tower pay-per-use aim mode.
 var _aim_ability_id: String = ""
 var _aim_command_tower: Tower = null
+## Clicked mob for inspect tooltip (name / HP / bounty).
+var _inspected_enemy: Enemy = null
 ## Board pan (Siege / large maps).
 var _panning: bool = false
 var _pan_last_screen: Vector2 = Vector2.ZERO
@@ -439,13 +441,20 @@ func _process(delta: float) -> void:
 			if tower:
 				hud.show_touch_tower_info(tower as Tower)
 
+	_refresh_inspected_enemy_tooltip(mouse)
+
 	# Desktop hover tooltips; on touch, info is tap/long-press driven.
 	if not _touch_ui:
 		var hovered_tower := build_system.update_hover(local_map)
 		if hovered_tower != null and _is_on_board_view(mouse) and not _paint_holding and not _awaiting_tower_tap:
-			hud.show_board_tower_tooltip_for(hovered_tower, mouse)
-		elif not hud.is_tooltip_pinned():
-			hud.hide_board_tower_tooltip()
+			if _inspected_enemy == null:
+				hud.show_board_tower_tooltip_for(hovered_tower, mouse)
+		elif _inspected_enemy == null:
+			var hover_mob := _find_enemy_at(local_map)
+			if hover_mob != null and _is_on_board_view(mouse) and not _paint_holding and not _awaiting_tower_tap:
+				hud.show_board_enemy_tooltip_for(hover_mob, mouse)
+			elif not hud.is_tooltip_pinned():
+				hud.hide_board_tower_tooltip()
 	else:
 		build_system.update_hover(local_map)
 
@@ -568,8 +577,20 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 	var cell := grid.world_to_cell(local_map)
 	var existing = grid.get_tower_at(cell)
 
+	# Click a live mob to inspect (before empty-cell place). Towers still win on their cell.
+	if existing == null:
+		var clicked_mob := _find_enemy_at(local_map)
+		if clicked_mob != null:
+			_paint_holding = false
+			_paint_enabled = false
+			_awaiting_tower_tap = false
+			_set_inspected_enemy(clicked_mob)
+			hud.set_status("Inspecting %s." % clicked_mob.display_name())
+			return
+
 	# Existing piece: overbuild walls while a combat type is armed; otherwise select for sell.
 	if existing != null:
+		_clear_inspected_enemy()
 		if additive:
 			_paint_enabled = false
 			_awaiting_tower_tap = false
@@ -597,6 +618,7 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 		return
 
 	_awaiting_tower_tap = false
+	_clear_inspected_enemy()
 
 	# Ctrl/Shift / Multi mode on empty = no paint.
 	if additive:
@@ -855,7 +877,9 @@ func _on_deselect() -> void:
 	var had_aim := not _aim_ability_id.is_empty()
 	var had_sel := build_system.selection_count() > 0
 	var was_placing := build_system.placing_enabled
+	var had_mob := _inspected_enemy != null
 	_clear_command_aim()
+	_clear_inspected_enemy()
 	build_system.clear_selection()
 	build_system.set_placing_enabled(false)
 	if hud:
@@ -864,8 +888,61 @@ func _on_deselect() -> void:
 		hud.set_status("Aim cancelled.")
 	elif had_sel or was_placing:
 		hud.set_status("Deselected — pick a tower type to place again.")
+	elif had_mob:
+		hud.set_status("Cleared mob inspect.")
 	else:
 		hud.set_status("Nothing selected.")
+
+
+func _find_enemy_at(local_map: Vector2) -> Enemy:
+	if enemies == null:
+		return null
+	var best: Enemy = null
+	var best_d := INF
+	for child in enemies.get_children():
+		if not (child is Enemy):
+			continue
+		var e := child as Enemy
+		if not e.alive:
+			continue
+		var d := e.position.distance_to(local_map)
+		var reach := e.hit_radius() + float(grid.tile_px()) * 0.35
+		if d <= reach and d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+func _set_inspected_enemy(enemy: Enemy) -> void:
+	if _inspected_enemy != null and is_instance_valid(_inspected_enemy) and _inspected_enemy != enemy:
+		_inspected_enemy.inspected = false
+		_inspected_enemy.queue_redraw()
+	_inspected_enemy = enemy
+	if enemy != null and is_instance_valid(enemy):
+		enemy.inspected = true
+		enemy.queue_redraw()
+		var screen := get_global_mouse_position()
+		hud.show_board_enemy_tooltip_for(enemy, screen)
+
+
+func _clear_inspected_enemy() -> void:
+	if _inspected_enemy != null and is_instance_valid(_inspected_enemy):
+		_inspected_enemy.inspected = false
+		_inspected_enemy.queue_redraw()
+	_inspected_enemy = null
+	if hud and not hud.is_tooltip_pinned():
+		hud.hide_board_tower_tooltip()
+	elif hud:
+		hud.hide_board_tower_tooltip()
+
+
+func _refresh_inspected_enemy_tooltip(screen_pos: Vector2) -> void:
+	if _inspected_enemy == null:
+		return
+	if not is_instance_valid(_inspected_enemy) or not _inspected_enemy.alive:
+		_clear_inspected_enemy()
+		return
+	hud.show_board_enemy_tooltip_for(_inspected_enemy, screen_pos)
 
 
 func _on_selected_towers_changed(count: int, sell_total: int) -> void:
@@ -1095,12 +1172,23 @@ func _on_skip_timer() -> void:
 			if game_state.tutorial_run and _tutorial_step == 2:
 				_tutorial_step = 3
 				_refresh_tutorial_status()
-			hud.set_status("Round started — build timer running, then waves begin.")
+			build_system.rebuild_paths()
+			var fs: Dictionary = wave_manager.last_path_failsafe
+			var removed := int(fs.get("removed", 0))
+			var refunded := int(fs.get("refunded", 0))
+			if removed > 0:
+				hud.set_status(
+					"Path was blocked — removed %d structures (+%d gold). Round started."
+					% [removed, refunded]
+				)
+			else:
+				hud.set_status("Round started — build timer running, then waves begin.")
 		else:
 			hud.set_status("Keep a path open from spawn to exit, then Start Round.")
 		return
 	if wave_manager.phase == WaveManager.Phase.WAVE:
 		if wave_manager.try_skip_timer():
+			build_system.rebuild_paths()
 			var bonus := wave_manager.last_early_send_bonus
 			if bonus > 0:
 				hud.set_status("Early send — next wave incoming (+%d gold)." % bonus)
@@ -1114,9 +1202,18 @@ func _on_skip_timer() -> void:
 			hud.set_status("Can't early-send right now.")
 		return
 	if wave_manager.try_skip_timer():
-		var bonus := wave_manager.last_early_send_bonus
-		if bonus > 0:
-			hud.set_status("Timer skipped — wave starting (+%d gold)." % bonus)
+		build_system.rebuild_paths()
+		var fs2: Dictionary = wave_manager.last_path_failsafe
+		var removed2 := int(fs2.get("removed", 0))
+		var refunded2 := int(fs2.get("refunded", 0))
+		var bonus2 := wave_manager.last_early_send_bonus
+		if removed2 > 0:
+			hud.set_status(
+				"Path was blocked — removed %d structures (+%d gold). Wave starting."
+				% [removed2, refunded2]
+			)
+		elif bonus2 > 0:
+			hud.set_status("Timer skipped — wave starting (+%d gold)." % bonus2)
 		else:
 			hud.set_status("Timer skipped — wave starting.")
 	elif wave_manager.phase == WaveManager.Phase.INTERMISSION:

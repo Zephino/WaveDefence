@@ -1,3 +1,15 @@
+## Version 00.02.86
+Date: 10/20/2026
+Time: 12:07 PM
+
+### Changes
+- Click/hover mob inspect: name, HP left/max, and gold bounty on the existing board tooltip (clears on death, empty click, Esc, or tower select)
+- Empty-cell clicks that hit a mob inspect it instead of placing a tower
+- Start Round / intermission auto-start failsafe: if the ground path is sealed, remove blocking towers/walls, refund sell value to the owner, reopen the path, then continue
+
+### Reason
+Let players check living creeps at a glance, and unblock stuck mazes (including Cheater-bot seals) so rounds can always start.
+
 ## Version 00.02.85
 Date: 10/20/2026
 Time: 11:22 AM

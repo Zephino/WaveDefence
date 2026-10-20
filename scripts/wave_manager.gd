@@ -43,6 +43,8 @@ var skip_unlocked: bool = false
 var intermission_left: float = 0.0
 ## Gold awarded by the most recent early-send / timer skip (for UI status).
 var last_early_send_bonus: int = 0
+## Last path-block failsafe result: { removed: int, refunded: int }.
+var last_path_failsafe: Dictionary = {"removed": 0, "refunded": 0}
 ## If set, rotate the Random map once the board fully clears (survives early-send past 25/50…).
 var pending_map_rotate_wave: int = 0
 ## Cached ground path; rebuilt only when towers change (not every spawn).
@@ -131,9 +133,12 @@ func start_round() -> bool:
 	## Player pressed Start Round after free-build prep.
 	if phase != Phase.PREP or game_state.is_game_over:
 		return false
+	last_path_failsafe = {"removed": 0, "refunded": 0}
 	invalidate_ground_path()
 	if not has_open_path():
-		return false
+		clear_path_blockers()
+		if not has_open_path():
+			return false
 	_start_intermission(WaveScaler.INITIAL_BUILD_TIME, true)
 	return true
 
@@ -146,6 +151,165 @@ func has_open_path() -> bool:
 				return false
 		return clash_match.living_count() > 0
 	return _ensure_ground_path().size() >= 2
+
+
+## Remove player/bot-built path blockers until spawn→exit is open; refund sell value to owners.
+## Does not remove terrain rocks. Returns { removed, refunded }.
+func clear_path_blockers() -> Dictionary:
+	last_path_failsafe = {"removed": 0, "refunded": 0}
+	if grid == null or pathfinder == null or game_state == null:
+		return last_path_failsafe
+	invalidate_ground_path()
+	pathfinder.rebuild()
+	if has_open_path():
+		return last_path_failsafe
+
+	var removed := 0
+	var refunded := 0
+	var max_iters := maxi(grid.towers.size(), 1) + 8
+	var guard := 0
+	while not has_open_path() and guard < max_iters:
+		guard += 1
+		var tower := _pick_path_blocker_to_remove()
+		if tower == null:
+			break
+		var refund := _refund_and_remove_tower(tower)
+		removed += 1
+		refunded += refund
+		invalidate_ground_path()
+		pathfinder.rebuild()
+
+	last_path_failsafe = {"removed": removed, "refunded": refunded}
+	return last_path_failsafe
+
+
+func _unique_path_blocking_towers() -> Array[Tower]:
+	var seen: Dictionary = {}
+	var out: Array[Tower] = []
+	if grid == null:
+		return out
+	for cell in grid.towers.keys():
+		var node: Node = grid.towers[cell]
+		if not (node is Tower) or not is_instance_valid(node):
+			continue
+		var tower := node as Tower
+		if seen.has(tower):
+			continue
+		seen[tower] = true
+		if _tower_blocks_any_path_cell(tower):
+			out.append(tower)
+	return out
+
+
+func _tower_blocks_any_path_cell(tower: Tower) -> bool:
+	for cell in grid.towers.keys():
+		if grid.towers[cell] == tower and grid.is_blocked_for_path(cell):
+			return true
+	return false
+
+
+func _blocked_lane_indices() -> Array[int]:
+	var out: Array[int] = []
+	if not _is_clash() or clash_match == null:
+		return out
+	for p in clash_match.living_players():
+		var cp := p as ClashPlayerState
+		if cp == null:
+			continue
+		if _ensure_lane_ground_path(cp.lane_index).size() < 2:
+			out.append(cp.lane_index)
+	return out
+
+
+func _tower_on_blocked_lane(tower: Tower, blocked_lanes: Array[int]) -> bool:
+	if blocked_lanes.is_empty():
+		return true
+	var lane := tower.lane_id
+	if lane < 0 and grid != null:
+		lane = grid.lane_index_for_cell(grid.world_to_cell(tower.position))
+	return lane in blocked_lanes
+
+
+func _would_open_path_if_removed(tower: Tower) -> bool:
+	if tower == null or grid == null or pathfinder == null:
+		return false
+	var cells: Array[Vector2i] = []
+	for c in grid.towers.keys():
+		if grid.towers[c] == tower:
+			cells.append(c)
+	if cells.is_empty():
+		return false
+	var anchor: Vector2i = cells[0]
+	if tower.has_meta("anchor_cell"):
+		anchor = tower.get_meta("anchor_cell") as Vector2i
+	var removed := grid.remove_tower_at(anchor, false)
+	if removed == null:
+		return false
+	invalidate_ground_path()
+	pathfinder.rebuild()
+	var ok := has_open_path()
+	for c in cells:
+		grid.towers[c] = tower
+	invalidate_ground_path()
+	pathfinder.rebuild()
+	return ok
+
+
+func _pick_path_blocker_to_remove() -> Tower:
+	var candidates := _unique_path_blocking_towers()
+	if candidates.is_empty():
+		return null
+	var blocked_lanes := _blocked_lane_indices()
+	var scoped: Array[Tower] = []
+	for t in candidates:
+		if _tower_on_blocked_lane(t, blocked_lanes):
+			scoped.append(t)
+	if scoped.is_empty():
+		scoped = candidates
+
+	for t in scoped:
+		if _would_open_path_if_removed(t):
+			return t
+	for t in scoped:
+		if TowerData.is_wall(t.tower_id):
+			return t
+	return scoped[0]
+
+
+func _refund_and_remove_tower(tower: Tower) -> int:
+	if tower == null or not is_instance_valid(tower) or grid == null:
+		return 0
+	var refund := TowerData.sell_value_for_tower(tower)
+	var cell: Vector2i
+	if tower.has_meta("anchor_cell"):
+		cell = tower.get_meta("anchor_cell") as Vector2i
+	else:
+		cell = grid.world_to_cell(tower.position)
+	var removed := grid.remove_tower_at(cell, true)
+	if removed == null:
+		return 0
+
+	var owner_id := -1
+	if tower.has_meta("clash_owner"):
+		owner_id = int(tower.get_meta("clash_owner"))
+	if _is_clash() and clash_match != null and owner_id >= 0:
+		var cp := clash_match.get_player(owner_id)
+		if cp != null and cp.is_human:
+			game_state.add_gold(refund)
+			game_state.record_sell_refund(refund)
+			clash_match.sync_human_gold_from_game_state()
+		elif cp != null:
+			cp.add_gold(refund)
+			clash_match.players_changed.emit()
+		else:
+			game_state.add_gold(refund)
+			game_state.record_sell_refund(refund)
+	else:
+		game_state.add_gold(refund)
+		game_state.record_sell_refund(refund)
+
+	tower.queue_free()
+	return refund
 
 
 func can_send_wave() -> bool:
@@ -185,7 +349,10 @@ func try_skip_timer() -> bool:
 	if phase != Phase.INTERMISSION or not skip_unlocked:
 		return false
 	if not can_send_wave():
-		return false
+		if not has_open_path():
+			clear_path_blockers()
+		if not can_send_wave():
+			return false
 	last_early_send_bonus = WaveScaler.early_send_bonus_from_timer(intermission_left)
 	if last_early_send_bonus > 0:
 		game_state.add_gold(last_early_send_bonus)
@@ -545,8 +712,10 @@ func _process_intermission(delta: float) -> void:
 	_emit_timer()
 	if intermission_left <= 0.0:
 		last_early_send_bonus = 0
+		if not has_open_path():
+			clear_path_blockers()
 		if not send_next_wave():
-			# Path blocked — keep retrying on a short delay.
+			# Still blocked (e.g. only rocks) — keep retrying on a short delay.
 			intermission_left = 1.0
 			_emit_timer()
 
@@ -864,7 +1033,9 @@ func force_next_wave() -> bool:
 	if game_state == null or game_state.is_game_over:
 		return false
 	if not has_open_path():
-		return false
+		clear_path_blockers()
+		if not has_open_path():
+			return false
 	# Anything still on the map / in the spawn queue → overlap like early send.
 	if phase == Phase.WAVE or enemies_alive > 0 or spawning or not spawn_queue.is_empty():
 		return _begin_overlapping_next_wave(false)

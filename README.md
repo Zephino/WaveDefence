@@ -107,10 +107,11 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 - **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
 - Select a tower from the left shop, then **left-click** the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
+- **Click or hover a living mob** to inspect it (name, HP left/max, gold bounty) on the same board tooltip as towers. Clears on death, empty click, Esc/deselect, or selecting a tower. Clicks that hit a mob inspect it instead of placing.
 - **Hold left-click and drag** to paint-place many walls/towers in a row.
 - Place cheap **Walls** to shape the maze. With a combat tower armed, **tap or drag** over a wall to build on top of it. **Deselect** (right-click / Esc) first, then tap a wall to **select** it for **Sell**.
 - You **cannot** build a wall or tower on top of an existing tower — **sell it first**.
-- Towers **block the path**. You cannot place a tower that fully cuts off spawn → exit.
+- Towers **block the path**. Placement still refuses a seal, but if the path is already blocked when you press **Start Round** (or when the intermission timer tries to start a wave), blocking towers/walls are removed, sell value is refunded, and the round continues.
 - Click a placed tower to select it; **Ctrl+click** or **Shift+click** to select multiple.
 - **Deselect** (sidebar), **Esc**, or **right-click** the board clears the selection.
 - Select towers and press **Upgrade** (or **U**): each tower can take **3** stat upgrades (damage/range/rate). Yellow pips show progress.

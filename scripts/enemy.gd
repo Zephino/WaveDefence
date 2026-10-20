@@ -64,6 +64,59 @@ var _base_color: Color = Color(0.85, 0.35, 0.35)
 var sprite_species: String = ""
 var _sprite_anim_time: float = 0.0
 var _move_angle: float = 0.0
+## Player clicked this mob to inspect (gold ring + pinned tooltip).
+var inspected: bool = false
+
+
+func display_name() -> String:
+	var parts: PackedStringArray = []
+	var body := ""
+	if not sprite_species.is_empty():
+		body = _title_species(sprite_species)
+		if is_wrecker:
+			parts.append("Wrecker")
+		elif is_snake:
+			parts.append("Snake")
+		elif is_boss:
+			parts.append("Boss")
+		elif is_flying:
+			parts.append("Flying")
+	elif is_wrecker:
+		body = "Wrecker"
+	elif is_snake:
+		body = "Snake"
+	elif is_boss:
+		body = "Boss"
+	elif is_flying:
+		body = "Flyer"
+	else:
+		body = "Creep"
+	if monster_type != "":
+		body = "%s %s" % [MonsterTypes.display_name(monster_type), body]
+	parts.append(body)
+	return " ".join(parts)
+
+
+func inspect_summary() -> String:
+	var lines: PackedStringArray = []
+	lines.append(display_name())
+	lines.append("HP: %d / %d" % [maxi(int(ceil(hp)), 0), maxi(int(ceil(max_hp)), 1)])
+	lines.append("Kill gold: %d" % bounty)
+	return "\n".join(lines)
+
+
+func hit_radius() -> float:
+	return maxf(_radius, 14.0)
+
+
+static func _title_species(species_id: String) -> String:
+	var raw := species_id.replace("_plus", "").replace("_v2", "").replace("_", " ")
+	var words: PackedStringArray = []
+	for w in raw.split(" ", false):
+		if w.is_empty():
+			continue
+		words.append(w.substr(0, 1).to_upper() + w.substr(1).to_lower())
+	return " ".join(words)
 
 
 func setup(
@@ -655,7 +708,9 @@ func _draw() -> void:
 		sprite_tint = sprite_tint.lerp(MonsterTypes.tint_color(monster_type), 0.25)
 	if not _draw_sprite(sprite_tint):
 		_draw_procedural(color)
-	if UserSettings.is_show_enemy_hp_bars():
+	if inspected:
+		draw_arc(Vector2.ZERO, _radius + 6.0, 0.0, TAU, 28, Color(1.0, 0.9, 0.25), 2.0)
+	if UserSettings.is_show_enemy_hp_bars() or inspected:
 		var bar_w := _radius * 2.2
 		var thick := 4.0 if is_boss else 3.0
 		var ratio := clampf(hp / max_hp, 0.0, 1.0)

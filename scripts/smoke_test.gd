@@ -1334,6 +1334,43 @@ func _run() -> void:
 		errors.append("exit should move exactly one cell left on the same row")
 	# Mid-wave / pre-unlock gates are enforced in main; grid always allows legal slides.
 
+	# Path-block failsafe: seal spawn→exit with walls (bypass place checks), Start Round clears + refunds.
+	grid.reset(true)
+	build.pathfinder.rebuild()
+	state.reset_run(WaveScaler.Difficulty.MEDIUM, WaveScaler.GameMode.CLASSIC)
+	waves.begin_run()
+	var seal_col := 5
+	var sealed := 0
+	for y in GameGrid.ROWS:
+		var cell := Vector2i(seal_col, y)
+		if not grid.is_buildable(cell):
+			continue
+		var wall := Tower.new()
+		wall.setup("wall", main.enemies, main.projectiles)
+		grid.place_tower(cell, wall)
+		sealed += 1
+	waves.invalidate_ground_path()
+	build.pathfinder.rebuild()
+	if sealed < 1:
+		errors.append("failsafe smoke could not place seal walls")
+	elif waves.has_open_path():
+		errors.append("full wall column should block spawn→exit before failsafe")
+	else:
+		var gold_blocked := state.gold
+		if not waves.start_round():
+			errors.append("start_round should clear blockers and begin")
+		else:
+			build.rebuild_paths()
+			var fs: Dictionary = waves.last_path_failsafe
+			if int(fs.get("removed", 0)) < 1:
+				errors.append("path failsafe should remove at least one structure")
+			if int(fs.get("refunded", 0)) < 1:
+				errors.append("path failsafe should refund sell gold")
+			if state.gold <= gold_blocked:
+				errors.append("path failsafe should increase gold after refund")
+			if not waves.has_open_path():
+				errors.append("path should be open after start_round failsafe")
+
 	if errors.is_empty():
 		print("SMOKE_TEST_OK")
 		quit(0)
