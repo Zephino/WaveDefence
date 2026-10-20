@@ -672,8 +672,9 @@ func _draw_sprite(tint: Color) -> bool:
 	if tex == null:
 		return false
 	var sz := EnemySprites.frame_size(sprite_species)
+	# Dedicated boss sheets are already ~80px; don't upscale them further.
 	var scale := 1.0
-	if is_boss:
+	if is_boss and maxf(sz.x, sz.y) < 60.0:
 		scale = 1.2
 	elif is_wrecker:
 		scale = 1.1

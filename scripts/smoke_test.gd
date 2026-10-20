@@ -120,16 +120,35 @@ func _run() -> void:
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
 
-	# Enemy sprite sheets load (ground walk frames).
+	# Enemy sprite sheets load (ground / flier / boss).
 	if not EnemySprites.has_species("slime"):
 		errors.append("slime sprite sheet should load from assets/sprites")
 	elif EnemySprites.walk_texture("slime", 0.0) == null:
 		errors.append("slime walk frame 0 should exist")
+	if not EnemySprites.has_species("bat"):
+		errors.append("bat flier sheet should load from assets/sprites")
+	if not EnemySprites.has_species("colossus_v2"):
+		errors.append("colossus boss sheet should load from assets/sprites")
 	var boss_sp := EnemySprites.pick_species(true, false, false, false, 30)
-	if not str(boss_sp).ends_with("_plus") and boss_sp != "jelly_plus":
-		# Bosses prefer plus variants.
-		if not EnemySprites.has_species(boss_sp):
-			errors.append("boss sprite pick should resolve to a loadable species")
+	if not EnemySprites.has_species(boss_sp):
+		errors.append("boss sprite pick should resolve to a loadable species (%s)" % boss_sp)
+	elif not str(boss_sp).contains("plus"):
+		errors.append("late-wave bosses should pick plus boss art (%s)" % boss_sp)
+	var fly_sp := EnemySprites.pick_species(false, true, false, false, 5)
+	if not EnemySprites.has_species(fly_sp):
+		errors.append("flier sprite pick should resolve to a loadable species (%s)" % fly_sp)
+	# Sprites are mode-agnostic (Classic / Random / Siege / Clash share Enemy.setup).
+	for mode in [
+		WaveScaler.GameMode.CLASSIC,
+		WaveScaler.GameMode.RANDOM,
+		WaveScaler.GameMode.SIEGE,
+		WaveScaler.GameMode.CLASH,
+	]:
+		var e := Enemy.new()
+		e.setup(PackedVector2Array([Vector2.ZERO, Vector2(40, 0)]), 10.0, 40.0, 1, false, false, 3)
+		if e.sprite_species.is_empty() or not EnemySprites.has_species(e.sprite_species):
+			errors.append("mode %d spawn should assign a loadable mob sprite" % mode)
+		e.free()
 
 	# Input sanitizers (names / seeds / injection markers).
 	if InputSanitize.sanitize_name("Bob!!") != "Bob":

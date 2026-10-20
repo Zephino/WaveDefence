@@ -1,0 +1,118 @@
+{
+  "name": "dragonfly_plus",
+  "class": "flier",
+  "facing_mode": "round",
+  "rotate_in_game": true,
+  "frame_width": 40,
+  "frame_height": 40,
+  "columns": 4,
+  "rows": 3,
+  "sheet_width": 160,
+  "sheet_height": 120,
+  "animations": {
+    "walk": {
+      "row": 0,
+      "frame_count": 4,
+      "fps": 8,
+      "loop": true
+    },
+    "death": {
+      "row": 1,
+      "frame_count": 4,
+      "fps": 8,
+      "loop": false
+    },
+    "attack": {
+      "row": 2,
+      "frame_count": 0,
+      "fps": 10,
+      "loop": false
+    }
+  },
+  "frames": [
+    {
+      "animation": "walk",
+      "index": 0,
+      "x": 0,
+      "y": 0,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "walk",
+      "index": 1,
+      "x": 40,
+      "y": 0,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "walk",
+      "index": 2,
+      "x": 80,
+      "y": 0,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "walk",
+      "index": 3,
+      "x": 120,
+      "y": 0,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "death",
+      "index": 0,
+      "x": 0,
+      "y": 40,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "death",
+      "index": 1,
+      "x": 40,
+      "y": 40,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "death",
+      "index": 2,
+      "x": 80,
+      "y": 40,
+      "w": 40,
+      "h": 40
+    },
+    {
+      "animation": "death",
+      "index": 3,
+      "x": 120,
+      "y": 40,
+      "w": 40,
+      "h": 40
+    }
+  ],
+  "center": {
+    "x": 20,
+    "y": 20
+  },
+  "hp_bar_anchor": {
+    "x": 20,
+    "y": 4
+  },
+  "hurtbox_radius": 13,
+  "shadow": {
+    "w": 19,
+    "y_offset": 17
+  },
+  "speed_hint": {
+    "stride_px_per_cycle": 8
+  },
+  "attack": {
+    "active_frames": [],
+    "hitbox": null
+  }
+}

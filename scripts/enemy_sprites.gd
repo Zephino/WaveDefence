@@ -1,7 +1,8 @@
 class_name EnemySprites
 extends RefCounted
 
-## Ground-mob sprite sheets under res://assets/sprites/<id>/
+## Mob sprite sheets under res://assets/sprites/<id>/
+## Supports *_ground_*, *_flier_*, and *_boss_* sheet naming.
 
 const BASE_SPECIES: PackedStringArray = [
 	"slime", "beetle", "spider", "crab", "crawler",
@@ -13,9 +14,24 @@ const PLUS_SPECIES: PackedStringArray = [
 	"pillbug_plus", "tortoise_plus", "urchin_plus", "mole_plus", "scarab_plus",
 	"tick_plus", "slug_plus", "jelly_plus", "armadillo_plus", "roller_plus",
 ]
-const FLYING_SPECIES: PackedStringArray = ["jelly", "jelly_plus"]
+const FLYING_SPECIES: PackedStringArray = [
+	"bat", "wasp", "moth", "hornet", "dragonfly",
+	"firefly", "hoverbot", "propeller", "stingray", "sky_jelly",
+]
+const FLYING_PLUS_SPECIES: PackedStringArray = [
+	"bat_plus", "wasp_plus", "moth_plus", "hornet_plus", "dragonfly_plus",
+	"firefly_plus", "hoverbot_plus", "propeller_plus", "stingray_plus", "sky_jelly_plus",
+]
+const BOSS_SPECIES: PackedStringArray = [
+	"colossus_v2", "iron_maw_v2", "juggernaut_v2", "leviathan_v2", "overseer_v2",
+]
+const BOSS_PLUS_SPECIES: PackedStringArray = [
+	"colossus_plus_v2", "iron_maw_plus_v2", "juggernaut_plus_v2",
+	"leviathan_plus_v2", "overseer_plus_v2",
+]
 const WRECKER_SPECIES := "armadillo"
 const SNAKE_SPECIES := "crawler"
+const _SHEET_KINDS: PackedStringArray = ["ground", "flier", "boss"]
 
 ## species_id -> { sheet: Texture2D, walk: Array[AtlasTexture], fps: float, frame_w: int, frame_h: int }
 static var _cache: Dictionary = {}
@@ -35,8 +51,20 @@ static func pick_species(
 	if is_snake:
 		return SNAKE_SPECIES if not is_boss else "crawler_plus"
 	if is_flying:
-		return "jelly_plus" if is_boss or wave >= 20 else "jelly"
-	var pool: PackedStringArray = PLUS_SPECIES if is_boss or wave >= 25 else BASE_SPECIES
+		var fly_pool: PackedStringArray = (
+			FLYING_PLUS_SPECIES if is_boss or wave >= 20 else FLYING_SPECIES
+		)
+		return _pick_from(fly_pool, rng)
+	if is_boss:
+		var boss_pool: PackedStringArray = (
+			BOSS_PLUS_SPECIES if wave >= 25 else BOSS_SPECIES
+		)
+		return _pick_from(boss_pool, rng)
+	var pool: PackedStringArray = PLUS_SPECIES if wave >= 25 else BASE_SPECIES
+	return _pick_from(pool, rng)
+
+
+static func _pick_from(pool: PackedStringArray, rng: RandomNumberGenerator) -> String:
 	if pool.is_empty():
 		return "slime"
 	if rng != null:
@@ -71,16 +99,26 @@ static func frame_size(species_id: String) -> Vector2:
 	return Vector2(float(entry.get("frame_w", 40)), float(entry.get("frame_h", 40)))
 
 
+static func _resolve_paths(species_id: String) -> Dictionary:
+	for kind in _SHEET_KINDS:
+		var sheet_path := "res://assets/sprites/%s/%s_%s_sheet.png" % [species_id, species_id, kind]
+		var frames_path := "res://assets/sprites/%s/%s_%s_frames.json" % [species_id, species_id, kind]
+		if ResourceLoader.exists(sheet_path) or FileAccess.file_exists(sheet_path):
+			return {"sheet": sheet_path, "frames": frames_path, "kind": kind}
+	return {}
+
+
 static func _ensure(species_id: String) -> bool:
 	if _cache.has(species_id):
 		return true
 	if _failed.has(species_id):
 		return false
-	var sheet_path := "res://assets/sprites/%s/%s_ground_sheet.png" % [species_id, species_id]
-	var frames_path := "res://assets/sprites/%s/%s_ground_frames.json" % [species_id, species_id]
-	if not ResourceLoader.exists(sheet_path) and not FileAccess.file_exists(sheet_path):
-		# Try Image load path before marking failed (pre-import).
-		pass
+	var paths := _resolve_paths(species_id)
+	if paths.is_empty():
+		_failed[species_id] = true
+		return false
+	var sheet_path: String = str(paths["sheet"])
+	var frames_path: String = str(paths["frames"])
 	var sheet: Texture2D = null
 	if ResourceLoader.exists(sheet_path):
 		sheet = load(sheet_path) as Texture2D

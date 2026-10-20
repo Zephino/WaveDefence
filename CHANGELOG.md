@@ -1,3 +1,15 @@
+## Version 00.02.82
+Date: 10/19/2026
+Time: 11:55 PM
+
+### Changes
+- Imported sprite batches **04–06**: dedicated **boss** art (colossus / iron maw / juggernaut / leviathan / overseer + plus) and **flier** art (bat, wasp, moth, … + plus)
+- EnemySprites loads `*_ground_*`, `*_flier_*`, and `*_boss_*` sheets; bosses and fliers pick from those pools
+- Mob sprites apply in **all map modes** (Classic / Random / Siege / Clash) — same Enemy spawn path
+
+### Reason
+Finish the remaining mob sprite packs so bosses and air units match the ground creeps in every mode, then ship the web build.
+
 ## Version 00.02.81
 Date: 10/19/2026
 Time: 11:25 PM
