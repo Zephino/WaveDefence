@@ -1,0 +1,35 @@
+{
+  "name": "antiair",
+  "class": "tower",
+  "frame_size": [
+    40,
+    40
+  ],
+  "columns": 4,
+  "rows": 2,
+  "sheet_size": [
+    160,
+    80
+  ],
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frame_count": 4,
+      "fps": 6,
+      "loop": true
+    },
+    "shoot": {
+      "row": 1,
+      "frame_count": 4,
+      "fps": 10,
+      "loop": false
+    }
+  },
+  "anchor": {
+    "x": 20,
+    "y": 20
+  },
+  "vfx_sheet": "tower_antiair_vfx_sheet.png",
+  "body_sheet": "tower_antiair_sheet.png",
+  "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+}

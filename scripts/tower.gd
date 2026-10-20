@@ -2,6 +2,7 @@ class_name Tower
 extends Node2D
 
 const _AttackFx := preload("res://scripts/attack_fx.gd")
+const _TowerSprites := preload("res://scripts/tower_sprites.gd")
 
 var tower_id: String = "gunner"
 var def: Dictionary = {}
@@ -21,6 +22,12 @@ var buff_fire_mult: float = 1.0
 var buff_time: float = 0.0
 ## Aim direction for elemental tower “front” / nozzle drawing.
 var _aim_dir: Vector2 = Vector2.RIGHT
+## Sprite anim state (visual only — combat ignores this).
+var _anim_name: String = "idle"
+var _anim_time: float = 0.0
+var _action_playing: bool = false
+## Wall fortress autotile bitmask (N=1 E=2 S=4 W=8).
+var wall_mask: int = 0
 const SELECT_COLOR := Color(0.35, 0.95, 0.45)
 const SELECT_COLOR_SOFT := Color(0.35, 0.95, 0.45, 0.35)
 
@@ -33,6 +40,50 @@ func setup(p_id: String, p_enemies: Node, p_projectiles: Node) -> void:
 	final_element = ""
 	gold_invested = 0
 	_refresh_combat_def()
+	_reset_idle_anim()
+	if TowerData.is_wall(tower_id):
+		play_visual_action("placement")
+	queue_redraw()
+
+
+## Play a one-shot visual action (shoot / activate / placement). Does not affect damage.
+func play_visual_action(preferred: String = "action") -> void:
+	if not _TowerSprites.has_tower(tower_id):
+		return
+	var large := tower_id == "vortex" and preferred != "placement"
+	var chosen := preferred
+	if _TowerSprites.anim_texture(tower_id, chosen, 0.0, large) == null:
+		chosen = "action"
+		large = tower_id == "vortex"
+	if _TowerSprites.anim_texture(tower_id, chosen, 0.0, large) == null:
+		return
+	_anim_name = chosen
+	_anim_time = 0.0
+	_action_playing = true
+	queue_redraw()
+
+
+func _reset_idle_anim() -> void:
+	_anim_name = "idle"
+	_anim_time = randf() * 0.4
+	_action_playing = false
+
+
+## Recompute 16-tile fortress connections. Any adjacent structure counts (keeps maze links).
+func refresh_wall_mask(grid: GameGrid) -> void:
+	if not TowerData.is_wall(tower_id) or grid == null:
+		return
+	var cell: Vector2i = get_meta("anchor_cell", grid.world_to_cell(position))
+	var mask := 0
+	if grid.get_tower_at(cell + Vector2i(0, -1)) != null:
+		mask |= 1
+	if grid.get_tower_at(cell + Vector2i(1, 0)) != null:
+		mask |= 2
+	if grid.get_tower_at(cell + Vector2i(0, 1)) != null:
+		mask |= 4
+	if grid.get_tower_at(cell + Vector2i(-1, 0)) != null:
+		mask |= 8
+	wall_mask = mask
 	queue_redraw()
 
 
@@ -81,7 +132,9 @@ func apply_final_element(element_id: String) -> bool:
 
 
 func _process(delta: float) -> void:
+	_tick_visual_anim(delta)
 	if bool(def.get("is_wall", false)):
+		queue_redraw()
 		return
 	if bool(def.get("is_command", false)):
 		_tick_ability_cooldowns(delta)
@@ -104,6 +157,20 @@ func _process(delta: float) -> void:
 			var rate := maxf(float(def.get("fire_rate", 1.0)) * maxf(buff_fire_mult, 0.05), 0.05)
 			fire_cooldown = 1.0 / rate
 	queue_redraw()
+
+
+func _tick_visual_anim(delta: float) -> void:
+	if not _TowerSprites.has_tower(tower_id):
+		return
+	var large := tower_id == "vortex"
+	_anim_time += delta
+	if not _action_playing:
+		return
+	if _TowerSprites.anim_loops(tower_id, _anim_name, large):
+		return
+	var dur: float = _TowerSprites.anim_duration(tower_id, _anim_name, large)
+	if dur <= 0.0 or _anim_time >= dur:
+		_reset_idle_anim()
 
 
 func _tick_orbit_aura() -> void:
@@ -134,6 +201,7 @@ func _tick_orbit_aura() -> void:
 		elif not _in_fire_range(e, range_px):
 			continue
 		if e.try_begin_orbit(center, radius, laps, immune):
+			play_visual_action("action")
 			# Ice final (or native freeze buff keys) can mild-slow while grabbing.
 			if def.has("bonus_slow_factor"):
 				e.apply_slow(
@@ -311,6 +379,7 @@ func _fire_at(target: Enemy) -> void:
 	# inherit the board offset as local coords and appear beside the tower.
 	projectile_container.add_child(proj)
 	proj.global_position = muzzle
+	play_visual_action("action")
 	if bool(def.get("melee", false)):
 		proj.impact_now()
 	if projectile_container != null:
@@ -330,16 +399,51 @@ func set_selected(value: bool) -> void:
 
 
 func _draw() -> void:
-	var color: Color = def.get("color", Color(0.6, 0.6, 0.6))
 	if bool(def.get("is_wall", false)):
+		_draw_wall()
+		return
+	if tower_id == "vortex":
+		_draw_vortex()
+		return
+	if not _draw_tower_sprite(false):
+		_draw_procedural_body()
+	_draw_tower_overlays(false)
+
+
+func _draw_wall() -> void:
+	var drawn := false
+	if _action_playing and _anim_name == "placement":
+		drawn = _draw_tower_sprite(false)
+	if not drawn:
+		var tile: Texture2D = _TowerSprites.wall_tile(wall_mask)
+		if tile != null:
+			var sz := Vector2(40, 40)
+			draw_texture_rect(tile, Rect2(-sz * 0.5, sz), false)
+			drawn = true
+	if not drawn:
+		var color: Color = def.get("color", Color(0.42, 0.4, 0.38))
 		draw_rect(Rect2(-18, -18, 36, 36), color)
 		draw_rect(Rect2(-18, -18, 36, 36), Color(0.15, 0.14, 0.12), false, 2.0)
-		draw_line(Vector2(-18, 0), Vector2(18, 0), Color(0.25, 0.23, 0.2), 1.5)
-		draw_line(Vector2(0, -18), Vector2(0, 0), Color(0.25, 0.23, 0.2), 1.5)
-		if selected:
-			draw_rect(Rect2(-20, -20, 40, 40), SELECT_COLOR, false, 2.0)
-			draw_arc(Vector2.ZERO, 24.0, 0.0, TAU, 40, SELECT_COLOR, 2.0)
-		return
+	if selected:
+		draw_rect(Rect2(-20, -20, 40, 40), SELECT_COLOR, false, 2.0)
+		draw_arc(Vector2.ZERO, 24.0, 0.0, TAU, 40, SELECT_COLOR, 2.0)
+
+
+func _draw_tower_sprite(large_vortex: bool) -> bool:
+	if not _TowerSprites.has_tower(tower_id):
+		return false
+	var tex: Texture2D = _TowerSprites.anim_texture(tower_id, _anim_name, _anim_time, large_vortex)
+	if tex == null and _anim_name != "idle":
+		tex = _TowerSprites.anim_texture(tower_id, "idle", _anim_time, large_vortex)
+	if tex == null:
+		return false
+	var sz: Vector2 = _TowerSprites.frame_size(tower_id, large_vortex)
+	draw_texture_rect(tex, Rect2(-sz * 0.5, sz), false)
+	return true
+
+
+func _draw_procedural_body() -> void:
+	var color: Color = def.get("color", Color(0.6, 0.6, 0.6))
 	draw_rect(Rect2(-14, -14, 28, 28), color)
 	draw_rect(Rect2(-14, -14, 28, 28), Color(0.05, 0.05, 0.05), false, 2.0)
 	if tower_id == "spike":
@@ -358,15 +462,15 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, 6.0, Color(0.9, 0.85, 0.35))
 		draw_line(Vector2(0, -11), Vector2(0, 11), Color(0.95, 0.9, 0.55), 2.0)
 		draw_line(Vector2(-11, 0), Vector2(11, 0), Color(0.95, 0.9, 0.55), 2.0)
-	elif tower_id == "vortex":
-		_draw_vortex()
-		return
 	elif tower_id == "burn" or tower_id == "freeze":
 		var nozzle := _aim_dir * 12.0
 		var side := Vector2(-_aim_dir.y, _aim_dir.x) * 3.5
 		var tip_color := Color(1.0, 0.55, 0.2) if tower_id == "burn" else Color(0.7, 0.9, 1.0)
 		draw_line(-side, nozzle, tip_color, 2.0)
 		draw_line(side, nozzle, tip_color, 2.0)
+
+
+func _draw_tower_overlays(vortex_mode: bool) -> void:
 	# Upgrade pips along the bottom edge (Command / walls skip).
 	if not bool(def.get("is_command", false)):
 		for i in TowerData.MAX_STAT_UPGRADES:
@@ -378,20 +482,23 @@ func _draw() -> void:
 		var accent := TowerData.final_element_color(final_element)
 		draw_circle(Vector2(11, -11), 3.5, accent)
 		draw_circle(Vector2(11, -11), 3.5, Color(0.05, 0.05, 0.05), false, 1.0)
-	if selected:
-		draw_arc(Vector2.ZERO, float(def.get("range", 100.0)), 0.0, TAU, 48, SELECT_COLOR_SOFT, 1.5)
-		draw_rect(Rect2(-16, -16, 32, 32), SELECT_COLOR, false, 2.0)
-		draw_arc(Vector2.ZERO, 20.0, 0.0, TAU, 40, SELECT_COLOR, 2.0)
+	if not selected:
+		return
+	var range_px := float(def.get("range", 100.0))
+	draw_arc(Vector2.ZERO, range_px, 0.0, TAU, 48, SELECT_COLOR_SOFT, 1.5)
+	draw_rect(Rect2(-16, -16, 32, 32), SELECT_COLOR, false, 2.0)
+	draw_arc(Vector2.ZERO, 20.0, 0.0, TAU, 40, SELECT_COLOR, 2.0)
+	if vortex_mode:
+		pass
 
 
-## One-cell tower body; faint 3×3 lockdown tint + orbit path ring.
+## 120×120 vortex art centered on the anchor; zone tint + orbit ring keep existing rules.
 func _draw_vortex() -> void:
 	var color: Color = def.get("color", Color(0.55, 0.35, 0.85))
 	var ts := 40.0
 	if get_parent() is GameGrid:
 		ts = float((get_parent() as GameGrid).tile_px())
 	var zone_half := ts * 1.5
-	# Locked zone (path-block / no build) — soft tint only, not a giant tower body.
 	draw_rect(
 		Rect2(-zone_half, -zone_half, zone_half * 2.0, zone_half * 2.0),
 		Color(color.r, color.g, color.b, 0.18)
@@ -402,29 +509,21 @@ func _draw_vortex() -> void:
 		false,
 		1.5
 	)
-	# Same physical size as other towers (1 slot).
-	draw_rect(Rect2(-14, -14, 28, 28), color)
-	draw_rect(Rect2(-14, -14, 28, 28), Color(0.05, 0.05, 0.05), false, 2.0)
-	draw_arc(Vector2.ZERO, 10.0, 0.2, TAU * 0.85, 24, Color(0.75, 0.55, 1.0), 2.2)
-	draw_arc(Vector2.ZERO, 6.0, TAU * 0.35, TAU * 1.1, 20, Color(0.45, 0.85, 0.95), 1.8)
-	draw_circle(Vector2.ZERO, 2.5, Color(0.9, 0.75, 1.0))
+	if not _draw_tower_sprite(true):
+		draw_rect(Rect2(-14, -14, 28, 28), color)
+		draw_rect(Rect2(-14, -14, 28, 28), Color(0.05, 0.05, 0.05), false, 2.0)
+		draw_arc(Vector2.ZERO, 10.0, 0.2, TAU * 0.85, 24, Color(0.75, 0.55, 1.0), 2.2)
+		draw_arc(Vector2.ZERO, 6.0, TAU * 0.35, TAU * 1.1, 20, Color(0.45, 0.85, 0.95), 1.8)
+		draw_circle(Vector2.ZERO, 2.5, Color(0.9, 0.75, 1.0))
 	var orbit_r := float(def.get("orbit_radius", 88.0))
 	draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, Color(0.65, 0.45, 0.95, 0.55), 2.0)
 	draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, Color(0.85, 0.7, 1.0, 0.9), 1.2)
-	for i in TowerData.MAX_STAT_UPGRADES:
-		var pip_color := Color(0.95, 0.85, 0.35) if i < upgrade_level else Color(0.2, 0.2, 0.22)
-		draw_rect(Rect2(-12 + i * 9, 10, 7, 3), pip_color)
-	if final_element != "":
-		var accent := TowerData.final_element_color(final_element)
-		draw_circle(Vector2(11, -11), 3.5, accent)
-		draw_circle(Vector2(11, -11), 3.5, Color(0.05, 0.05, 0.05), false, 1.0)
+	_draw_tower_overlays(true)
 	if selected:
-		draw_arc(Vector2.ZERO, float(def.get("range", 120.0)), 0.0, TAU, 48, SELECT_COLOR_SOFT, 1.5)
 		draw_rect(
 			Rect2(-zone_half - 2.0, -zone_half - 2.0, zone_half * 2.0 + 4.0, zone_half * 2.0 + 4.0),
 			SELECT_COLOR,
 			false,
 			2.0
 		)
-		draw_rect(Rect2(-16, -16, 32, 32), SELECT_COLOR, false, 2.0)
 		draw_arc(Vector2.ZERO, orbit_r, 0.0, TAU, 64, SELECT_COLOR, 2.0)

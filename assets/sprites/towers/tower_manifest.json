@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "generated": "2026-10-20",
+  "towers": [
+    {
+      "name": "wall",
+      "class": "wall",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frames": 4,
+          "fps": 4,
+          "loop": true
+        },
+        "placement": {
+          "row": 1,
+          "frames": 4,
+          "fps": 6,
+          "loop": false
+        }
+      },
+      "autotile": {
+        "file": "tower_wall_autotile_16.png",
+        "columns": 4,
+        "rows": 4,
+        "bitmask": {
+          "N": 1,
+          "E": 2,
+          "S": 4,
+          "W": 8
+        },
+        "tile_index_formula": "index = (N?1:0) | (E?2:0) | (S?4:0) | (W?8:0)",
+        "tile_rect_formula": "(index % 4) * 40, (index // 4) * 40, 40, 40"
+      },
+      "asset_note": "Keep autotile under combat tower bases; wall is not a gun."
+    },
+    {
+      "name": "gunner",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "shoot": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_gunner_vfx_sheet.png",
+      "body_sheet": "tower_gunner_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "rapid",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "shoot": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_rapid_vfx_sheet.png",
+      "body_sheet": "tower_rapid_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "cannon",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "shoot": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_cannon_vfx_sheet.png",
+      "body_sheet": "tower_cannon_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "burn",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "cast": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_burn_vfx_sheet.png",
+      "body_sheet": "tower_burn_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "freeze",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "cast": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_freeze_vfx_sheet.png",
+      "body_sheet": "tower_freeze_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "poison",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "cast": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_poison_vfx_sheet.png",
+      "body_sheet": "tower_poison_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "lightning",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "cast": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_lightning_vfx_sheet.png",
+      "body_sheet": "tower_lightning_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "spike",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "trigger": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_spike_vfx_sheet.png",
+      "body_sheet": "tower_spike_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "antiair",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "shoot": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_antiair_vfx_sheet.png",
+      "body_sheet": "tower_antiair_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "gatling",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "shoot": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_gatling_vfx_sheet.png",
+      "body_sheet": "tower_gatling_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    },
+    {
+      "name": "vortex",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "activate": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_vortex_vfx_sheet.png",
+      "body_sheet": "tower_vortex_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system.",
+      "vortex_3x3": {
+        "frame_width": 120,
+        "frame_height": 120,
+        "sheet_size": [
+          480,
+          240
+        ],
+        "animation_rows": {
+          "idle": 0,
+          "activate": 1
+        }
+      }
+    },
+    {
+      "name": "command",
+      "class": "tower",
+      "frame_size": [
+        40,
+        40
+      ],
+      "columns": 4,
+      "rows": 2,
+      "sheet_size": [
+        160,
+        80
+      ],
+      "animations": {
+        "idle": {
+          "row": 0,
+          "frame_count": 4,
+          "fps": 6,
+          "loop": true
+        },
+        "signal": {
+          "row": 1,
+          "frame_count": 4,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "anchor": {
+        "x": 20,
+        "y": 20
+      },
+      "vfx_sheet": "tower_command_vfx_sheet.png",
+      "body_sheet": "tower_command_sheet.png",
+      "asset_notes": "Flat gameplay 40px art. Fire action on actual shot/cast, not continuously; keep original projectile system."
+    }
+  ],
+  "source_reference_note": "Most towers derive from the conversation's approved hi-res artwork. Gatling, Vortex, Command and wall-connect tiles drawn with Pillow."
+}

@@ -1,0 +1,146 @@
+{
+  "sheets": [
+    {
+      "file": "tower_wall_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 6,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_gunner_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 31,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_rapid_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 31,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_cannon_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 30,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_burn_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 28,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_freeze_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 27,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_poison_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 30,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_lightning_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 29,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_spike_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 29,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_antiair_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 27,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_gatling_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 6,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_vortex_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 5,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_command_sheet.png",
+      "size": [
+        160,
+        80
+      ],
+      "opaque_colors": 7,
+      "binary_alpha": true,
+      "blank_frames": []
+    },
+    {
+      "file": "tower_vortex_3x3_sheet.png",
+      "size": [
+        480,
+        240
+      ],
+      "opaque_colors": 5,
+      "binary_alpha": true,
+      "blank_frames": []
+    }
+  ],
+  "check_failures": [],
+  "all_pass": true
+}

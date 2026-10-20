@@ -1,0 +1,42 @@
+{
+  "name": "wall",
+  "class": "wall",
+  "frame_size": [
+    40,
+    40
+  ],
+  "columns": 4,
+  "rows": 2,
+  "sheet_size": [
+    160,
+    80
+  ],
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frames": 4,
+      "fps": 4,
+      "loop": true
+    },
+    "placement": {
+      "row": 1,
+      "frames": 4,
+      "fps": 6,
+      "loop": false
+    }
+  },
+  "autotile": {
+    "file": "tower_wall_autotile_16.png",
+    "columns": 4,
+    "rows": 4,
+    "bitmask": {
+      "N": 1,
+      "E": 2,
+      "S": 4,
+      "W": 8
+    },
+    "tile_index_formula": "index = (N?1:0) | (E?2:0) | (S?4:0) | (W?8:0)",
+    "tile_rect_formula": "(index % 4) * 40, (index // 4) * 40, 40, 40"
+  },
+  "asset_note": "Keep autotile under combat tower bases; wall is not a gun."
+}

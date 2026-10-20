@@ -958,6 +958,7 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 		hud.set_status("Not enough gold.")
 		return
 	tower.start_ability_cooldown(ability_id, CommandAbilities.cooldown(ability_id))
+	tower.play_visual_action("action")
 	game_state.record_spend(cost)
 	if ability_id == "supplydrop":
 		game_state.supply_drop_used = true

@@ -723,6 +723,7 @@ func _use_command_abilities(p: ClashPlayerState, during_wave: bool) -> void:
 		if not p.spend_gold(cost):
 			break
 		cmd.start_ability_cooldown(ability_id, CommandAbilities.cooldown(ability_id))
+		cmd.play_visual_action("action")
 		casts += 1
 
 

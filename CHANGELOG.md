@@ -1,3 +1,16 @@
+## Version 00.02.83
+Date: 10/20/2026
+Time: 10:17 AM
+
+### Changes
+- Imported temporary **animated tower sprites** under `assets/sprites/towers/` (all 13 towers + wall autotile + Vortex 3×3)
+- Added reusable **TowerSprites** loader: idle/action from `*_frames.json`, wall 16-tile fortress bitmask, Vortex 120×120 sheet
+- Towers play action anims on real events (shot, orbit pull, Command cast, wall placement); combat math unchanged
+- Archived source ZIP in `docs/archive/`; added `docs/TOWER_SPRITES.md` replacement guide and `tower_sprite_validate.gd`
+
+### Reason
+Build a permanent, swappable tower animation architecture now; Claude’s final art can drop in with the same filenames and layout.
+
 ## Version 00.02.82
 Date: 10/19/2026
 Time: 11:55 PM

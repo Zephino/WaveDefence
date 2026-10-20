@@ -600,6 +600,7 @@ func place_tower(cell: Vector2i, tower: Node) -> void:
 		tower.set_meta("anchor_cell", cell)
 	add_child(tower)
 	tower_placed.emit(cell, tower)
+	_refresh_wall_autotiles_around(cell, footprint)
 	queue_redraw()
 
 
@@ -615,8 +616,27 @@ func remove_tower_at(cell: Vector2i, notify: bool = true) -> Node:
 		towers.erase(c)
 	if notify:
 		tower_removed.emit(cell)
+	for c in to_clear:
+		_refresh_wall_autotiles_around(c, 1)
 	queue_redraw()
 	return tower
+
+
+## Update 16-tile fortress bitmasks for walls near a changed cell.
+func _refresh_wall_autotiles_around(cell: Vector2i, footprint: int = 1) -> void:
+	var seen: Dictionary = {}
+	var dirs: Array[Vector2i] = [
+		Vector2i.ZERO, Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)
+	]
+	for c in TowerData.footprint_cells(cell, maxi(footprint, 1)):
+		for d in dirs:
+			var n: Vector2i = c + d
+			if seen.has(n):
+				continue
+			seen[n] = true
+			var t := get_tower_at(n) as Tower
+			if t != null and is_instance_valid(t) and TowerData.is_wall(t.tower_id):
+				t.refresh_wall_mask(self)
 
 
 func get_tower_at(cell: Vector2i) -> Node:

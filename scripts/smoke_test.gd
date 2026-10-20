@@ -129,6 +129,22 @@ func _run() -> void:
 		errors.append("bat flier sheet should load from assets/sprites")
 	if not EnemySprites.has_species("colossus_v2"):
 		errors.append("colossus boss sheet should load from assets/sprites")
+	# Tower sprite system (data-driven sheets under assets/sprites/towers/).
+	var _TS = preload("res://scripts/tower_sprites.gd")
+	for tid in _TS.tower_ids():
+		if not _TS.has_tower(str(tid)):
+			errors.append("tower sprite missing for %s" % tid)
+	if _TS.anim_texture("gunner", "idle", 0.0) == null:
+		errors.append("gunner idle frame should load")
+	if _TS.anim_texture("gunner", "action", 0.0) == null:
+		errors.append("gunner action/shoot frame should load")
+	if _TS.wall_tile(0) == null:
+		errors.append("wall autotile tile 0 should load")
+	if _TS.anim_texture("vortex", "idle", 0.0, true) == null:
+		errors.append("vortex 3x3 idle frame should load")
+	var tower_val: PackedStringArray = _TS.validate_assets()
+	if not tower_val.is_empty():
+		errors.append("tower sprite validate: %s" % tower_val[0])
 	var boss_sp := EnemySprites.pick_species(true, false, false, false, 30)
 	if not EnemySprites.has_species(boss_sp):
 		errors.append("boss sprite pick should resolve to a loadable species (%s)" % boss_sp)
