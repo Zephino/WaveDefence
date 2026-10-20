@@ -26,6 +26,9 @@ const KEY_TOWERS_SHOP_POS_X := "towers_shop_pos_x"
 const KEY_TOWERS_SHOP_POS_Y := "towers_shop_pos_y"
 const KEY_SEND_SHOP_POS_X := "send_shop_pos_x"
 const KEY_SEND_SHOP_POS_Y := "send_shop_pos_y"
+const KEY_LAUNCHER_POS_X := "hud_launcher_pos_x"
+const KEY_LAUNCHER_POS_Y := "hud_launcher_pos_y"
+const KEY_LAUNCHER_COLLAPSED := "hud_launcher_collapsed"
 
 static var _loaded: bool = false
 static var large_controls: bool = false
@@ -48,6 +51,8 @@ static var send_shop_pinned: bool = false
 ## Floating shop positions; x < 0 means “use default layout”.
 static var towers_shop_pos: Vector2 = Vector2(-1, -1)
 static var send_shop_pos: Vector2 = Vector2(-1, -1)
+static var launcher_pos: Vector2 = Vector2(-1, -1)
+static var launcher_collapsed: bool = false
 
 
 static func ensure_loaded() -> void:
@@ -84,6 +89,11 @@ static func ensure_loaded() -> void:
 		float(cfg.get_value(SECTION, KEY_SEND_SHOP_POS_X, -1.0)),
 		float(cfg.get_value(SECTION, KEY_SEND_SHOP_POS_Y, -1.0))
 	)
+	launcher_pos = Vector2(
+		float(cfg.get_value(SECTION, KEY_LAUNCHER_POS_X, -1.0)),
+		float(cfg.get_value(SECTION, KEY_LAUNCHER_POS_Y, -1.0))
+	)
+	launcher_collapsed = bool(cfg.get_value(SECTION, KEY_LAUNCHER_COLLAPSED, false))
 	build_speed_mult = clampf(build_speed_mult, 1.0, 2.5)
 
 
@@ -107,6 +117,8 @@ static func _apply_defaults() -> void:
 	send_shop_pinned = false
 	towers_shop_pos = Vector2(-1, -1)
 	send_shop_pos = Vector2(-1, -1)
+	launcher_pos = Vector2(-1, -1)
+	launcher_collapsed = false
 
 
 static func _save_prefs() -> void:
@@ -133,6 +145,9 @@ static func _save_prefs() -> void:
 	cfg.set_value(SECTION, KEY_TOWERS_SHOP_POS_Y, towers_shop_pos.y)
 	cfg.set_value(SECTION, KEY_SEND_SHOP_POS_X, send_shop_pos.x)
 	cfg.set_value(SECTION, KEY_SEND_SHOP_POS_Y, send_shop_pos.y)
+	cfg.set_value(SECTION, KEY_LAUNCHER_POS_X, launcher_pos.x)
+	cfg.set_value(SECTION, KEY_LAUNCHER_POS_Y, launcher_pos.y)
+	cfg.set_value(SECTION, KEY_LAUNCHER_COLLAPSED, launcher_collapsed)
 	cfg.save(SAVE_PATH)
 
 
@@ -328,3 +343,25 @@ static func set_send_shop_pos(pos: Vector2) -> void:
 static func get_send_shop_pos() -> Vector2:
 	ensure_loaded()
 	return send_shop_pos
+
+
+static func set_launcher_pos(pos: Vector2) -> void:
+	ensure_loaded()
+	launcher_pos = pos
+	_save_prefs()
+
+
+static func get_launcher_pos() -> Vector2:
+	ensure_loaded()
+	return launcher_pos
+
+
+static func set_launcher_collapsed(on: bool) -> void:
+	ensure_loaded()
+	launcher_collapsed = on
+	_save_prefs()
+
+
+static func is_launcher_collapsed() -> bool:
+	ensure_loaded()
+	return launcher_collapsed

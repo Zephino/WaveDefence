@@ -49,6 +49,12 @@ var _towers_drag_bar: Control
 var _send_drag_bar: Control
 var _actions_drag_bar: Control
 var _launcher_shell: PanelContainer
+var _launcher_drag_bar: Control
+var _launcher_body: VBoxContainer
+var _launcher_hide_btn: Button
+var _launcher_title: Label
+var _launcher_float_pos: Vector2 = Vector2(-1, -1)
+var _launcher_collapsed: bool = false
 
 var gold_label: Label
 var lives_label: Label
@@ -178,6 +184,8 @@ func _build_ui(version_text: String) -> void:
 	_send_pinned = UserSettings.is_send_shop_pinned()
 	_towers_float_pos = UserSettings.get_towers_shop_pos()
 	_send_float_pos = UserSettings.get_send_shop_pos()
+	_launcher_float_pos = UserSettings.get_launcher_pos()
+	_launcher_collapsed = UserSettings.is_launcher_collapsed()
 	_towers_open = false
 	_send_open = false
 	_actions_open = false
@@ -188,6 +196,7 @@ func _build_ui(version_text: String) -> void:
 
 	_build_towers_shop_panel(root)
 	_build_send_shop_panel(root)
+	_apply_launcher_layout()
 	_apply_towers_shop_layout()
 	_apply_send_shop_layout()
 	_apply_actions_layout()
@@ -628,11 +637,11 @@ func _make_actions_panel(root: Control) -> VBoxContainer:
 
 
 ## Compact launcher under gold/lives: Towers / Send / Actions + always-visible Start/Skip.
+## Drag the title bar to move; Hide collapses shop buttons (Start/Skip stay).
 func _build_launcher_panel(root: Control) -> void:
 	_launcher_shell = PanelContainer.new()
 	_launcher_shell.z_index = 28
 	_launcher_shell.mouse_filter = Control.MOUSE_FILTER_STOP
-	_launcher_shell.position = Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
 	_launcher_shell.add_theme_stylebox_override("panel", _popup_panel_style())
 	root.add_child(_launcher_shell)
 
@@ -640,9 +649,31 @@ func _build_launcher_panel(root: Control) -> void:
 	column.add_theme_constant_override("separation", 4)
 	_launcher_shell.add_child(column)
 
+	_launcher_drag_bar = HBoxContainer.new()
+	_launcher_drag_bar.add_theme_constant_override("separation", 6)
+	_launcher_drag_bar.gui_input.connect(_on_launcher_header_gui_input)
+	column.add_child(_launcher_drag_bar)
+
+	_launcher_title = Label.new()
+	_launcher_title.text = "Controls"
+	_launcher_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_launcher_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_launcher_title.tooltip_text = "Drag to move"
+	_launcher_drag_bar.add_child(_launcher_title)
+
+	_launcher_hide_btn = Button.new()
+	_launcher_hide_btn.focus_mode = Control.FOCUS_NONE
+	_launcher_hide_btn.custom_minimum_size = Vector2(44, GameLayout.button_height(24.0))
+	_launcher_hide_btn.pressed.connect(_toggle_launcher_collapsed)
+	_launcher_drag_bar.add_child(_launcher_hide_btn)
+
+	_launcher_body = VBoxContainer.new()
+	_launcher_body.add_theme_constant_override("separation", 4)
+	column.add_child(_launcher_body)
+
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 4)
-	column.add_child(btn_row)
+	_launcher_body.add_child(btn_row)
 
 	var btn_h := GameLayout.button_height(26.0)
 	_towers_toggle = Button.new()
@@ -673,6 +704,7 @@ func _build_launcher_panel(root: Control) -> void:
 	_actions_toggle.pressed.connect(_toggle_actions_popup)
 	btn_row.add_child(_actions_toggle)
 
+	# Timer + Start/Skip stay outside the collapsible body so rounds remain one tap away.
 	timer_label = Label.new()
 	timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	timer_label.text = ""
@@ -894,7 +926,34 @@ func _refresh_send_pin_button() -> void:
 func _launcher_bottom_y() -> float:
 	if _launcher_shell == null:
 		return 34.0
-	return _launcher_shell.position.y + maxf(_launcher_shell.size.y, 88.0) + 4.0
+	return _launcher_shell.position.y + maxf(_launcher_shell.size.y, 48.0) + 4.0
+
+
+func _toggle_launcher_collapsed() -> void:
+	_launcher_collapsed = not _launcher_collapsed
+	UserSettings.set_launcher_collapsed(_launcher_collapsed)
+	_apply_launcher_layout()
+
+
+func _apply_launcher_layout() -> void:
+	if _launcher_shell == null:
+		return
+	var default_pos := Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
+	if _launcher_float_pos.x >= 0.0:
+		_launcher_shell.position = _clamp_shop_pos(_launcher_float_pos, _launcher_shell.size)
+	else:
+		_launcher_shell.position = default_pos
+	if _launcher_body:
+		_launcher_body.visible = not _launcher_collapsed
+	if _launcher_title:
+		_launcher_title.text = "Controls" if not _launcher_collapsed else "Controls ▸"
+	if _launcher_hide_btn:
+		_launcher_hide_btn.text = "Hide" if not _launcher_collapsed else "Show"
+		_launcher_hide_btn.tooltip_text = (
+			"Collapse Towers / Send / Actions (timer + Start Round stay)"
+			if not _launcher_collapsed
+			else "Expand shop buttons"
+		)
 
 
 func _apply_towers_shop_layout() -> void:
@@ -1007,6 +1066,10 @@ func _on_actions_header_gui_input(event: InputEvent) -> void:
 	_handle_shop_drag(event, "actions")
 
 
+func _on_launcher_header_gui_input(event: InputEvent) -> void:
+	_handle_shop_drag(event, "launcher")
+
+
 func _handle_shop_drag(event: InputEvent, which: String) -> void:
 	var pinned := false
 	if which == "towers":
@@ -1021,6 +1084,8 @@ func _handle_shop_drag(event: InputEvent, which: String) -> void:
 			panel = _send_panel
 		"actions":
 			panel = _actions_shell
+		"launcher":
+			panel = _launcher_shell
 	if pinned or panel == null or not panel.visible:
 		return
 	if event is InputEventMouseButton:
@@ -1036,6 +1101,8 @@ func _handle_shop_drag(event: InputEvent, which: String) -> void:
 				bar = _send_drag_bar
 			"actions":
 				bar = _actions_drag_bar
+			"launcher":
+				bar = _launcher_drag_bar
 		if bar != null:
 			for child in bar.get_children():
 				if child is BaseButton:
@@ -1057,6 +1124,8 @@ func _input(event: InputEvent) -> void:
 			panel = _send_panel
 		"actions":
 			panel = _actions_shell
+		"launcher":
+			panel = _launcher_shell
 	if panel == null:
 		_drag_shop = ""
 		return
@@ -1071,6 +1140,8 @@ func _input(event: InputEvent) -> void:
 				_send_float_pos = next
 			"actions":
 				_actions_float_pos = next
+			"launcher":
+				_launcher_float_pos = next
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -1085,6 +1156,8 @@ func _persist_shop_float_pos(which: String) -> void:
 		UserSettings.set_towers_shop_pos(_towers_float_pos)
 	elif which == "send":
 		UserSettings.set_send_shop_pos(_send_float_pos)
+	elif which == "launcher":
+		UserSettings.set_launcher_pos(_launcher_float_pos)
 
 
 func _unhandled_input(event: InputEvent) -> void:

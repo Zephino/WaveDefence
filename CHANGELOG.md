@@ -1,3 +1,14 @@
+## Version 00.02.88
+Date: 10/20/2026
+Time: 12:29 PM
+
+### Changes
+- Controls launcher is draggable (title bar) and can **Hide** / **Show**; position and collapsed state are saved
+- When hidden, Towers / Send / Actions collapse; timer and Start Round / Skip stay available
+
+### Reason
+Let players park or tuck the new Controls panel so it stays out of the way without losing round controls.
+
 ## Version 00.02.87
 Date: 10/20/2026
 Time: 12:20 PM
