@@ -145,6 +145,18 @@ func _run() -> void:
 	var tower_val: PackedStringArray = _TS.validate_assets()
 	if not tower_val.is_empty():
 		errors.append("tower sprite validate: %s" % tower_val[0])
+	var _ES = preload("res://scripts/effect_sprites.gd")
+	if not _ES.has_effect("fx_tracer"):
+		errors.append("fx_tracer effect sheet should load")
+	elif _ES.anim_texture("fx_tracer", 0.0) == null:
+		errors.append("fx_tracer frame 0 should exist")
+	if _ES.projectile_for_tower("gunner") != "fx_tracer":
+		errors.append("gunner should map to fx_tracer projectile")
+	if _ES.impact_for_tower("cannon") != "fx_explosion":
+		errors.append("cannon should map to fx_explosion impact")
+	var fx_val: PackedStringArray = _ES.validate_assets()
+	if not fx_val.is_empty():
+		errors.append("effect sprite validate: %s" % fx_val[0])
 	var boss_sp := EnemySprites.pick_species(true, false, false, false, 30)
 	if not EnemySprites.has_species(boss_sp):
 		errors.append("boss sprite pick should resolve to a loadable species (%s)" % boss_sp)

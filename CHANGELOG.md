@@ -1,3 +1,15 @@
+## Version 00.02.84
+Date: 10/20/2026
+Time: 11:12 AM
+
+### Changes
+- Replaced updated **tower v2** sheets (antiair, burn, cannon, command, freeze, gatling, poison, vortex icon/sheet)
+- Added data-driven **attack effects** under `assets/sprites/effects/` (tracers, shells, fireball, ice, poison, lightning bolts, muzzle, impacts)
+- Projectiles / muzzle / impacts / lightning hops use sheets from `effects_manifest.json`; combat math unchanged
+
+### Reason
+Drop in Claude’s improved tower art and the matching shot/impact VFX without redesigning gameplay.
+
 ## Version 00.02.83
 Date: 10/20/2026
 Time: 10:17 AM

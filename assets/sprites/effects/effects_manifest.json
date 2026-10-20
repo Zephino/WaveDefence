@@ -1,0 +1,334 @@
+{
+  "version": 1,
+  "style": "WaveDefence showcase: saturated glow, cartoon sci-fi",
+  "effects": [
+    {
+      "name": "fx_tracer",
+      "sheet": "fx_tracer_sheet.png",
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 16,
+      "loop": true,
+      "pivot": [
+        8,
+        8
+      ],
+      "used_by": [
+        "gunner",
+        "rapid",
+        "gatling"
+      ],
+      "note": "projectile, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_flak_shell",
+      "sheet": "fx_flak_shell_sheet.png",
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 16,
+      "loop": true,
+      "pivot": [
+        8,
+        8
+      ],
+      "used_by": [
+        "antiair"
+      ],
+      "note": "projectile, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_cannon_shell",
+      "sheet": "fx_cannon_shell_sheet.png",
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 12,
+      "loop": true,
+      "pivot": [
+        10,
+        8
+      ],
+      "used_by": [
+        "cannon"
+      ],
+      "note": "projectile, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_fireball",
+      "sheet": "fx_fireball_sheet.png",
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 12,
+      "loop": true,
+      "pivot": [
+        16,
+        12
+      ],
+      "used_by": [
+        "burn"
+      ],
+      "note": "projectile, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_ice_shard",
+      "sheet": "fx_ice_shard_sheet.png",
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 10,
+      "loop": true,
+      "pivot": [
+        14,
+        12
+      ],
+      "used_by": [
+        "freeze"
+      ],
+      "note": "spinning snowflake projectile; sparkle trail on the left, so rotate to travel direction",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_poison_glob",
+      "sheet": "fx_poison_glob_sheet.png",
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 10,
+      "loop": true,
+      "pivot": [
+        15,
+        12
+      ],
+      "used_by": [
+        "poison"
+      ],
+      "note": "projectile, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_lightning_bolt",
+      "sheet": "fx_lightning_bolt_sheet.png",
+      "frame_width": 64,
+      "frame_height": 16,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 20,
+      "loop": true,
+      "pivot": [
+        0,
+        8
+      ],
+      "used_by": [
+        "lightning"
+      ],
+      "note": "tiling beam segment; repeat along chain",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_muzzle_flash",
+      "sheet": "fx_muzzle_flash_sheet.png",
+      "frame_width": 20,
+      "frame_height": 20,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 24,
+      "loop": false,
+      "pivot": [
+        5,
+        10
+      ],
+      "used_by": [
+        "gunner",
+        "rapid",
+        "gatling",
+        "cannon",
+        "antiair"
+      ],
+      "note": "one-shot at muzzle, faces right",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_hit_spark",
+      "sheet": "fx_hit_spark_sheet.png",
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 5,
+      "columns": 5,
+      "rows": 1,
+      "fps": 20,
+      "loop": false,
+      "pivot": [
+        12,
+        12
+      ],
+      "used_by": [
+        "gunner",
+        "rapid",
+        "gatling"
+      ],
+      "note": "impact",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_explosion",
+      "sheet": "fx_explosion_sheet.png",
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 7,
+      "columns": 7,
+      "rows": 1,
+      "fps": 16,
+      "loop": false,
+      "pivot": [
+        24,
+        24
+      ],
+      "used_by": [
+        "cannon"
+      ],
+      "note": "splash impact; scale to splash radius",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_fire_burst",
+      "sheet": "fx_fire_burst_sheet.png",
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 6,
+      "columns": 6,
+      "rows": 1,
+      "fps": 14,
+      "loop": false,
+      "pivot": [
+        16,
+        16
+      ],
+      "used_by": [
+        "burn"
+      ],
+      "note": "impact",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_frost_burst",
+      "sheet": "fx_frost_burst_sheet.png",
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 6,
+      "columns": 6,
+      "rows": 1,
+      "fps": 14,
+      "loop": false,
+      "pivot": [
+        16,
+        16
+      ],
+      "used_by": [
+        "freeze"
+      ],
+      "note": "impact",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_poison_cloud",
+      "sheet": "fx_poison_cloud_sheet.png",
+      "frame_width": 40,
+      "frame_height": 40,
+      "frames": 6,
+      "columns": 6,
+      "rows": 1,
+      "fps": 10,
+      "loop": false,
+      "pivot": [
+        20,
+        20
+      ],
+      "used_by": [
+        "poison"
+      ],
+      "note": "splash impact",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_lightning_spark",
+      "sheet": "fx_lightning_spark_sheet.png",
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 5,
+      "columns": 5,
+      "rows": 1,
+      "fps": 20,
+      "loop": false,
+      "pivot": [
+        12,
+        12
+      ],
+      "used_by": [
+        "lightning"
+      ],
+      "note": "impact at each chain hop",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_flak_burst",
+      "sheet": "fx_flak_burst_sheet.png",
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 6,
+      "columns": 6,
+      "rows": 1,
+      "fps": 16,
+      "loop": false,
+      "pivot": [
+        16,
+        16
+      ],
+      "used_by": [
+        "antiair"
+      ],
+      "note": "air-burst impact",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_spike_burst",
+      "sheet": "fx_spike_burst_sheet.png",
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 5,
+      "columns": 5,
+      "rows": 1,
+      "fps": 14,
+      "loop": false,
+      "pivot": [
+        16,
+        22
+      ],
+      "used_by": [
+        "spike"
+      ],
+      "note": "melee strike at enemy",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ extends Node2D
 
 const _AttackFx := preload("res://scripts/attack_fx.gd")
 const _TowerSprites := preload("res://scripts/tower_sprites.gd")
+const _EffectSprites := preload("res://scripts/effect_sprites.gd")
 
 var tower_id: String = "gunner"
 var def: Dictionary = {}
@@ -373,16 +374,19 @@ func _fire_at(target: Enemy) -> void:
 		enemy_container,
 		def.get("color", Color.WHITE),
 		float(def.get("projectile_speed", 320.0)),
-		_resolved_lane()
+		_resolved_lane(),
+		tower_id
 	)
 	# Must be in the projectile layer before setting global_position, or shots
 	# inherit the board offset as local coords and appear beside the tower.
 	projectile_container.add_child(proj)
 	proj.global_position = muzzle
 	play_visual_action("action")
+	_spawn_muzzle_flash(muzzle, aim)
 	if bool(def.get("melee", false)):
 		proj.impact_now()
-	if projectile_container != null:
+	# Legacy procedural trails only when sheet projectiles are unavailable.
+	elif _EffectSprites.projectile_for_tower(tower_id).is_empty():
 		_AttackFx.try_spawn(
 			effect,
 			muzzle,
@@ -391,6 +395,17 @@ func _fire_at(target: Enemy) -> void:
 			projectile_container,
 			target
 		)
+
+
+func _spawn_muzzle_flash(muzzle_global: Vector2, aim: Vector2) -> void:
+	if projectile_container == null:
+		return
+	if not _EffectSprites.uses_muzzle(tower_id):
+		return
+	var angle := 0.0
+	if aim.length_squared() > 0.001:
+		angle = aim.angle()
+	_EffectSprites.spawn_flash("fx_muzzle_flash", muzzle_global, projectile_container, angle, 1.0)
 
 
 func set_selected(value: bool) -> void:

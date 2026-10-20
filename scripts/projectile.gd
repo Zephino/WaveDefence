@@ -1,6 +1,8 @@
 class_name Projectile
 extends Node2D
 
+const _EffectSprites := preload("res://scripts/effect_sprites.gd")
+
 var target: Enemy
 var speed: float = 320.0
 var damage: float = 1.0
@@ -12,6 +14,11 @@ var color: Color = Color.WHITE
 var alive: bool = true
 ## Clash lane this shot can hit (-1 = any).
 var lane_id: int = -1
+## Visual-only tower id for projectile / impact sheets.
+var tower_id: String = ""
+var _anim_time: float = 0.0
+var _flight_fx: String = ""
+var _impact_fx: String = ""
 
 
 func setup(
@@ -23,7 +30,8 @@ func setup(
 	p_enemies: Node,
 	p_color: Color,
 	p_speed: float = 320.0,
-	p_lane_id: int = -1
+	p_lane_id: int = -1,
+	p_tower_id: String = ""
 ) -> void:
 	target = p_target
 	damage = p_damage
@@ -34,11 +42,16 @@ func setup(
 	color = p_color
 	speed = maxf(p_speed, 40.0)
 	lane_id = p_lane_id
+	tower_id = p_tower_id
+	_flight_fx = _EffectSprites.projectile_for_tower(tower_id)
+	_impact_fx = _EffectSprites.impact_for_tower(tower_id)
+	_anim_time = 0.0
 
 
 func _process(delta: float) -> void:
 	if not alive:
 		return
+	_anim_time += delta
 	if target == null or not is_instance_valid(target) or not target.alive:
 		queue_free()
 		return
@@ -81,6 +94,7 @@ func _hits_clash_divider(from_global: Vector2, to_global: Vector2) -> bool:
 
 func _impact() -> void:
 	alive = false
+	_spawn_impact_fx()
 	if effect == "lightning":
 		_do_lightning(
 			int(effect_data.get("chain_count", 3)),
@@ -95,6 +109,19 @@ func _impact() -> void:
 		_apply_to_enemy(target, damage, true)
 	_apply_bonus_chain()
 	queue_free()
+
+
+func _spawn_impact_fx() -> void:
+	if _impact_fx.is_empty():
+		return
+	var host: Node = get_parent()
+	if host == null:
+		host = enemy_container
+	var scale_extra := 1.0
+	if _impact_fx == "fx_explosion" and splash_radius > 0.0:
+		# 48px frame == 40px splash at scale 1; stretch to splash radius.
+		scale_extra = splash_radius / 40.0
+	_EffectSprites.spawn_flash(_impact_fx, global_position, host, 0.0, scale_extra)
 
 
 func _do_lightning(chain_count: int, chain_range: float, falloff: float, start_dmg: float, apply_effects: bool) -> void:
@@ -193,6 +220,7 @@ func _spawn_bolt(from_pos: Vector2, to_pos: Vector2) -> void:
 	var bolt := LightningBolt.new()
 	host.add_child(bolt)
 	bolt.setup(from_pos, to_pos)
+	_EffectSprites.spawn_flash("fx_lightning_spark", to_pos, host, 0.0, 1.0)
 
 
 func _damage_in_radius(center: Vector2, radius: float, dmg: float, apply_effects: bool) -> void:
@@ -272,23 +300,62 @@ func _apply_bonus_effects(enemy: Enemy, mult: float) -> void:
 
 
 func _draw() -> void:
+	var angle := 0.0
+	if target != null and is_instance_valid(target):
+		var dir := target.global_position - global_position
+		if dir.length_squared() > 0.001:
+			angle = dir.angle()
+	if not _flight_fx.is_empty() and _EffectSprites.draw_effect(self, _flight_fx, _anim_time, angle, 1.0):
+		return
 	draw_circle(Vector2.ZERO, 4.0, color)
 
 
 class LightningBolt extends Node2D:
+	const _ES := preload("res://scripts/effect_sprites.gd")
 	var from_pt := Vector2.ZERO
 	var to_pt := Vector2.ZERO
-	var life := 0.15
+	var life := 0.18
+	var _anim_time: float = 0.0
+	var _from_global := Vector2.ZERO
+	var _to_global := Vector2.ZERO
 
 	func setup(from_global: Vector2, to_global: Vector2) -> void:
-		from_pt = to_local(from_global)
-		to_pt = to_local(to_global)
+		_from_global = from_global
+		_to_global = to_global
+		global_position = from_global
+		from_pt = Vector2.ZERO
+		to_pt = to_global - from_global
+		z_index = 8
 
 	func _process(delta: float) -> void:
+		_anim_time += delta
 		life -= delta
 		if life <= 0.0:
 			queue_free()
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_line(from_pt, to_pt, Color(0.95, 0.9, 0.3, clampf(life / 0.15, 0.0, 1.0)), 2.5)
+		var length := to_pt.length()
+		var angle := to_pt.angle()
+		# Tile gold bolt segments along the hop (64px authored length).
+		if _ES.has_effect("fx_lightning_bolt") and length > 1.0:
+			var seg_w := 64.0
+			var sc := _ES.display_scale()
+			var covered := 0.0
+			while covered < length:
+				var remain := length - covered
+				var use_w := minf(seg_w, remain / maxf(sc, 0.001))
+				draw_set_transform(Vector2.RIGHT.rotated(angle) * covered, angle, Vector2(sc, sc))
+				var tex: Texture2D = _ES.anim_texture("fx_lightning_bolt", _anim_time)
+				if tex != null:
+					var sz: Vector2 = _ES.frame_size("fx_lightning_bolt")
+					# Pivot is (0, 8) — left-center of the bolt segment.
+					draw_texture_rect_region(
+						tex,
+						Rect2(0.0, -8.0, use_w, sz.y),
+						Rect2(0, 0, use_w, sz.y)
+					)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+				covered += seg_w * sc
+			return
+		draw_line(from_pt, to_pt, Color(0.95, 0.9, 0.3, clampf(life / 0.18, 0.0, 1.0)), 2.5)
