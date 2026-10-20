@@ -1,0 +1,20 @@
+{
+  "outline": "#1e3a46",
+  "mint_base": "#95d7c0",
+  "mint_shadow": "#5aa08d",
+  "mint_highlight": "#d8f5e5",
+  "mint_accent": "#f2c14e",
+  "violet_base": "#8d74e8",
+  "violet_shadow": "#5d4cb0",
+  "violet_highlight": "#c7bcff",
+  "violet_accent": "#f2c14e",
+  "gold": "#f2c14e",
+  "teal": "#50b7a5",
+  "cyan": "#7fd8cc",
+  "dark_teal": "#37756d",
+  "dirt": "#8d6a52",
+  "stone": "#86929b",
+  "brown": "#6f5846",
+  "pink": "#c47b9f",
+  "green": "#6fa56b"
+}

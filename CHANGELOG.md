@@ -1,3 +1,14 @@
+## Version 00.02.81
+Date: 10/19/2026
+Time: 11:25 PM
+
+### Changes
+- Ground enemies use animated **sprite sheets** (30 species from sprite batches 01–03)
+- Bosses / late waves prefer `_plus` variants; fliers use jelly; wreckers use armadillo
+
+### Reason
+Imported player-provided sprite packs so creeps look like authored art instead of plain circles.
+
 ## Version 00.02.80
 Date: 10/19/2026
 Time: 10:35 PM

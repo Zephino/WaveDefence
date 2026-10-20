@@ -60,6 +60,10 @@ var _orbit_immune_after: float = 1.5
 
 var _radius: float = 10.0
 var _base_color: Color = Color(0.85, 0.35, 0.35)
+## Sprite sheet species id (empty = procedural circle fallback).
+var sprite_species: String = ""
+var _sprite_anim_time: float = 0.0
+var _move_angle: float = 0.0
 
 
 func setup(
@@ -97,12 +101,22 @@ func setup(
 		_base_color = Color(0.95, 0.45, 0.12)
 	if monster_type != "":
 		_base_color = _base_color.lerp(MonsterTypes.tint_color(monster_type), 0.7)
+	_assign_sprite_species()
 	# Path points are grid-local (same space as this node's parent offset).
 	if path.size() > 0:
 		position = path[0]
 		path_index = 1 if path.size() > 1 else 0
 		path_dist = 0.0
 	queue_redraw()
+
+
+func _assign_sprite_species() -> void:
+	sprite_species = EnemySprites.pick_species(
+		is_boss, is_flying, is_wrecker, is_snake, wave_index
+	)
+	if not EnemySprites.has_species(sprite_species):
+		sprite_species = ""
+	_sprite_anim_time = randf() * 0.5
 
 
 ## Enable wrecker hunt (Clash send pack): smash lane structures, then exit.
@@ -113,6 +127,7 @@ func configure_wrecker(p_grid: GameGrid, p_pathfinder: Pathfinder = null) -> voi
 	_wreck_hunting = true
 	_radius = 14.0
 	_base_color = Color(0.95, 0.45, 0.12)
+	_assign_sprite_species()
 	queue_redraw()
 	refresh_wrecker_hunt()
 
@@ -303,6 +318,7 @@ func configure_snake(index: int, prev: Enemy, spacing: float = 28.0) -> void:
 		_base_color = Color(0.32, 0.68, 0.28).lerp(Color(0.16, 0.42, 0.2), shade)
 	if monster_type != "":
 		_base_color = _base_color.lerp(MonsterTypes.tint_color(monster_type), 0.4)
+	_assign_sprite_species()
 	queue_redraw()
 
 
@@ -325,6 +341,8 @@ func _process(delta: float) -> void:
 	if is_wrecker:
 		_wrecker_tick()
 	_move_along_path(delta)
+	if not sprite_species.is_empty():
+		_sprite_anim_time += delta * maxf(slow_factor, 0.35)
 	queue_redraw()
 
 
@@ -425,6 +443,8 @@ func _move_along_path(delta: float) -> void:
 	var step := current_speed * delta
 	var to_target := target - position
 	var dist := to_target.length()
+	if dist > 0.01:
+		_move_angle = to_target.angle()
 	if dist <= step:
 		position = target
 		if is_wrecker:
@@ -620,6 +640,58 @@ func _draw() -> void:
 		color = color.lerp(Color(1.0, 0.95, 0.35), 0.45)
 	if orbit_active:
 		color = color.lerp(Color(0.65, 0.4, 0.95), 0.5)
+	var sprite_tint := Color.WHITE
+	if burn_time > 0.0:
+		sprite_tint = sprite_tint.lerp(Color(1.0, 0.5, 0.25), 0.4)
+	if poison_time > 0.0:
+		sprite_tint = sprite_tint.lerp(Color(0.45, 1.0, 0.45), 0.35)
+	if slow_time > 0.0:
+		sprite_tint = sprite_tint.lerp(Color(0.5, 0.85, 1.0), 0.35)
+	if mark_time > 0.0:
+		sprite_tint = sprite_tint.lerp(Color(1.0, 0.95, 0.4), 0.4)
+	if orbit_active:
+		sprite_tint = sprite_tint.lerp(Color(0.75, 0.5, 1.0), 0.4)
+	if monster_type != "":
+		sprite_tint = sprite_tint.lerp(MonsterTypes.tint_color(monster_type), 0.25)
+	if not _draw_sprite(sprite_tint):
+		_draw_procedural(color)
+	if UserSettings.is_show_enemy_hp_bars():
+		var bar_w := _radius * 2.2
+		var thick := 4.0 if is_boss else 3.0
+		var ratio := clampf(hp / max_hp, 0.0, 1.0)
+		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w, thick), Color(0.1, 0.1, 0.1))
+		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w * ratio, thick), Color(0.2, 0.85, 0.3))
+	if UserSettings.is_high_contrast() and monster_type != "":
+		draw_arc(Vector2.ZERO, _radius + 5.0, 0.0, TAU, 12, Color.WHITE, 2.0)
+
+
+func _draw_sprite(tint: Color) -> bool:
+	if sprite_species.is_empty():
+		return false
+	var tex := EnemySprites.walk_texture(sprite_species, _sprite_anim_time)
+	if tex == null:
+		return false
+	var sz := EnemySprites.frame_size(sprite_species)
+	var scale := 1.0
+	if is_boss:
+		scale = 1.2
+	elif is_wrecker:
+		scale = 1.1
+	elif is_flying:
+		scale = 1.05
+	var half := sz * 0.5 * scale
+	# Sheets are authored facing up; rotate to movement heading.
+	draw_set_transform(Vector2.ZERO, _move_angle + PI * 0.5, Vector2.ONE)
+	draw_texture_rect(tex, Rect2(-half, sz * scale), false, tint)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if is_boss:
+		draw_arc(Vector2.ZERO, maxf(half.x, half.y) * 0.55, 0.0, TAU, 24, Color(1, 0.85, 0.2), 2.0)
+	elif is_flying:
+		draw_arc(Vector2.ZERO, maxf(half.x, half.y) * 0.55, 0.0, TAU, 24, Color(0.7, 0.9, 1.0), 1.5)
+	return true
+
+
+func _draw_procedural(color: Color) -> void:
 	if is_flying:
 		var wing := PackedVector2Array([
 			Vector2(-_radius - 6.0, 0.0),
@@ -641,11 +713,3 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, _radius, color)
 		if is_boss:
 			draw_arc(Vector2.ZERO, _radius + 3.0, 0.0, TAU, 24, Color(1, 0.85, 0.2), 2.0)
-	if UserSettings.is_show_enemy_hp_bars():
-		var bar_w := _radius * 2.2
-		var thick := 4.0 if is_boss else 3.0
-		var ratio := clampf(hp / max_hp, 0.0, 1.0)
-		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w, thick), Color(0.1, 0.1, 0.1))
-		draw_rect(Rect2(-bar_w * 0.5, -_radius - 8.0, bar_w * ratio, thick), Color(0.2, 0.85, 0.3))
-	if UserSettings.is_high_contrast() and monster_type != "":
-		draw_arc(Vector2.ZERO, _radius + 5.0, 0.0, TAU, 12, Color.WHITE, 2.0)

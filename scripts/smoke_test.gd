@@ -120,6 +120,17 @@ func _run() -> void:
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
 
+	# Enemy sprite sheets load (ground walk frames).
+	if not EnemySprites.has_species("slime"):
+		errors.append("slime sprite sheet should load from assets/sprites")
+	elif EnemySprites.walk_texture("slime", 0.0) == null:
+		errors.append("slime walk frame 0 should exist")
+	var boss_sp := EnemySprites.pick_species(true, false, false, false, 30)
+	if not str(boss_sp).ends_with("_plus") and boss_sp != "jelly_plus":
+		# Bosses prefer plus variants.
+		if not EnemySprites.has_species(boss_sp):
+			errors.append("boss sprite pick should resolve to a loadable species")
+
 	# Input sanitizers (names / seeds / injection markers).
 	if InputSanitize.sanitize_name("Bob!!") != "Bob":
 		errors.append("name sanitize should strip punctuation")
