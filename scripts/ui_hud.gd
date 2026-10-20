@@ -718,9 +718,6 @@ func _build_launcher_panel(root: Control) -> void:
 	skip_button.pressed.connect(func() -> void: skip_timer_pressed.emit())
 	column.add_child(skip_button)
 
-	_launcher_shell.custom_minimum_size = Vector2(maxf(GameLayout.sidebar_width(), 200.0), 0)
-
-
 func _popup_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.16, 0.22, 0.94)
@@ -938,11 +935,6 @@ func _toggle_launcher_collapsed() -> void:
 func _apply_launcher_layout() -> void:
 	if _launcher_shell == null:
 		return
-	var default_pos := Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
-	if _launcher_float_pos.x >= 0.0:
-		_launcher_shell.position = _clamp_shop_pos(_launcher_float_pos, _launcher_shell.size)
-	else:
-		_launcher_shell.position = default_pos
 	if _launcher_body:
 		_launcher_body.visible = not _launcher_collapsed
 	if _launcher_title:
@@ -954,6 +946,18 @@ func _apply_launcher_layout() -> void:
 			if not _launcher_collapsed
 			else "Expand shop buttons"
 		)
+	# Shrink to content when collapsed; expand width when open.
+	if _launcher_collapsed:
+		_launcher_shell.custom_minimum_size = Vector2(128.0, 0.0)
+	else:
+		_launcher_shell.custom_minimum_size = Vector2(maxf(GameLayout.sidebar_width(), 200.0), 0.0)
+	_launcher_shell.size = Vector2.ZERO
+	_launcher_shell.reset_size()
+	var default_pos := Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
+	if _launcher_float_pos.x >= 0.0:
+		_launcher_shell.position = _clamp_shop_pos(_launcher_float_pos, _launcher_shell.size)
+	else:
+		_launcher_shell.position = default_pos
 
 
 func _apply_towers_shop_layout() -> void:
@@ -1494,6 +1498,12 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 				skip_button.text = "Send Next Wave"
 				skip_button.disabled = true
 				skip_button.tooltip_text = "Kill 25% of enemies to unlock early send"
+	if timer_label:
+		timer_label.visible = not timer_label.text.is_empty()
+	# Keep collapsed chip tight when timer text appears/clears.
+	if _launcher_collapsed and _launcher_shell != null:
+		_launcher_shell.size = Vector2.ZERO
+		_launcher_shell.reset_size()
 
 
 func update_enemies_remaining(remaining: int, alive: int, queued: int) -> void:

@@ -1,3 +1,13 @@
+## Version 00.02.89
+Date: 10/20/2026
+Time: 12:31 PM
+
+### Changes
+- Controls **Hide** now shrinks the panel to a compact chip (narrower + shorter); **Show** restores full size
+
+### Reason
+Collapsing only hid buttons while the window stayed large — Hide should visibly shrink the panel.
+
 ## Version 00.02.88
 Date: 10/20/2026
 Time: 12:29 PM
