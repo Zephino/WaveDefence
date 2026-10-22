@@ -1,3 +1,17 @@
+## Version 00.02.90
+Date: 10/22/2026
+Time: 7:40 PM
+
+### Changes
+- Web/PWA service worker prefetches **wasm + pck** on install so phones can play offline after one online download
+- Offline navigation serves the cached game (`index.html`) instead of only the offline stub
+- Offline page copy explains: open once online / Update app, then play without internet
+- Leaderboard: detect online/offline on web; auto-upload pending scores when the device reconnects
+- Submit messaging: “Saved locally — will upload when you’re back online”
+
+### Reason
+Let installed home-screen / mobile web copies play with no signal, and sync qualifying scores when Wi‑Fi returns.
+
 ## Version 00.02.89
 Date: 10/20/2026
 Time: 12:31 PM

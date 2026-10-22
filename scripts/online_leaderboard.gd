@@ -12,6 +12,9 @@ var last_source: String = "local" ## "global" | "local" | "offline"
 var _http: HTTPRequest
 var _busy: bool = false
 var _queue: Array = [] ## Array of Dictionaries {kind, ...}
+var _web_online_cb: JavaScriptObject
+var _web_visibility_cb: JavaScriptObject
+var _reconnect_flushing: bool = false
 
 
 func _ready() -> void:
@@ -19,11 +22,54 @@ func _ready() -> void:
 	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
+	_setup_web_reconnect_hooks()
 	call_deferred("bootstrap_and_flush")
 
 
 func is_online_likely() -> bool:
-	return true
+	if OS.get_name() != "Web":
+		return true
+	var online = JavaScriptBridge.eval("navigator.onLine", true)
+	if typeof(online) == TYPE_BOOL:
+		return online
+	return str(online).to_lower() != "false"
+
+
+func _setup_web_reconnect_hooks() -> void:
+	if OS.get_name() != "Web":
+		return
+	_web_online_cb = JavaScriptBridge.create_callback(_on_js_online)
+	_web_visibility_cb = JavaScriptBridge.create_callback(_on_js_visibility)
+	var window := JavaScriptBridge.get_interface("window")
+	var document := JavaScriptBridge.get_interface("document")
+	if window != null:
+		window.addEventListener("online", _web_online_cb)
+	if document != null:
+		document.addEventListener("visibilitychange", _web_visibility_cb)
+
+
+func _on_js_online(_args: Array) -> void:
+	_reconnect_sync()
+
+
+func _on_js_visibility(_args: Array) -> void:
+	if not is_online_likely():
+		return
+	var hidden = JavaScriptBridge.eval("document.hidden", true)
+	if typeof(hidden) == TYPE_BOOL and hidden:
+		return
+	if str(hidden).to_lower() == "true":
+		return
+	_reconnect_sync()
+
+
+func _reconnect_sync() -> void:
+	if _reconnect_flushing:
+		return
+	_reconnect_flushing = true
+	await fetch_boards()
+	await flush_pending_if_online()
+	_reconnect_flushing = false
 
 
 func bootstrap_and_flush() -> void:
@@ -45,6 +91,8 @@ func flush_pending_if_online() -> bool:
 	if pending.is_empty():
 		return true
 	if not OnlineConfig.can_post():
+		return false
+	if not is_online_likely():
 		return false
 	if not bool(pending.get("needed", false)) or bool(pending.get("done", false)):
 		return true

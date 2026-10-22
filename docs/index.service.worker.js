@@ -1,10 +1,8 @@
-// This service worker is required to expose an exported Godot project as a
-// Progressive Web App. It provides an offline fallback page telling the user
-// that they need an Internet connection to run the project if desired.
-// Incrementing CACHE_VERSION will kick off the install event and force
-// previously cached resources to be updated from the network.
+// Progressive Web App service worker for Wave Defence.
+// Caches the full game (shell + wasm + pck) so installed phones can play offline
+// after one successful online download. Incrementing CACHE_VERSION forces refresh.
 /** @type {string} */
-const CACHE_VERSION = '00.02.89';
+const CACHE_VERSION = '00.02.90';
 /** @type {string} */
 const CACHE_PREFIX = 'Wave Defence-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
@@ -12,150 +10,209 @@ const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const OFFLINE_URL = 'index.offline.html';
 /** @type {boolean} */
 const ENSURE_CROSSORIGIN_ISOLATION_HEADERS = true;
-// Files that will be cached on load.
+// Shell + helpers cached on install.
 /** @type {string[]} */
-const CACHED_FILES = ["index.html","index.js","index.offline.html","index.icon.png","index.apple-touch-icon.png","index.audio.worklet.js","index.audio.position.worklet.js"];
-// Files that we might not want the user to preload, and will only be cached on first load.
+const CACHED_FILES = [
+	'index.html',
+	'index.js',
+	'index.offline.html',
+	'index.icon.png',
+	'index.apple-touch-icon.png',
+	'index.audio.worklet.js',
+	'index.audio.position.worklet.js',
+	'mobile_play.js',
+];
+// Game pack — also prefetched on install so offline play works on phones.
 /** @type {string[]} */
-const CACHEABLE_FILES = ["index.wasm","index.pck"];
+const CACHEABLE_FILES = ['index.wasm', 'index.pck'];
 const FULL_CACHE = CACHED_FILES.concat(CACHEABLE_FILES);
 
 self.addEventListener('install', (event) => {
-	event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHED_FILES)).then(() => self.skipWaiting()));
+	// OFFLINE_FULL_CACHE: download shell + wasm + pck while online so airplane mode works later.
+	event.waitUntil(
+		caches
+			.open(CACHE_NAME)
+			.then((cache) => cache.addAll(FULL_CACHE))
+			.then(() => self.skipWaiting())
+	);
 });
 
 self.addEventListener('activate', (event) => {
-	event.waitUntil(caches.keys().then(
-		function (keys) {
-			// Remove old caches.
-			return Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key)));
-		}
-	).then(function () {
-		// Enable navigation preload if available.
-		return ('navigationPreload' in self.registration) ? self.registration.navigationPreload.enable() : Promise.resolve();
-	}));
+	event.waitUntil(
+		caches
+			.keys()
+			.then(function (keys) {
+				return Promise.all(
+					keys
+						.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+						.map((key) => caches.delete(key))
+				);
+			})
+			.then(function () {
+				return 'navigationPreload' in self.registration
+					? self.registration.navigationPreload.enable()
+					: Promise.resolve();
+			})
+	);
 });
 
 /**
- * Ensures that the response has the correct COEP/COOP headers
  * @param {Response} response
  * @returns {Response}
  */
 function ensureCrossOriginIsolationHeaders(response) {
-	if (response.headers.get('Cross-Origin-Embedder-Policy') === 'require-corp'
-		&& response.headers.get('Cross-Origin-Opener-Policy') === 'same-origin') {
+	if (
+		response.headers.get('Cross-Origin-Embedder-Policy') === 'require-corp' &&
+		response.headers.get('Cross-Origin-Opener-Policy') === 'same-origin'
+	) {
 		return response;
 	}
-
 	const crossOriginIsolatedHeaders = new Headers(response.headers);
 	crossOriginIsolatedHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
 	crossOriginIsolatedHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
-	const newResponse = new Response(response.body, {
+	return new Response(response.body, {
 		status: response.status,
 		statusText: response.statusText,
 		headers: crossOriginIsolatedHeaders,
 	});
-
-	return newResponse;
 }
 
 /**
- * Calls fetch and cache the result if it is cacheable
+ * Basename without query/hash (handles cache-bust ?v=).
+ * @param {string} url
+ * @returns {string}
+ */
+function localName(url) {
+	try {
+		const path = new URL(url, self.location.href).pathname;
+		const parts = path.split('/');
+		return parts[parts.length - 1] || '';
+	} catch (e) {
+		return '';
+	}
+}
+
+/**
+ * @param {Cache} cache
+ * @param {Request} request
+ * @returns {Promise<Response|undefined>}
+ */
+async function matchIgnoreSearch(cache, request) {
+	let hit = await cache.match(request, { ignoreSearch: true });
+	if (hit) {
+		return hit;
+	}
+	const name = localName(request.url);
+	if (name && FULL_CACHE.indexOf(name) >= 0) {
+		hit = await cache.match(name);
+		if (hit) {
+			return hit;
+		}
+		hit = await cache.match('./' + name);
+	}
+	return hit;
+}
+
+/**
  * @param {FetchEvent} event
  * @param {Cache} cache
  * @param {boolean} isCacheable
- * @returns {Response}
+ * @returns {Promise<Response>}
  */
 async function fetchAndCache(event, cache, isCacheable) {
-	// Use the preloaded response, if it's there
-	/** @type { Response } */
+	/** @type {Response} */
 	let response = await event.preloadResponse;
 	if (response == null) {
-		// Or, go over network.
 		response = await self.fetch(event.request);
 	}
-
 	if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
 		response = ensureCrossOriginIsolationHeaders(response);
 	}
-
 	if (isCacheable) {
-		// And update the cache
 		cache.put(event.request, response.clone());
+		const name = localName(event.request.url);
+		if (name && FULL_CACHE.indexOf(name) >= 0) {
+			cache.put(name, response.clone());
+		}
 	}
-
 	return response;
 }
 
-self.addEventListener(
-	'fetch',
-	/**
-	 * Triggered on fetch
-	 * @param {FetchEvent} event
-	 */
-	(event) => {
-		const isNavigate = event.request.mode === 'navigate';
-		const url = event.request.url || '';
-		const referrer = event.request.referrer || '';
-		const base = referrer.slice(0, referrer.lastIndexOf('/') + 1);
-		const local = url.startsWith(base) ? url.replace(base, '') : '';
-		const isCacheable = FULL_CACHE.some((v) => v === local) || (base === referrer && base.endsWith(CACHED_FILES[0]));
-		if (isNavigate || isCacheable) {
-			event.respondWith((async () => {
-				// Try to use cache first
+self.addEventListener('fetch', (event) => {
+	const isNavigate = event.request.mode === 'navigate';
+	const name = localName(event.request.url);
+	const isCacheable = FULL_CACHE.indexOf(name) >= 0 || isNavigate;
+	if (isNavigate || isCacheable) {
+		event.respondWith(
+			(async () => {
 				const cache = await caches.open(CACHE_NAME);
 				if (isNavigate) {
-					// NETWORK_FIRST_HTML: always try the network so updates reach installed PWAs.
+					// NETWORK_FIRST_HTML: prefer network so Update app works; fall back to cached game offline.
 					try {
 						const response = await fetchAndCache(event, cache, true);
 						return response;
 					} catch (e) {
 						console.error('Network error: ', e); // eslint-disable-line no-console
-						const cachedNav = await cache.match(event.request);
-						if (cachedNav) { return cachedNav; }
+						const cachedNav = await matchIgnoreSearch(cache, event.request);
+						if (cachedNav) {
+							return ENSURE_CROSSORIGIN_ISOLATION_HEADERS
+								? ensureCrossOriginIsolationHeaders(cachedNav)
+								: cachedNav;
+						}
+						const cachedIndex = await cache.match('index.html');
+						if (cachedIndex) {
+							return ENSURE_CROSSORIGIN_ISOLATION_HEADERS
+								? ensureCrossOriginIsolationHeaders(cachedIndex)
+								: cachedIndex;
+						}
 						return caches.match(OFFLINE_URL);
 					}
 				}
-				let cached = await cache.match(event.request);
+				let cached = await matchIgnoreSearch(cache, event.request);
 				if (cached != null) {
 					if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
 						cached = ensureCrossOriginIsolationHeaders(cached);
 					}
 					return cached;
 				}
-				// Try network if don't have it in cache.
-				const response = await fetchAndCache(event, cache, isCacheable);
-				return response;
-			})());
-		} else if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
-			event.respondWith((async () => {
+				try {
+					return await fetchAndCache(event, cache, isCacheable);
+				} catch (e) {
+					console.error('Network error: ', e); // eslint-disable-line no-console
+					return caches.match(OFFLINE_URL);
+				}
+			})()
+		);
+	} else if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
+		event.respondWith(
+			(async () => {
 				let response = await fetch(event.request);
-				response = ensureCrossOriginIsolationHeaders(response);
-				return response;
-			})());
-		}
+				return ensureCrossOriginIsolationHeaders(response);
+			})()
+		);
 	}
-);
+});
 
 self.addEventListener('message', (event) => {
-	// No cross origin
 	if (event.origin !== self.origin) {
 		return;
 	}
 	const id = event.source.id || '';
 	const msg = event.data || '';
-	// Ensure it's one of our clients.
 	self.clients.get(id).then(function (client) {
 		if (!client) {
-			return; // Not a valid client.
+			return;
 		}
 		if (msg === 'claim') {
 			self.skipWaiting().then(() => self.clients.claim());
 		} else if (msg === 'clear') {
 			caches.delete(CACHE_NAME);
 		} else if (msg === 'update') {
-			self.skipWaiting().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((all) => all.forEach((c) => c.navigate(c.url)));
+			self
+				.skipWaiting()
+				.then(() => self.clients.claim())
+				.then(() => self.clients.matchAll())
+				.then((all) => all.forEach((c) => c.navigate(c.url)));
 		}
 	});
 });
-

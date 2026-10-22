@@ -4,7 +4,7 @@
 		<meta charset="utf-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>You are offline</title>
+		<title>Wave Defence — offline</title>
 		<style>
 html {
 	background-color: #000000;
@@ -12,25 +12,30 @@ html {
 }
 
 body {
-	font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 	margin: 2rem;
+	max-width: 28rem;
 }
 
 p {
 	margin-block: 1rem;
+	line-height: 1.45;
 }
 
 button {
 	display: block;
 	padding: 1rem 2rem;
-	margin: 3rem auto 0;
+	margin: 2rem auto 0;
 }
 		</style>
 	</head>
 	<body>
-		<h1>You are offline</h1>
-		<p>This application requires an Internet connection to run for the first time.</p>
-		<p>Press the button below to try reloading:</p>
+		<h1>Can't load the game yet</h1>
+		<p>
+			Open Wave Defence once while online (or use <strong>Settings → Update app</strong>)
+			so this phone can finish downloading. After that you can play offline.
+		</p>
+		<p>Press Reload when you have a connection:</p>
 		<button type="button">Reload</button>
 		<script>
 document.querySelector('button').addEventListener('click', () => {

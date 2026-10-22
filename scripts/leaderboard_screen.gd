@@ -455,24 +455,27 @@ func _on_submit() -> void:
 		OnlineLeaderboard.queue_pending_score(
 			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
 		)
-		status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
-			cleaned,
-			wave_score,
-			board_label,
-		]
-		var ok := await OnlineLeaderboard.push_score(
-			cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
-		)
-		if not is_inside_tree():
-			return
-		if ok:
-			status_label.text = "Saved %s — wave %d (%s) on the global board." % [
+		if OnlineLeaderboard.is_online_likely():
+			status_label.text = "Saved %s — wave %d (%s). Uploading…" % [
 				cleaned,
 				wave_score,
 				board_label,
 			]
+			var ok := await OnlineLeaderboard.push_score(
+				cleaned, wave_score, score_difficulty, seeds, score_mode, board_png, clash_players, clash_bots
+			)
+			if not is_inside_tree():
+				return
+			if ok:
+				status_label.text = "Saved %s — wave %d (%s) on the global board." % [
+					cleaned,
+					wave_score,
+					board_label,
+				]
+			else:
+				status_label.text = "Saved %s locally — will upload when you’re back online." % cleaned
 		else:
-			status_label.text = "Saved %s locally — upload will retry when you leave." % cleaned
+			status_label.text = "Saved %s locally — will upload when you’re back online." % cleaned
 		_refresh_list()
 		_refresh_source_label()
 	else:

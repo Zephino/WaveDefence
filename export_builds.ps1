@@ -161,6 +161,9 @@ if ($doWeb) {
     $ver = (Get-Content (Join-Path $ProjectRoot "VERSION") -Raw).Trim()
     $htmlPath = Join-Path $ProjectRoot "docs\index.html"
     $swPath = Join-Path $ProjectRoot "docs\index.service.worker.js"
+    $swSrc = Join-Path $ProjectRoot "web\index.service.worker.js"
+    $offlineHtmlSrc = Join-Path $ProjectRoot "web\index.offline.html"
+    $offlineHtmlDst = Join-Path $ProjectRoot "docs\index.offline.html"
     $manifestPath = Join-Path $ProjectRoot "docs\index.manifest.json"
     $mobileJsSrc = Join-Path $ProjectRoot "web\mobile_play.js"
     $mobileJsDst = Join-Path $ProjectRoot "docs\mobile_play.js"
@@ -260,6 +263,13 @@ if ($doWeb) {
         $html = $html.Insert($headIdx, $inject)
         Write-TextFileRetry $htmlPath $html
 
+        # Replace Godot's default SW with our offline-capable template, then stamp version.
+        if (Test-Path $swSrc) {
+            Copy-Item -Force $swSrc $swPath
+        }
+        if (Test-Path $offlineHtmlSrc) {
+            Copy-Item -Force $offlineHtmlSrc $offlineHtmlDst
+        }
         if (Test-Path $swPath) {
             $sw = Read-TextFileRetry $swPath
             $swTagged = "const CACHE_VERSION = '" + $Version + "';"
@@ -267,42 +277,11 @@ if ($doWeb) {
             if ($swNew -notmatch [regex]::Escape($swTagged)) {
                 throw "Failed to stamp CACHE_VERSION=$Version into service worker"
             }
-            $swNew = $swNew -replace "event.waitUntil\(caches.open\(CACHE_NAME\).then\(\(cache\) => cache.addAll\(CACHED_FILES\)\)\);", "event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHED_FILES)).then(() => self.skipWaiting()));"
-            $navOld = @'
-				if (isNavigate) {
-					// Check if we have full cache during HTML page request.
-					/** @type {Response[]} */
-					const fullCache = await Promise.all(FULL_CACHE.map((name) => cache.match(name)));
-					const missing = fullCache.some((v) => v === undefined);
-					if (missing) {
-						try {
-							// Try network if some cached file is missing (so we can display offline page in case).
-							const response = await fetchAndCache(event, cache, isCacheable);
-							return response;
-						} catch (e) {
-							// And return the hopefully always cached offline page in case of network failure.
-							console.error('Network error: ', e); // eslint-disable-line no-console
-							return caches.match(OFFLINE_URL);
-						}
-					}
-				}
-'@
-            $navNew = @'
-				if (isNavigate) {
-					// NETWORK_FIRST_HTML: always try the network so updates reach installed PWAs.
-					try {
-						const response = await fetchAndCache(event, cache, true);
-						return response;
-					} catch (e) {
-						console.error('Network error: ', e); // eslint-disable-line no-console
-						const cachedNav = await cache.match(event.request);
-						if (cachedNav) { return cachedNav; }
-						return caches.match(OFFLINE_URL);
-					}
-				}
-'@
-            if ($swNew.Contains("if (isNavigate)")) {
-                $swNew = $swNew.Replace($navOld, $navNew)
+            if ($swNew -notmatch "OFFLINE_FULL_CACHE") {
+                throw "Service worker missing OFFLINE_FULL_CACHE (offline mobile play)"
+            }
+            if ($swNew -notmatch "NETWORK_FIRST_HTML") {
+                throw "Service worker missing NETWORK_FIRST_HTML"
             }
             Write-TextFileRetry $swPath $swNew
         }
@@ -316,6 +295,7 @@ if ($doWeb) {
             $swOnDisk = Read-TextFileRetry $swPath
             if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $Version + "';")) { return $false }
             if ($swOnDisk -notmatch "NETWORK_FIRST_HTML") { return $false }
+            if ($swOnDisk -notmatch "OFFLINE_FULL_CACHE") { return $false }
         }
         if (Test-Path $manifestPath) {
             $man = Read-TextFileRetry $manifestPath
