@@ -184,6 +184,7 @@ func _show_settings() -> void:
 		box.add_child(update_btn)
 
 	box.add_child(_btn("Close", _hide_settings))
+	SettingsTouch.wire_scroll_tree(scroll)
 
 
 func _hide_settings() -> void:

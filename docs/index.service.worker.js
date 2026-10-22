@@ -2,7 +2,7 @@
 // Caches the full game (shell + wasm + pck) so installed phones can play offline
 // after one successful online download. Incrementing CACHE_VERSION forces refresh.
 /** @type {string} */
-const CACHE_VERSION = '00.02.90';
+const CACHE_VERSION = '00.02.91';
 /** @type {string} */
 const CACHE_PREFIX = 'Wave Defence-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;

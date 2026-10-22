@@ -479,6 +479,7 @@ func _finalize_modal_size(panel: PanelContainer, box: VBoxContainer, max_size: V
 		scroll.horizontal_scroll_mode = (
 			ScrollContainer.SCROLL_MODE_AUTO if needed.x > inner_max.x else ScrollContainer.SCROLL_MODE_DISABLED
 		)
+		SettingsTouch.wire_scroll_tree(scroll)
 		return
 	if parent != panel:
 		return
@@ -495,6 +496,7 @@ func _finalize_modal_size(panel: PanelContainer, box: VBoxContainer, max_size: V
 	panel.add_child(scroll)
 	scroll.add_child(box)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	SettingsTouch.wire_scroll_tree(scroll)
 
 
 func _show_settings_popup() -> void:

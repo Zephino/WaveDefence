@@ -1,3 +1,13 @@
+## Version 00.02.91
+Date: 10/22/2026
+Time: 7:49 PM
+
+### Changes
+- Settings menus scroll more reliably with finger on mobile **browser** (not only installed PWA): drag-to-scroll on labels/buttons/empty areas, lower deadzone, slightly higher web scroll gain
+
+### Reason
+Finger-scrolling Settings felt stuck in the mobile browser tab while the installed app scrolled fine.
+
 ## Version 00.02.90
 Date: 10/22/2026
 Time: 7:40 PM
