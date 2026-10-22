@@ -73,6 +73,11 @@ func _reconnect_sync() -> void:
 
 
 func bootstrap_and_flush() -> void:
+	# Offline web: skip network entirely so the menu opens without waiting on timeouts.
+	if not is_online_likely():
+		last_source = "offline"
+		boards_updated.emit(false)
+		return
 	await fetch_boards()
 	await flush_pending_if_online()
 
@@ -80,6 +85,10 @@ func bootstrap_and_flush() -> void:
 func fetch_boards() -> bool:
 	if not OnlineConfig.can_read():
 		last_source = "local"
+		boards_updated.emit(false)
+		return false
+	if not is_online_likely():
+		last_source = "offline"
 		boards_updated.emit(false)
 		return false
 	var ok := await _enqueue_and_wait({"kind": "get"})

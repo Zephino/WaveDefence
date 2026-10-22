@@ -1,6 +1,6 @@
 // Progressive Web App service worker for Wave Defence.
-// Caches the full game (shell + wasm + pck) so installed phones can play offline
-// after one successful online download. Incrementing CACHE_VERSION forces refresh.
+// After one online download, phones can open and play with no internet.
+// Incrementing CACHE_VERSION forces a refresh when online.
 /** @type {string} */
 const CACHE_VERSION = '00.00.00';
 /** @type {string} */
@@ -10,7 +10,7 @@ const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const OFFLINE_URL = 'index.offline.html';
 /** @type {boolean} */
 const ENSURE_CROSSORIGIN_ISOLATION_HEADERS = true;
-// Shell + helpers cached on install.
+
 /** @type {string[]} */
 const CACHED_FILES = [
 	'index.html',
@@ -21,18 +21,47 @@ const CACHED_FILES = [
 	'index.audio.worklet.js',
 	'index.audio.position.worklet.js',
 	'mobile_play.js',
+	'index.manifest.json',
+	'index.192x192.png',
 ];
-// Game pack — also prefetched on install so offline play works on phones.
 /** @type {string[]} */
 const CACHEABLE_FILES = ['index.wasm', 'index.pck'];
-const FULL_CACHE = CACHED_FILES.concat(CACHEABLE_FILES);
+/** @type {string[]} */
+const MUSIC_FILES = [
+	'music/web_loop_01.wav',
+	'music/web_loop_02.wav',
+	'music/web_loop_03.wav',
+	'music/web_loop_04.wav',
+	'music/web_loop_05.wav',
+];
+const FULL_CACHE = CACHED_FILES.concat(CACHEABLE_FILES).concat(MUSIC_FILES);
+
+/**
+ * Cache each URL on its own so one failure (e.g. huge wasm on flaky LTE) does not abort the rest.
+ * @param {Cache} cache
+ * @param {string[]} urls
+ */
+async function precacheUrls(cache, urls) {
+	await Promise.all(
+		urls.map(async (url) => {
+			try {
+				const res = await fetch(url, { cache: 'reload' });
+				if (res && res.ok) {
+					await cache.put(url, res.clone());
+				}
+			} catch (e) {
+				console.warn('SW precache failed:', url, e); // eslint-disable-line no-console
+			}
+		})
+	);
+}
 
 self.addEventListener('install', (event) => {
-	// OFFLINE_FULL_CACHE: download shell + wasm + pck while online so airplane mode works later.
+	// OFFLINE_FULL_CACHE: download shell + wasm + pck + music while online.
 	event.waitUntil(
 		caches
 			.open(CACHE_NAME)
-			.then((cache) => cache.addAll(FULL_CACHE))
+			.then((cache) => precacheUrls(cache, FULL_CACHE))
 			.then(() => self.skipWaiting())
 	);
 });
@@ -52,6 +81,9 @@ self.addEventListener('activate', (event) => {
 				return 'navigationPreload' in self.registration
 					? self.registration.navigationPreload.enable()
 					: Promise.resolve();
+			})
+			.then(function () {
+				return self.clients.claim();
 			})
 	);
 });
@@ -78,18 +110,51 @@ function ensureCrossOriginIsolationHeaders(response) {
 }
 
 /**
- * Basename without query/hash (handles cache-bust ?v=).
+ * Path relative to the SW scope (handles /WaveDefence/… and ?v= cache bust).
+ * @param {string} url
+ * @returns {string}
+ */
+function scopedPath(url) {
+	try {
+		const u = new URL(url, self.location.href);
+		const scopeUrl = new URL(self.registration.scope);
+		let path = u.pathname;
+		if (path.startsWith(scopeUrl.pathname)) {
+			path = path.slice(scopeUrl.pathname.length);
+		}
+		return path.replace(/^\//, '');
+	} catch (e) {
+		return '';
+	}
+}
+
+/**
  * @param {string} url
  * @returns {string}
  */
 function localName(url) {
-	try {
-		const path = new URL(url, self.location.href).pathname;
-		const parts = path.split('/');
-		return parts[parts.length - 1] || '';
-	} catch (e) {
-		return '';
+	const path = scopedPath(url);
+	const parts = path.split('/');
+	return parts[parts.length - 1] || '';
+}
+
+/**
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isFullCacheUrl(url) {
+	const path = scopedPath(url);
+	const name = localName(url);
+	if (FULL_CACHE.indexOf(path) >= 0) {
+		return true;
 	}
+	if (FULL_CACHE.indexOf(name) >= 0) {
+		return true;
+	}
+	if (path.indexOf('music/') === 0 && name.indexOf('web_loop_') === 0) {
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -102,15 +167,29 @@ async function matchIgnoreSearch(cache, request) {
 	if (hit) {
 		return hit;
 	}
+	const path = scopedPath(request.url);
 	const name = localName(request.url);
-	if (name && FULL_CACHE.indexOf(name) >= 0) {
-		hit = await cache.match(name);
+	const keys = [path, name, './' + path, './' + name].filter(Boolean);
+	for (let i = 0; i < keys.length; i++) {
+		hit = await cache.match(keys[i]);
 		if (hit) {
 			return hit;
 		}
-		hit = await cache.match('./' + name);
 	}
-	return hit;
+	return undefined;
+}
+
+/**
+ * @param {Response|undefined} cached
+ * @returns {Response|undefined}
+ */
+function withIsolation(cached) {
+	if (!cached) {
+		return cached;
+	}
+	return ENSURE_CROSSORIGIN_ISOLATION_HEADERS
+		? ensureCrossOriginIsolationHeaders(cached)
+		: cached;
 }
 
 /**
@@ -130,56 +209,98 @@ async function fetchAndCache(event, cache, isCacheable) {
 	}
 	if (isCacheable) {
 		cache.put(event.request, response.clone());
+		const path = scopedPath(event.request.url);
 		const name = localName(event.request.url);
-		if (name && FULL_CACHE.indexOf(name) >= 0) {
+		if (path) {
+			cache.put(path, response.clone());
+		}
+		if (name && name !== path) {
 			cache.put(name, response.clone());
 		}
 	}
 	return response;
 }
 
+/**
+ * Serve the cached game shell when offline (do not wait for a network timeout).
+ * @param {Cache} cache
+ * @param {Request} request
+ * @returns {Promise<Response>}
+ */
+async function cachedGameOrOfflinePage(cache, request) {
+	const cachedNav = await matchIgnoreSearch(cache, request);
+	if (cachedNav) {
+		return withIsolation(cachedNav);
+	}
+	const cachedIndex = await cache.match('index.html');
+	if (cachedIndex) {
+		return withIsolation(cachedIndex);
+	}
+	const offline = await caches.match(OFFLINE_URL);
+	return offline || Response.error();
+}
+
 self.addEventListener('fetch', (event) => {
 	const isNavigate = event.request.mode === 'navigate';
-	const name = localName(event.request.url);
-	const isCacheable = FULL_CACHE.indexOf(name) >= 0 || isNavigate;
-	if (isNavigate || isCacheable) {
+	const cacheableAsset = isFullCacheUrl(event.request.url);
+	if (isNavigate || cacheableAsset) {
 		event.respondWith(
 			(async () => {
 				const cache = await caches.open(CACHE_NAME);
+				const offline = typeof self.navigator !== 'undefined' && self.navigator.onLine === false;
+
 				if (isNavigate) {
-					// NETWORK_FIRST_HTML: prefer network so Update app works; fall back to cached game offline.
+					// OFFLINE_CACHE_FIRST: no internet → open cached game immediately.
+					if (offline) {
+						return cachedGameOrOfflinePage(cache, event.request);
+					}
+					// NETWORK_FIRST_HTML: online so Update app / new builds still land.
 					try {
-						const response = await fetchAndCache(event, cache, true);
-						return response;
+						return await fetchAndCache(event, cache, true);
 					} catch (e) {
 						console.error('Network error: ', e); // eslint-disable-line no-console
-						const cachedNav = await matchIgnoreSearch(cache, event.request);
-						if (cachedNav) {
-							return ENSURE_CROSSORIGIN_ISOLATION_HEADERS
-								? ensureCrossOriginIsolationHeaders(cachedNav)
-								: cachedNav;
-						}
-						const cachedIndex = await cache.match('index.html');
-						if (cachedIndex) {
-							return ENSURE_CROSSORIGIN_ISOLATION_HEADERS
-								? ensureCrossOriginIsolationHeaders(cachedIndex)
-								: cachedIndex;
-						}
-						return caches.match(OFFLINE_URL);
+						return cachedGameOrOfflinePage(cache, event.request);
 					}
 				}
+
 				let cached = await matchIgnoreSearch(cache, event.request);
 				if (cached != null) {
-					if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
-						cached = ensureCrossOriginIsolationHeaders(cached);
-					}
-					return cached;
+					return withIsolation(cached);
+				}
+				if (offline) {
+					return caches.match(OFFLINE_URL);
 				}
 				try {
-					return await fetchAndCache(event, cache, isCacheable);
+					return await fetchAndCache(event, cache, true);
 				} catch (e) {
 					console.error('Network error: ', e); // eslint-disable-line no-console
 					return caches.match(OFFLINE_URL);
+				}
+			})()
+		);
+		return;
+	}
+
+	// Same-origin assets we did not list: try cache, then network (never hang offline).
+	if (event.request.url.startsWith(self.registration.scope)) {
+		event.respondWith(
+			(async () => {
+				const cache = await caches.open(CACHE_NAME);
+				const cached = await matchIgnoreSearch(cache, event.request);
+				if (cached) {
+					return withIsolation(cached);
+				}
+				if (typeof self.navigator !== 'undefined' && self.navigator.onLine === false) {
+					return Response.error();
+				}
+				try {
+					let response = await fetch(event.request);
+					if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
+						response = ensureCrossOriginIsolationHeaders(response);
+					}
+					return response;
+				} catch (e) {
+					return Response.error();
 				}
 			})()
 		);

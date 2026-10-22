@@ -1,3 +1,15 @@
+## Version 00.02.92
+Date: 10/22/2026
+Time: 7:55 PM
+
+### Changes
+- Offline open uses **cache-first** (no waiting on a network timeout) so the installed game starts without internet
+- Service worker precaches music + resilient pack download; version-bump cache wipe only runs when online
+- Leaderboard bootstrap skips HTTP when offline so the menu does not stall on load
+
+### Reason
+After one online download, starting and playing with airplane mode on should work without needing a connection to load.
+
 ## Version 00.02.91
 Date: 10/22/2026
 Time: 7:49 PM

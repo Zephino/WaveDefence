@@ -16,7 +16,7 @@ Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA requ
 
 On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap **Fullscreen** in Settings — a real on-page tap target appears (browsers block fullscreen from the game canvas alone). Use the floating **Fullscreen** control if the screen timed out. On web only, Settings also has **Install app** (Chrome install prompt, or Safari Share → Add to Home Screen).
 
-**Offline on phone:** open the site (or installed app) **once while online** so the game pack finishes downloading. After that you can play with no internet from the home-screen icon. Leaderboard scores save on the device offline and **upload automatically when you’re back online**. Use **Update app** when you have a connection to pull a newer build.
+**Offline on phone:** open the site (or installed app) **once while online** so the game pack + music finish downloading. After that you can **start and play with no internet** (airplane mode). Leaderboard scores save on the device offline and **upload automatically when you’re back online**. Use **Update app** when you have a connection to pull a newer build.
 
 Rebuild the site files:
 

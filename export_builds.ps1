@@ -203,7 +203,8 @@ if ($doWeb) {
 	var KEY = "wd_game_ver";
 	try {
 		var prev = localStorage.getItem(KEY);
-		if (prev && prev !== VER && "serviceWorker" in navigator) {
+		// Only wipe caches / reload when online — offline must keep the last playable pack.
+		if (prev && prev !== VER && "serviceWorker" in navigator && navigator.onLine !== false) {
 			localStorage.setItem(KEY, VER);
 			Promise.all([
 				navigator.serviceWorker.getRegistrations().then(function (regs) {
@@ -215,7 +216,9 @@ if ($doWeb) {
 			]).then(function () { location.reload(); });
 			return;
 		}
-		localStorage.setItem(KEY, VER);
+		if (navigator.onLine !== false) {
+			localStorage.setItem(KEY, VER);
+		}
 	} catch (e) {}
 	function withVer(url) {
 		if (!url || typeof url !== "string") return url;
@@ -280,6 +283,9 @@ if ($doWeb) {
             if ($swNew -notmatch "OFFLINE_FULL_CACHE") {
                 throw "Service worker missing OFFLINE_FULL_CACHE (offline mobile play)"
             }
+            if ($swNew -notmatch "OFFLINE_CACHE_FIRST") {
+                throw "Service worker missing OFFLINE_CACHE_FIRST"
+            }
             if ($swNew -notmatch "NETWORK_FIRST_HTML") {
                 throw "Service worker missing NETWORK_FIRST_HTML"
             }
@@ -291,11 +297,13 @@ if ($doWeb) {
         $htmlOnDisk = Read-TextFileRetry $htmlPath
         if ($htmlOnDisk -notmatch [regex]::Escape('var VER = "' + $Version + '"')) { return $false }
         if ($htmlOnDisk -notmatch 'mobile_play\.js\?v=') { return $false }
+        if ($htmlOnDisk -notmatch 'navigator\.onLine !== false') { return $false }
         if (Test-Path $swPath) {
             $swOnDisk = Read-TextFileRetry $swPath
             if ($swOnDisk -notmatch [regex]::Escape("const CACHE_VERSION = '" + $Version + "';")) { return $false }
             if ($swOnDisk -notmatch "NETWORK_FIRST_HTML") { return $false }
             if ($swOnDisk -notmatch "OFFLINE_FULL_CACHE") { return $false }
+            if ($swOnDisk -notmatch "OFFLINE_CACHE_FIRST") { return $false }
         }
         if (Test-Path $manifestPath) {
             $man = Read-TextFileRetry $manifestPath
