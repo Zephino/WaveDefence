@@ -1,3 +1,14 @@
+## Version 00.02.95
+Date: 10/22/2026
+Time: 8:33 PM
+
+### Changes
+- **Controls** menu can be dragged freely anywhere on mobile/desktop again
+- Controls panel background is click-through (buttons + title bar still work) so it does not block tower/wall placement when floated over the board
+
+### Reason
+Players need to move Controls wherever is comfortable on phone; locking it to the gutter blocked that, while a solid panel over the lane still ate taps.
+
 ## Version 00.02.94
 Date: 10/22/2026
 Time: 8:23 PM

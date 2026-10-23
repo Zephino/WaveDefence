@@ -641,16 +641,19 @@ func _make_actions_panel(root: Control) -> VBoxContainer:
 func _build_launcher_panel(root: Control) -> void:
 	_launcher_shell = PanelContainer.new()
 	_launcher_shell.z_index = 28
-	_launcher_shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	# IGNORE on chrome so empty panel areas pass taps to the board (free-move anywhere).
+	_launcher_shell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_launcher_shell.clip_contents = true
 	_launcher_shell.add_theme_stylebox_override("panel", _popup_panel_style())
 	root.add_child(_launcher_shell)
 
 	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_theme_constant_override("separation", 4)
 	_launcher_shell.add_child(column)
 
 	_launcher_drag_bar = HBoxContainer.new()
+	_launcher_drag_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	_launcher_drag_bar.add_theme_constant_override("separation", 6)
 	_launcher_drag_bar.gui_input.connect(_on_launcher_header_gui_input)
 	column.add_child(_launcher_drag_bar)
@@ -669,10 +672,12 @@ func _build_launcher_panel(root: Control) -> void:
 	_launcher_drag_bar.add_child(_launcher_hide_btn)
 
 	_launcher_body = VBoxContainer.new()
+	_launcher_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_launcher_body.add_theme_constant_override("separation", 4)
 	column.add_child(_launcher_body)
 
 	var btn_row := HBoxContainer.new()
+	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn_row.add_theme_constant_override("separation", 4)
 	_launcher_body.add_child(btn_row)
 
@@ -933,11 +938,6 @@ func _toggle_launcher_collapsed() -> void:
 	_apply_launcher_layout()
 
 
-func _gutter_max_width() -> float:
-	## Left chrome must stay left of the playfield so Clash lane taps are not eaten.
-	return maxf(GameLayout.board_origin().x - GameLayout.SIDEBAR_LEFT - 4.0, 96.0)
-
-
 func _apply_launcher_layout() -> void:
 	if _launcher_shell == null:
 		return
@@ -952,24 +952,18 @@ func _apply_launcher_layout() -> void:
 			if not _launcher_collapsed
 			else "Expand shop buttons"
 		)
-	var max_w := _gutter_max_width()
-	# Shrink to content when collapsed; expand width when open — never wider than the gutter.
+	# Shrink to content when collapsed; expand width when open. Drag anywhere on screen.
 	if _launcher_collapsed:
-		_launcher_shell.custom_minimum_size = Vector2(minf(128.0, max_w), 0.0)
+		_launcher_shell.custom_minimum_size = Vector2(128.0, 0.0)
 	else:
-		_launcher_shell.custom_minimum_size = Vector2(
-			minf(maxf(GameLayout.sidebar_width(), 160.0), max_w),
-			0.0
-		)
+		_launcher_shell.custom_minimum_size = Vector2(maxf(GameLayout.sidebar_width(), 200.0), 0.0)
 	_launcher_shell.size = Vector2.ZERO
 	_launcher_shell.reset_size()
-	if _launcher_shell.size.x > max_w:
-		_launcher_shell.size.x = max_w
 	var default_pos := Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
 	if _launcher_float_pos.x >= 0.0:
-		_launcher_shell.position = _clamp_gutter_panel_pos(_launcher_float_pos, _launcher_shell.size)
+		_launcher_shell.position = _clamp_shop_pos(_launcher_float_pos, _launcher_shell.size)
 	else:
-		_launcher_shell.position = _clamp_gutter_panel_pos(default_pos, _launcher_shell.size)
+		_launcher_shell.position = _clamp_shop_pos(default_pos, _launcher_shell.size)
 
 
 func _apply_towers_shop_layout() -> void:
@@ -1074,15 +1068,6 @@ func _clamp_shop_pos(pos: Vector2, size: Vector2) -> Vector2:
 	return Vector2(clampf(pos.x, 4.0, max_x), clampf(pos.y, 4.0, max_y))
 
 
-## Keep Controls (and similar left chrome) from covering the playfield.
-func _clamp_gutter_panel_pos(pos: Vector2, size: Vector2) -> Vector2:
-	var board_x := GameLayout.board_origin().x
-	var max_right := board_x - 4.0
-	if pos.x + size.x > max_right:
-		pos.x = maxf(GameLayout.SIDEBAR_LEFT, max_right - size.x)
-	return _clamp_shop_pos(pos, size)
-
-
 func _on_towers_header_gui_input(event: InputEvent) -> void:
 	_handle_shop_drag(event, "towers")
 
@@ -1161,11 +1146,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		var raw := mm.global_position - _drag_grab
-		var next := (
-			_clamp_gutter_panel_pos(raw, panel.size)
-			if _drag_shop == "launcher"
-			else _clamp_shop_pos(raw, panel.size)
-		)
+		var next := _clamp_shop_pos(raw, panel.size)
 		panel.position = next
 		match _drag_shop:
 			"towers":
