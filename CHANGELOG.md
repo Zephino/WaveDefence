@@ -1,3 +1,14 @@
+## Version 00.02.97
+Date: 10/22/2026
+Time: 8:42 PM
+
+### Changes
+- Mobile (native + web/PWA) keeps the screen awake while the game is open; releases on background / quit
+- Web uses the Screen Wake Lock API (re-acquired after tab resume / first tap)
+
+### Reason
+Phones were dimming or locking during longer Clash/prep sessions with the game still open.
+
 ## Version 00.02.96
 Date: 10/22/2026
 Time: 8:34 PM

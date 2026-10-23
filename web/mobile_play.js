@@ -292,6 +292,8 @@
 		if (isTouchish() && !isFullscreen()) {
 			enterFullscreen();
 		}
+		// Wake Lock often needs a user gesture the first time.
+		if (wantKeepAwake) requestKeepAwake();
 	}
 
 	function isDisplayFullscreen() {
@@ -779,11 +781,55 @@
 		return true;
 	}
 
+	var wakeLock = null;
+	var wantKeepAwake = false;
+
+	/** Block screen timeout while the game tab/app is visible (Screen Wake Lock). */
+	function requestKeepAwake() {
+		if (released || !wantKeepAwake) return Promise.resolve(false);
+		if (!navigator.wakeLock || typeof navigator.wakeLock.request !== "function") {
+			return Promise.resolve(false);
+		}
+		if (document.visibilityState && document.visibilityState !== "visible") {
+			return Promise.resolve(false);
+		}
+		return navigator.wakeLock.request("screen").then(function (lock) {
+			wakeLock = lock;
+			lock.addEventListener("release", function () {
+				if (wakeLock === lock) wakeLock = null;
+			});
+			return true;
+		}).catch(function () {
+			return false;
+		});
+	}
+
+	function releaseKeepAwake() {
+		if (!wakeLock) return Promise.resolve();
+		var lock = wakeLock;
+		wakeLock = null;
+		try {
+			return lock.release().catch(function () {});
+		} catch (e) {
+			return Promise.resolve();
+		}
+	}
+
+	function setKeepAwake(on) {
+		wantKeepAwake = !!on;
+		if (!wantKeepAwake || released) {
+			return releaseKeepAwake();
+		}
+		return requestKeepAwake();
+	}
+
 	/** Quit: undo fullscreen / CSS and try to leave the page. */
 	function exitPlayMode() {
 		released = true;
 		enterInFlight = false;
 		cssFullscreen = false;
+		wantKeepAwake = false;
+		releaseKeepAwake();
 		unlockOrientation();
 		clearCanvasCss(canvasEl());
 		mode = "";
@@ -929,6 +975,7 @@
 		mode = "";
 		applyCssLandscape();
 		refreshChromeButtons();
+		if (wantKeepAwake) requestKeepAwake();
 	}
 
 	window.WaveDefenceMobile = {
@@ -937,6 +984,7 @@
 		promptInstall: promptInstall,
 		promptUpdateApp: promptUpdateApp,
 		forceAppUpdate: forceAppUpdate,
+		setKeepAwake: setKeepAwake,
 		unlockAudio: unlockAudio,
 		unlockAndStartGame: unlockAndStartGame,
 		isAudioUnlocked: function () { return !!audioUnlocked; },
@@ -980,6 +1028,8 @@
 		// Installed / phone: fill the viewport immediately (status bars still need a tap for true FS).
 		if (isStandalone() || isTouchish()) {
 			cssFullscreen = true;
+			wantKeepAwake = true;
+			requestKeepAwake();
 		}
 		applyCssLandscape();
 		refreshChromeButtons();
@@ -1037,7 +1087,12 @@
 			refreshChromeButtons();
 		});
 		document.addEventListener("visibilitychange", function () {
-			if (document.visibilityState === "visible") onResume();
+			if (document.visibilityState === "visible") {
+				onResume();
+			} else {
+				// Browser releases the lock when hidden; drop our handle so resume re-requests.
+				releaseKeepAwake();
+			}
 		});
 		window.addEventListener("pageshow", onResume);
 		window.addEventListener("focus", onResume);

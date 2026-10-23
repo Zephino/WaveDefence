@@ -178,8 +178,11 @@ func _apply_mobile_presentation() -> void:
 	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+	# Keep the display awake while the game is in the foreground.
+	DisplayServer.screen_set_keep_on(true)
 	if OS.has_feature("web"):
 		_js_apply_css_landscape()
+		_js_set_keep_awake(true)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
@@ -243,10 +246,30 @@ func request_web_update() -> void:
 func _release_mobile_presentation() -> void:
 	if not GameLayout.is_mobile_device() and not _web_mobile_play:
 		return
+	DisplayServer.screen_set_keep_on(false)
 	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR)
 	if OS.has_feature("web"):
+		_js_set_keep_awake(false)
 		return
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+func _js_set_keep_awake(on: bool) -> void:
+	if not OS.has_feature("web"):
+		return
+	var flag := "true" if on else "false"
+	JavaScriptBridge.eval(
+		"""
+		(function () {
+			try {
+				if (window.WaveDefenceMobile && WaveDefenceMobile.setKeepAwake) {
+					WaveDefenceMobile.setKeepAwake(%s);
+				}
+			} catch (e) {}
+		})()
+		""" % flag,
+		true
+	)
 
 
 func _js_apply_css_landscape() -> void:

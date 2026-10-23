@@ -190,7 +190,7 @@ Expect `SMOKE_TEST_OK`.
 
 ## Mobile / touch
 
-The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
+The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, keep the screen awake while the game is open (no idle timeout), and release orientation / wake lock when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
 
 **HUD (PC and mobile):** **Controls** launcher under gold/lives opens **Towers**, Clash **Send**, and **Actions** as floating popups (Esc/X closes). Drag the Controls title to move it anywhere on screen; **Hide** collapses shop buttons. Start Round / Skip and the timer stay. Controls chrome is click-through so it does not block placing. Drag popup title bars to move them; **Pin** keeps Towers / Send open at their current spot (still draggable). Unpinned **Towers** closes after you pick a type so mobile taps reach the board.
 
