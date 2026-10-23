@@ -647,6 +647,20 @@ func _run() -> void:
 		hud._on_tower_button("gunner")
 		if not hud.tower_buttons.has("gunner"):
 			errors.append("towers popup should keep tower buttons after pin")
+		if hud._towers_panel == null or not hud._towers_panel.visible:
+			errors.append("pinned towers shop should stay open after selecting a type")
+		# Unpinned float must not cover the board by default; selecting a type closes it.
+		hud._towers_pinned = false
+		hud._towers_float_pos = Vector2(-1, -1)
+		hud._towers_open = true
+		hud._apply_towers_shop_layout()
+		if hud._towers_panel != null and hud._towers_panel.visible:
+			var board_x := GameLayout.board_origin().x
+			if hud._towers_panel.position.x + 1.0 >= board_x:
+				errors.append("default floating towers shop should sit in the left gutter, not over the board")
+		hud._on_tower_button("wall")
+		if hud._towers_open or (hud._towers_panel != null and hud._towers_panel.visible):
+			errors.append("unpinned towers shop should close after selecting a type so board taps place")
 		hud._towers_pinned = prev_pin
 		UserSettings.set_towers_shop_pinned(prev_pin)
 		hud._apply_towers_shop_layout()

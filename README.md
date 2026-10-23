@@ -107,8 +107,8 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 
 - **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), **Settings** (Master / Music / SFX volume + Mute music / Mute sounds; swipe to scroll without changing controls), save maze image, quit to menu (no mid-run save).
 - **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
-- Under gold/lives, open **Towers**, **Send** (Clash only), or **Actions** from the **Controls** launcher. Drag its title bar to move it; **Hide** shrinks it to a compact chip (timer + Start Round stay). Esc/X closes popups.
-- Select a tower from **Towers**, then **left-click** the grid to place it.
+- Under gold/lives, open **Towers**, **Send** (Clash only), or **Actions** from the **Controls** launcher. Drag its title bar to move it; **Hide** shrinks it to a compact chip (timer + Start Round stay). Esc/X closes popups. The floating **Towers** list stays in the left gutter (not over your Clash lane); picking a type closes it so you can tap the board to place.
+- Select a tower from **Towers**, then **left-click** / tap the grid to place it.
 - Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
 - **Click or hover a living mob** to inspect it (name, HP left/max, gold bounty) on the same board tooltip as towers. Clears on death, empty click, Esc/deselect, or selecting a tower. Clicks that hit a mob inspect it instead of placing.
 - **Hold left-click and drag** to paint-place many walls/towers in a row.
@@ -192,7 +192,7 @@ Expect `SMOKE_TEST_OK`.
 
 The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, and release orientation when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
 
-**HUD (PC and mobile):** **Controls** launcher under gold/lives opens **Towers**, Clash **Send**, and **Actions** as floating popups (Esc/X closes). Drag the Controls title to move it; **Hide** collapses shop buttons. Start Round / Skip and the timer stay. Drag popup title bars to move them; **Pin** can dock Towers left / Send right.
+**HUD (PC and mobile):** **Controls** launcher under gold/lives opens **Towers**, Clash **Send**, and **Actions** as floating popups (Esc/X closes). Drag the Controls title to move it; **Hide** collapses shop buttons. Start Round / Skip and the timer stay. Drag popup title bars to move them; **Pin** can dock Towers left / Send right. Unpinned **Towers** defaults to the left gutter and closes after you pick a type so mobile taps reach the board.
 
 Mobile extras:
 

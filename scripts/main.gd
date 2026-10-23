@@ -634,7 +634,7 @@ func _handle_mouse(event: InputEventMouseButton) -> void:
 			_on_deselect()
 		elif not game_state.can_afford(int(TowerData.get_def(build_system.selected_tower_id)["cost"])):
 			hud.set_status("Not enough gold.")
-		elif pathfinder.would_block_path(cell):
+		elif _would_block_placement_path(cell):
 			hud.set_status("Can't place there — would block the path.")
 		else:
 			hud.set_status("Can't place there.")
@@ -825,6 +825,19 @@ func _focus_camera_on_map_center() -> void:
 	_clamp_map_pan()
 	_sync_world_positions()
 	_update_map_camera()
+
+
+func _would_block_placement_path(cell: Vector2i) -> bool:
+	if pathfinder == null or grid == null:
+		return false
+	if clash_match != null and grid.is_clash_layout:
+		var lane := build_system.human_lane if build_system != null else 0
+		return pathfinder.would_block_path_between(
+			grid.get_lane_spawn(lane),
+			grid.get_lane_exit(lane),
+			cell
+		)
+	return pathfinder.would_block_path(cell)
 
 
 func _paint_place_at(local_map: Vector2, show_status: bool) -> bool:

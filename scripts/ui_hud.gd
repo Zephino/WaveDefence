@@ -978,11 +978,13 @@ func _apply_towers_shop_layout() -> void:
 		var h := minf(GameLayout.board_pixel_size().y - 48.0, 520.0)
 		_towers_panel.size = Vector2(w, h)
 		_towers_panel.custom_minimum_size = Vector2(w, h)
+		var desired := Vector2(
+			GameLayout.SIDEBAR_LEFT,
+			maxf(GameLayout.BOARD_TOP, _launcher_bottom_y())
+		)
 		if _towers_float_pos.x >= 0.0:
-			_towers_panel.position = _clamp_shop_pos(_towers_float_pos, _towers_panel.size)
-		else:
-			var board := GameLayout.board_origin()
-			_towers_panel.position = Vector2(board.x + 6.0, board.y + 8.0)
+			desired = _towers_float_pos
+		_towers_panel.position = _clamp_towers_float_pos(desired, _towers_panel.size)
 		_towers_panel.visible = true
 	else:
 		_towers_panel.visible = false
@@ -1056,6 +1058,14 @@ func _clamp_shop_pos(pos: Vector2, size: Vector2) -> Vector2:
 	var max_x := maxf(view.x - size.x - 4.0, 4.0)
 	var max_y := maxf(view.y - size.y - 4.0, 4.0)
 	return Vector2(clampf(pos.x, 4.0, max_x), clampf(pos.y, 4.0, max_y))
+
+
+## Keep the Towers float out of the playfield so Clash lane taps are not eaten.
+func _clamp_towers_float_pos(pos: Vector2, size: Vector2) -> Vector2:
+	var board_x := GameLayout.board_origin().x
+	if pos.x + size.x > board_x + 2.0:
+		pos.x = maxf(GameLayout.SIDEBAR_LEFT, board_x - size.x - 4.0)
+	return _clamp_shop_pos(pos, size)
 
 
 func _on_towers_header_gui_input(event: InputEvent) -> void:
@@ -1135,7 +1145,12 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
-		var next := _clamp_shop_pos(mm.global_position - _drag_grab, panel.size)
+		var raw := mm.global_position - _drag_grab
+		var next := (
+			_clamp_towers_float_pos(raw, panel.size)
+			if _drag_shop == "towers"
+			else _clamp_shop_pos(raw, panel.size)
+		)
 		panel.position = next
 		match _drag_shop:
 			"towers":
@@ -1385,6 +1400,10 @@ func _on_tower_button(tower_id: String) -> void:
 		return
 	highlight_tower(tower_id)
 	tower_type_selected.emit(tower_id)
+	# Floating shop eats board taps while open — close after arming a type so place works.
+	if not _towers_pinned and _towers_open:
+		_towers_open = false
+		_apply_towers_shop_layout()
 
 
 func _refresh_shop_buttons() -> void:

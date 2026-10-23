@@ -1,3 +1,15 @@
+## Version 00.02.93
+Date: 10/22/2026
+Time: 8:14 PM
+
+### Changes
+- Floating **Towers** shop no longer sits over the board (stays in the left gutter; saved positions that overlap are nudged back)
+- Picking a tower type closes the unpinned Towers popup so mobile taps can place on the grid
+- Clash “would block path” place feedback uses the human lane spawn/exit (not classic portals)
+
+### Reason
+On mobile Clash, the Towers popup covered the left of the human lane (left of / on / one cell right of the green path), so taps never reached the board.
+
 ## Version 00.02.92
 Date: 10/22/2026
 Time: 7:55 PM
