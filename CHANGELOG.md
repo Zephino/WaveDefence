@@ -1,3 +1,15 @@
+## Version 00.02.94
+Date: 10/22/2026
+Time: 8:23 PM
+
+### Changes
+- **Controls** launcher is width-capped and clamped to the left gutter so it cannot cover the Clash lane / green path
+- Floating **Towers** window can be dragged freely again (board-ban clamp removed); still closes after picking a type
+- Clash camera starts focused on the human (leftmost) lane instead of the map midpoint
+
+### Reason
+With the Towers shop closed, placement on/left of the green path still failed because the always-visible Controls panel overlapped those cells; the previous Towers clamp also blocked free dragging.
+
 ## Version 00.02.93
 Date: 10/22/2026
 Time: 8:14 PM

@@ -649,15 +649,19 @@ func _run() -> void:
 			errors.append("towers popup should keep tower buttons after pin")
 		if hud._towers_panel == null or not hud._towers_panel.visible:
 			errors.append("pinned towers shop should stay open after selecting a type")
-		# Unpinned float must not cover the board by default; selecting a type closes it.
+		# Controls launcher must stay in the left gutter (never cover the Clash lane).
+		hud._launcher_collapsed = false
+		hud._launcher_float_pos = Vector2(-1, -1)
+		hud._apply_launcher_layout()
+		if hud._launcher_shell != null:
+			var board_x := GameLayout.board_origin().x
+			if hud._launcher_shell.position.x + hud._launcher_shell.size.x > board_x + 0.5:
+				errors.append("Controls launcher must not overlap the playfield")
+		# Unpinned: picking a type closes the shop so board taps place; float may be dragged freely.
 		hud._towers_pinned = false
 		hud._towers_float_pos = Vector2(-1, -1)
 		hud._towers_open = true
 		hud._apply_towers_shop_layout()
-		if hud._towers_panel != null and hud._towers_panel.visible:
-			var board_x := GameLayout.board_origin().x
-			if hud._towers_panel.position.x + 1.0 >= board_x:
-				errors.append("default floating towers shop should sit in the left gutter, not over the board")
 		hud._on_tower_button("wall")
 		if hud._towers_open or (hud._towers_panel != null and hud._towers_panel.visible):
 			errors.append("unpinned towers shop should close after selecting a type so board taps place")

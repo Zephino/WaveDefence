@@ -827,6 +827,34 @@ func _focus_camera_on_map_center() -> void:
 	_update_map_camera()
 
 
+## Clash: keep the human (leftmost) lane in view — not the map midpoint over bot lanes.
+func _focus_camera_on_human_lane() -> void:
+	if grid == null or not grid.is_clash_layout:
+		_focus_camera_on_map_center()
+		return
+	if not _map_needs_pan():
+		map_pan = Vector2.ZERO
+		_clamp_map_pan()
+		_sync_world_positions()
+		_update_map_camera()
+		return
+	var lane := build_system.human_lane if build_system != null else 0
+	var spawn := grid.get_lane_spawn(lane)
+	var focus := grid.cell_to_world_center(spawn)
+	# Bias a bit downward so more of the lane is visible under the top HUD.
+	focus.y = grid.map_pixel_size().y * 0.45
+	var visible := _visible_map_extent()
+	map_pan = focus - visible * 0.5
+	# Prefer showing lane x=0 at the left of the play view when it fits.
+	var lane_left_px := 0.0
+	if lane >= 0 and lane < grid.lane_col_ranges.size():
+		lane_left_px = float((grid.lane_col_ranges[lane] as Vector2i).x) * float(grid.tile_px())
+	map_pan.x = lane_left_px
+	_clamp_map_pan()
+	_sync_world_positions()
+	_update_map_camera()
+
+
 func _would_block_placement_path(cell: Vector2i) -> bool:
 	if pathfinder == null or grid == null:
 		return false
@@ -1366,7 +1394,9 @@ func _apply_run_map(new_random: bool) -> void:
 	map_pan = Vector2.ZERO
 	map_zoom = 1.0
 	_sync_world_positions()
-	if WaveScaler.is_siege_mode(mode) or WaveScaler.is_clash_mode(mode):
+	if WaveScaler.is_clash_mode(mode):
+		_focus_camera_on_human_lane()
+	elif WaveScaler.is_siege_mode(mode):
 		_focus_camera_on_map_center()
 	else:
 		_update_map_camera()

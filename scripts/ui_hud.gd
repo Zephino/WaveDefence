@@ -642,6 +642,7 @@ func _build_launcher_panel(root: Control) -> void:
 	_launcher_shell = PanelContainer.new()
 	_launcher_shell.z_index = 28
 	_launcher_shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_launcher_shell.clip_contents = true
 	_launcher_shell.add_theme_stylebox_override("panel", _popup_panel_style())
 	root.add_child(_launcher_shell)
 
@@ -932,6 +933,11 @@ func _toggle_launcher_collapsed() -> void:
 	_apply_launcher_layout()
 
 
+func _gutter_max_width() -> float:
+	## Left chrome must stay left of the playfield so Clash lane taps are not eaten.
+	return maxf(GameLayout.board_origin().x - GameLayout.SIDEBAR_LEFT - 4.0, 96.0)
+
+
 func _apply_launcher_layout() -> void:
 	if _launcher_shell == null:
 		return
@@ -946,18 +952,24 @@ func _apply_launcher_layout() -> void:
 			if not _launcher_collapsed
 			else "Expand shop buttons"
 		)
-	# Shrink to content when collapsed; expand width when open.
+	var max_w := _gutter_max_width()
+	# Shrink to content when collapsed; expand width when open — never wider than the gutter.
 	if _launcher_collapsed:
-		_launcher_shell.custom_minimum_size = Vector2(128.0, 0.0)
+		_launcher_shell.custom_minimum_size = Vector2(minf(128.0, max_w), 0.0)
 	else:
-		_launcher_shell.custom_minimum_size = Vector2(maxf(GameLayout.sidebar_width(), 200.0), 0.0)
+		_launcher_shell.custom_minimum_size = Vector2(
+			minf(maxf(GameLayout.sidebar_width(), 160.0), max_w),
+			0.0
+		)
 	_launcher_shell.size = Vector2.ZERO
 	_launcher_shell.reset_size()
+	if _launcher_shell.size.x > max_w:
+		_launcher_shell.size.x = max_w
 	var default_pos := Vector2(GameLayout.SIDEBAR_LEFT, 34.0)
 	if _launcher_float_pos.x >= 0.0:
-		_launcher_shell.position = _clamp_shop_pos(_launcher_float_pos, _launcher_shell.size)
+		_launcher_shell.position = _clamp_gutter_panel_pos(_launcher_float_pos, _launcher_shell.size)
 	else:
-		_launcher_shell.position = default_pos
+		_launcher_shell.position = _clamp_gutter_panel_pos(default_pos, _launcher_shell.size)
 
 
 func _apply_towers_shop_layout() -> void:
@@ -978,13 +990,15 @@ func _apply_towers_shop_layout() -> void:
 		var h := minf(GameLayout.board_pixel_size().y - 48.0, 520.0)
 		_towers_panel.size = Vector2(w, h)
 		_towers_panel.custom_minimum_size = Vector2(w, h)
-		var desired := Vector2(
-			GameLayout.SIDEBAR_LEFT,
-			maxf(GameLayout.BOARD_TOP, _launcher_bottom_y())
-		)
 		if _towers_float_pos.x >= 0.0:
-			desired = _towers_float_pos
-		_towers_panel.position = _clamp_towers_float_pos(desired, _towers_panel.size)
+			_towers_panel.position = _clamp_shop_pos(_towers_float_pos, _towers_panel.size)
+		else:
+			# Default in the left gutter; player may drag freely afterward.
+			var desired := Vector2(
+				GameLayout.SIDEBAR_LEFT,
+				maxf(GameLayout.BOARD_TOP, _launcher_bottom_y())
+			)
+			_towers_panel.position = _clamp_shop_pos(desired, _towers_panel.size)
 		_towers_panel.visible = true
 	else:
 		_towers_panel.visible = false
@@ -1060,11 +1074,12 @@ func _clamp_shop_pos(pos: Vector2, size: Vector2) -> Vector2:
 	return Vector2(clampf(pos.x, 4.0, max_x), clampf(pos.y, 4.0, max_y))
 
 
-## Keep the Towers float out of the playfield so Clash lane taps are not eaten.
-func _clamp_towers_float_pos(pos: Vector2, size: Vector2) -> Vector2:
+## Keep Controls (and similar left chrome) from covering the playfield.
+func _clamp_gutter_panel_pos(pos: Vector2, size: Vector2) -> Vector2:
 	var board_x := GameLayout.board_origin().x
-	if pos.x + size.x > board_x + 2.0:
-		pos.x = maxf(GameLayout.SIDEBAR_LEFT, board_x - size.x - 4.0)
+	var max_right := board_x - 4.0
+	if pos.x + size.x > max_right:
+		pos.x = maxf(GameLayout.SIDEBAR_LEFT, max_right - size.x)
 	return _clamp_shop_pos(pos, size)
 
 
@@ -1147,8 +1162,8 @@ func _input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		var raw := mm.global_position - _drag_grab
 		var next := (
-			_clamp_towers_float_pos(raw, panel.size)
-			if _drag_shop == "towers"
+			_clamp_gutter_panel_pos(raw, panel.size)
+			if _drag_shop == "launcher"
 			else _clamp_shop_pos(raw, panel.size)
 		)
 		panel.position = next
