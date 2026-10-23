@@ -639,11 +639,16 @@ func _run() -> void:
 		if hud._actions_shell != null and hud._actions_shell.visible and not hud._actions_open:
 			errors.append("actions popup should start closed")
 		var prev_pin := UserSettings.is_towers_shop_pinned()
-		hud._towers_pinned = true
+		hud._towers_pinned = false
+		hud._towers_float_pos = Vector2(320.0, 140.0)
 		hud._towers_open = true
 		hud._apply_towers_shop_layout()
+		var before_pin := hud._towers_panel.position if hud._towers_panel else Vector2.ZERO
+		hud._toggle_towers_pin()
 		if hud._towers_panel == null or not hud._towers_panel.visible:
 			errors.append("pinned towers shop should stay visible")
+		elif hud._towers_panel.position.distance_to(before_pin) > 2.0:
+			errors.append("pin should keep the towers shop at its current location")
 		hud._on_tower_button("gunner")
 		if not hud.tower_buttons.has("gunner"):
 			errors.append("towers popup should keep tower buttons after pin")

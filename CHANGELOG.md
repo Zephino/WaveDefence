@@ -1,3 +1,13 @@
+## Version 00.02.96
+Date: 10/22/2026
+Time: 8:34 PM
+
+### Changes
+- **Pin** on Towers / Send keeps the popup open at its **current** location (no jump to a sidebar dock); still draggable while pinned
+
+### Reason
+Pin should lock the shop where you placed it on mobile, not teleport it to a fixed dock.
+
 ## Version 00.02.95
 Date: 10/22/2026
 Time: 8:33 PM

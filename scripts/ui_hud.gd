@@ -895,6 +895,10 @@ func _toggle_towers_pin() -> void:
 	UserSettings.set_towers_shop_pinned(_towers_pinned)
 	if _towers_pinned:
 		_towers_open = true
+		# Pin in place — keep wherever the popup is now (do not jump to a sidebar dock).
+		if _towers_panel != null and _towers_panel.visible:
+			_towers_float_pos = _towers_panel.position
+			UserSettings.set_towers_shop_pos(_towers_float_pos)
 	_refresh_towers_pin_button()
 	_apply_towers_shop_layout()
 
@@ -904,6 +908,9 @@ func _toggle_send_pin() -> void:
 	UserSettings.set_send_shop_pinned(_send_pinned)
 	if _send_pinned:
 		_send_open = true
+		if _send_panel != null and _send_panel.visible:
+			_send_float_pos = _send_panel.position
+			UserSettings.set_send_shop_pos(_send_float_pos)
 	_refresh_send_pin_button()
 	_apply_send_shop_layout()
 
@@ -913,7 +920,7 @@ func _refresh_towers_pin_button() -> void:
 		return
 	_towers_pin_btn.text = "Unpin" if _towers_pinned else "Pin"
 	_towers_pin_btn.tooltip_text = (
-		"Dock towers on the left sidebar" if not _towers_pinned else "Float as a popup again"
+		"Keep open at this spot" if not _towers_pinned else "Unpin — closes after you pick a type"
 	)
 
 
@@ -922,7 +929,7 @@ func _refresh_send_pin_button() -> void:
 		return
 	_send_pin_btn.text = "Unpin" if _send_pinned else "Pin"
 	_send_pin_btn.tooltip_text = (
-		"Dock sends in the right actions area" if not _send_pinned else "Float as a popup again"
+		"Keep open at this spot" if not _send_pinned else "Unpin — float closes with X / Esc"
 	)
 
 
@@ -971,15 +978,8 @@ func _apply_towers_shop_layout() -> void:
 		return
 	_refresh_towers_pin_button()
 	if _towers_pinned:
-		var rect := GameLayout.sidebar_rect()
-		var top_y := maxf(rect.position.y, _launcher_bottom_y())
-		var height := maxf(GameLayout.VIEW_HEIGHT - top_y - 8.0, 160.0)
-		_towers_panel.position = Vector2(rect.position.x, top_y)
-		_towers_panel.size = Vector2(rect.size.x, height)
-		_towers_panel.custom_minimum_size = Vector2(rect.size.x, height)
-		_towers_panel.visible = true
 		_towers_open = true
-	elif _towers_open:
+	if _towers_open:
 		var w := GameLayout.sidebar_width()
 		var h := minf(GameLayout.board_pixel_size().y - 48.0, 520.0)
 		_towers_panel.size = Vector2(w, h)
@@ -1015,14 +1015,8 @@ func _apply_send_shop_layout() -> void:
 		return
 	_refresh_launcher_send_visibility()
 	if _send_pinned:
-		var rect := GameLayout.right_sidebar_rect()
-		var h := minf(rect.size.y * 0.48, 340.0)
-		_send_panel.position = rect.position
-		_send_panel.size = Vector2(rect.size.x, h)
-		_send_panel.custom_minimum_size = Vector2(rect.size.x, h)
-		_send_panel.visible = true
 		_send_open = true
-	elif _send_open:
+	if _send_open:
 		var board_sz := GameLayout.board_pixel_size()
 		var w := maxf(GameLayout.sidebar_width(), 200.0)
 		var h := minf(board_sz.y - 48.0, 420.0)
@@ -1085,11 +1079,6 @@ func _on_launcher_header_gui_input(event: InputEvent) -> void:
 
 
 func _handle_shop_drag(event: InputEvent, which: String) -> void:
-	var pinned := false
-	if which == "towers":
-		pinned = _towers_pinned
-	elif which == "send":
-		pinned = _send_pinned
 	var panel: Control = null
 	match which:
 		"towers":
@@ -1100,7 +1089,8 @@ func _handle_shop_drag(event: InputEvent, which: String) -> void:
 			panel = _actions_shell
 		"launcher":
 			panel = _launcher_shell
-	if pinned or panel == null or not panel.visible:
+	# Pinned shops stay open at their spot but can still be dragged to a new pin location.
+	if panel == null or not panel.visible:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

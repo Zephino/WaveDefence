@@ -2,7 +2,7 @@
 // After one online download, phones can open and play with no internet.
 // Incrementing CACHE_VERSION forces a refresh when online.
 /** @type {string} */
-const CACHE_VERSION = '00.02.95';
+const CACHE_VERSION = '00.02.96';
 /** @type {string} */
 const CACHE_PREFIX = 'Wave Defence-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
