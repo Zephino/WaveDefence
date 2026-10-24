@@ -120,15 +120,23 @@ func _run() -> void:
 	if rotate_gold < 80 * WaveScaler.MAP_ROTATE_GOLD_PER_KILL:
 		errors.append("map rotate gold should scale with kills")
 
-	# Enemy sprite sheets load (ground / flier / boss).
+	# Enemy sprite sheets load (ground / flier / boss + plus).
 	if not EnemySprites.has_species("slime"):
 		errors.append("slime sprite sheet should load from assets/sprites")
 	elif EnemySprites.walk_texture("slime", 0.0) == null:
 		errors.append("slime walk frame 0 should exist")
+	if not EnemySprites.has_species("slime_plus"):
+		errors.append("slime_plus ground sheet should load from assets/sprites")
 	if not EnemySprites.has_species("bat"):
 		errors.append("bat flier sheet should load from assets/sprites")
 	if not EnemySprites.has_species("colossus_v2"):
 		errors.append("colossus boss sheet should load from assets/sprites")
+	var wreck_late := EnemySprites.pick_species(false, false, true, false, 30)
+	if wreck_late != "armadillo_plus":
+		errors.append("late-wave wrecker should use armadillo_plus (%s)" % wreck_late)
+	var ground_late := EnemySprites.pick_species(false, false, false, false, 30)
+	if not str(ground_late).ends_with("_plus"):
+		errors.append("late-wave ground should pick a _plus species (%s)" % ground_late)
 	# Tower sprite system (data-driven sheets under assets/sprites/towers/).
 	var _TS = preload("res://scripts/tower_sprites.gd")
 	for tid in _TS.tower_ids():

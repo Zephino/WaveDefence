@@ -4,19 +4,17 @@ extends RefCounted
 ## Mob sprite sheets under res://assets/sprites/<id>/
 ## Supports *_ground_*, *_flier_*, and *_boss_* sheet naming.
 
-## Ground creeps — WaveDefence_mobs_ground rework (no _plus pack yet).
+## Ground creeps — WaveDefence_mobs_all pack (base + _plus).
 const BASE_SPECIES: PackedStringArray = [
 	"slime", "beetle", "spider", "crab", "crawler",
 	"pillbug", "tortoise", "urchin", "mole", "scarab",
 	"tick", "slug", "jelly", "armadillo", "roller",
 ]
-## Until a ground _plus pack arrives, late waves reuse base ground art.
 const PLUS_SPECIES: PackedStringArray = [
-	"slime", "beetle", "spider", "crab", "crawler",
-	"pillbug", "tortoise", "urchin", "mole", "scarab",
-	"tick", "slug", "jelly", "armadillo", "roller",
+	"slime_plus", "beetle_plus", "spider_plus", "crab_plus", "crawler_plus",
+	"pillbug_plus", "tortoise_plus", "urchin_plus", "mole_plus", "scarab_plus",
+	"tick_plus", "slug_plus", "jelly_plus", "armadillo_plus", "roller_plus",
 ]
-## Kept from prior packs until Claude’s flier / boss reworks land.
 const FLYING_SPECIES: PackedStringArray = [
 	"bat", "wasp", "moth", "hornet", "dragonfly",
 	"firefly", "hoverbot", "propeller", "stingray", "sky_jelly",
@@ -33,7 +31,9 @@ const BOSS_PLUS_SPECIES: PackedStringArray = [
 	"leviathan_plus_v2", "overseer_plus_v2",
 ]
 const WRECKER_SPECIES := "armadillo"
+const WRECKER_PLUS_SPECIES := "armadillo_plus"
 const SNAKE_SPECIES := "crawler"
+const SNAKE_PLUS_SPECIES := "crawler_plus"
 const _SHEET_KINDS: PackedStringArray = ["ground", "flier", "boss"]
 
 ## species_id -> { sheet: Texture2D, walk: Array[AtlasTexture], fps: float, frame_w: int, frame_h: int }
@@ -50,10 +50,9 @@ static func pick_species(
 	rng: RandomNumberGenerator = null
 ) -> String:
 	if is_wrecker:
-		# armadillo_plus archived with legacy ground; use base until plus rework.
-		return WRECKER_SPECIES
+		return WRECKER_PLUS_SPECIES if wave >= 25 else WRECKER_SPECIES
 	if is_snake:
-		return SNAKE_SPECIES
+		return SNAKE_PLUS_SPECIES if wave >= 25 else SNAKE_SPECIES
 	if is_flying:
 		var fly_pool: PackedStringArray = (
 			FLYING_PLUS_SPECIES if is_boss or wave >= 20 else FLYING_SPECIES

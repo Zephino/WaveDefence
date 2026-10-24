@@ -1,3 +1,15 @@
+## Version 00.02.98
+Date: 10/24/2026
+Time: 12:01 PM
+
+### Changes
+- Imported **WaveDefence_mobs_all** sprite pack: new ground `_plus` sheets, refreshed flier + boss sheets
+- Late waves / wreckers / snakes use `_plus` art; art tools landed in `tools/monster_art/`
+- Previous differing sheets backed up under `archive/mobs_all_pre_*`
+
+### Reason
+Bring in the full mob art drop so late-game ground creeps get distinct plus looks and fliers/bosses stay current.
+
 ## Version 00.02.97
 Date: 10/22/2026
 Time: 8:42 PM
