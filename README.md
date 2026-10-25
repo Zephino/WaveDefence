@@ -150,7 +150,7 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 | Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×). Homing poison blob from tower → enemy when Effects is on |
 | Lightning | 80 | Chain damage; strong vs air (2.0×). Bolt flashes when Effects is on |
 | Spike | 45 | Melee ground-only; high damage, very short range |
-| Anti-Air | 65 | Air-only flak; long range |
+| Anti-Air | 65 | Air-only missiles; long range |
 | Vortex | 90 | No damage (unlocks wave **12**); 1-cell tower that **locks a 3×3** build zone (not in corners); only pulls enemies on the **8 ring tiles**, spins them one lap, then releases |
 | Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
 | Command | 100 | Does not shoot. Select it, then place **pay-on-place** abilities. Combat ones (Air Strike / Barricade Spike / Recon Flare) arm as **path traps** and only spend gold when placed — they wait for enemies instead of missing. Supply Drop buffs nearby towers on place (no spend if none in range). Hover ability buttons for tower-style tooltips. |

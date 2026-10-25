@@ -1,3 +1,15 @@
+## Version 00.02.99
+Date: 10/25/2026
+Time: 1:07 AM
+
+### Changes
+- Clash bots obey human placement rules (no sealed lanes that delete ground sends)
+- Four Clash bot difficulties (Easy / Medium / Hard / Cheater) with learning in `user://clash_bot_memory.cfg`
+- Anti-Air fires missiles (`fx_missile` + `fx_missile_burst`, no gun muzzle flash)
+
+### Reason
+Apply the tested WaveDefence_update_for_cursor pack so Clash bots stay fair and Anti-Air reads as missiles.
+
 ## Version 00.02.98
 Date: 10/24/2026
 Time: 12:01 PM
