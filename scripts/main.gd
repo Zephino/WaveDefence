@@ -366,6 +366,9 @@ func _on_clash_tower_wrecked(cell: Vector2i) -> void:
 		break
 	if repaired:
 		wave_manager.invalidate_ground_path()
+		# Safety net: a mid-wave repair must never leave a lane sealed (sends would vanish).
+		if not wave_manager.has_open_path():
+			wave_manager.clear_path_blockers()
 		build_system.refresh_after_reset()
 		if hud != null:
 			hud.refresh_clash_panel()

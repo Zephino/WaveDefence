@@ -17,6 +17,9 @@ var incoming_sends: Array = []
 ## Cheater heal: after dipping to ≤ trigger, regenerate toward target.
 var cheater_healing: bool = false
 var cheater_heal_timer: float = 0.0
+## Bot learning: monsters that got past this player since the last prep (reset by the bot).
+var leaks_ground_round: int = 0
+var leaks_air_round: int = 0
 
 
 func reset_economy() -> void:

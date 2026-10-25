@@ -834,6 +834,12 @@ func _on_enemy_leaked(enemy: Enemy) -> void:
 	SoundHub.play_leak()
 	if _is_clash() and enemy.defender_id >= 0:
 		clash_match.credit_leak(enemy.defender_id)
+		var leak_p := clash_match.get_player(enemy.defender_id)
+		if leak_p != null:
+			if enemy.is_flying:
+				leak_p.leaks_air_round += 1
+			else:
+				leak_p.leaks_ground_round += 1
 		if _try_clash_overflow(enemy):
 			_emit_enemies_remaining()
 			return

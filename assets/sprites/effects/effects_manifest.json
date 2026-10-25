@@ -329,6 +329,46 @@
       ],
       "note": "melee strike at enemy",
       "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_missile",
+      "sheet": "fx_missile_sheet.png",
+      "frame_width": 32,
+      "frame_height": 16,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 16,
+      "loop": true,
+      "pivot": [
+        22,
+        8
+      ],
+      "used_by": [
+        "antiair"
+      ],
+      "note": "rocket projectile, faces right; translucent smoke trail behind",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
+    },
+    {
+      "name": "fx_missile_burst",
+      "sheet": "fx_missile_burst_sheet.png",
+      "frame_width": 40,
+      "frame_height": 40,
+      "frames": 7,
+      "columns": 7,
+      "rows": 1,
+      "fps": 16,
+      "loop": false,
+      "pivot": [
+        20,
+        20
+      ],
+      "used_by": [
+        "antiair"
+      ],
+      "note": "air-burst impact with shrapnel",
+      "blend": "add-friendly (stepped alpha 0/96/176/255)"
     }
   ]
 }

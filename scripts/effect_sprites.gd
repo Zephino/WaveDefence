@@ -12,7 +12,7 @@ const PROJECTILE_FOR_TOWER := {
 	"gunner": "fx_tracer",
 	"rapid": "fx_tracer",
 	"gatling": "fx_tracer",
-	"antiair": "fx_flak_shell",
+	"antiair": "fx_missile",
 	"cannon": "fx_cannon_shell",
 	"burn": "fx_fireball",
 	"freeze": "fx_ice_shard",
@@ -30,7 +30,7 @@ const IMPACT_FOR_TOWER := {
 	"freeze": "fx_frost_burst",
 	"poison": "fx_poison_cloud",
 	"lightning": "fx_lightning_spark",
-	"antiair": "fx_flak_burst",
+	"antiair": "fx_missile_burst",
 	"spike": "fx_spike_burst",
 }
 
@@ -39,7 +39,6 @@ const MUZZLE_TOWERS := {
 	"rapid": true,
 	"gatling": true,
 	"cannon": true,
-	"antiair": true,
 }
 
 ## name -> { frames, fps, loop, frame_w, frame_h, pivot, sheet_w, sheet_h }
