@@ -18,7 +18,13 @@ On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap 
 
 **Offline on phone:** open the site (or installed app) **once while online** so the game pack + music finish downloading. After that you can **start and play with no internet** (airplane mode). Leaderboard scores save on the device offline and **upload automatically when you’re back online**. Use **Update app** when you have a connection to pull a newer build.
 
-Rebuild the site files:
+The main menu includes **Suggest a Feature**, directly beneath **Quit**,
+which opens an anonymous in-game suggestion form. The website is generated from
+the files in `docs/`, not directly from the Godot source files. A GitHub Actions
+workflow now exports the web game after source changes and commits the refreshed
+`docs/` files back to `main`. GitHub Pages then publishes that export.
+
+To rebuild the web files locally instead:
 
 ```powershell
 .\export_builds.ps1 -WebOnly

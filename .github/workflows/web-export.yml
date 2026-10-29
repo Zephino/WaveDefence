@@ -1,0 +1,110 @@
+name: Publish Wave Defence web game
+
+# Source code changes must rebuild the exported Godot game in docs/.
+# The Pages branch deployment alone only republishes whatever is already there.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VERSION'
+      - 'project.godot'
+      - 'export_presets.cfg'
+      - 'scripts/**'
+      - 'scenes/**'
+      - 'data/**'
+      - 'assets/**'
+      - 'audio/**'
+      - 'web/**'
+      - '.github/workflows/web-export.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wave-defence-web-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Godot and matching web export templates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '4.7.2'
+          $release = "https://github.com/godotengine/godot/releases/download/$version-stable"
+          $work = Join-Path $env:RUNNER_TEMP 'godot-web'
+          $bin = Join-Path $work 'bin'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          $appZip = Join-Path $work 'godot.zip'
+          & curl.exe -fLSs --retry 3 --output $appZip "$release/Godot_v$version-stable_win64.exe.zip"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download Godot executable' }
+          $appFolder = Join-Path $work 'app'
+          Expand-Archive -Path $appZip -DestinationPath $appFolder -Force
+          $exe = Get-ChildItem $appFolder -Filter 'Godot_v*-stable_win64.exe' -Recurse |
+            Select-Object -First 1
+          if (-not $exe) { throw 'Godot executable not found in archive' }
+          Copy-Item $exe.FullName (Join-Path $bin 'godot.exe')
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+
+          $tpz = Join-Path $work 'templates.tpz'
+          & curl.exe -fLSs --retry 3 --output $tpz "$release/Godot_v$version-stable_export_templates.tpz"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download Godot export templates' }
+          $extract = Join-Path $work 'extracted'
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          & tar.exe -xf $tpz -C $extract
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract Godot export templates' }
+          $source = Join-Path $extract 'templates'
+          $destination = Join-Path $env:APPDATA "Godot/export_templates/$version.stable"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          $webFiles = @(Get-ChildItem $source -File | Where-Object { $_.Name -like 'web*' })
+          if ($webFiles.Count -lt 2) { throw 'Web release/debug templates not found' }
+          $webFiles | Copy-Item -Destination $destination -Force
+          if (Test-Path (Join-Path $source 'version.txt')) {
+            Copy-Item (Join-Path $source 'version.txt') $destination -Force
+          }
+          Write-Host "Installed Godot $version with web templates"
+
+      - name: Import Godot project
+        shell: pwsh
+        run: |
+          & godot --headless --import --path .
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+
+      - name: Export web game including offline and mobile shell
+        shell: powershell
+        run: |
+          .\export_builds.ps1 -WebOnly
+          if (-not (Test-Path 'docs/index.pck')) { throw 'Missing exported game pack' }
+          if (-not (Test-Path 'docs/index.html')) { throw 'Missing exported game page' }
+          $v = (Get-Content VERSION -Raw).Trim()
+          $html = Get-Content 'docs/index.html' -Raw
+          if (-not $html.Contains('var VER = "' + $v + '"')) { throw 'Version and browser cache-busting do not match' }
+          $worker = Get-Content 'docs/index.service.worker.js' -Raw
+          if (-not $worker.Contains("const CACHE_VERSION = '" + $v + "';")) { throw 'Offline cache version was not updated' }
+
+      - name: Commit playable build to Pages docs folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f -- docs
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to stage the web export' }
+          $changes = git diff --cached --name-only
+          if (-not $changes) {
+            Write-Host 'Exported web files already up to date'
+            exit 0
+          }
+          $v = (Get-Content VERSION -Raw).Trim()
+          git commit -m "build(web): publish Wave Defence v$v"
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to commit web export' }
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish web export to main/docs' }
