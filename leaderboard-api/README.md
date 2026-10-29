@@ -46,6 +46,43 @@ npm run deploy
 Until `API_BASE_URL` is set, clients still **read** worldwide boards from  
 `https://raw.githubusercontent.com/Zephino/WaveDefence/data/leaderboard.json`.
 
+## In-game feature suggestions
+
+The main-menu **Suggest a Feature** option opens an in-game form without a
+player account or an external browser. It submits to this existing Worker at
+`POST /suggestions`, which creates an issue in
+[WaveDefence Issues](https://github.com/Zephino/WaveDefence/issues). The game
+automatically includes the version, desktop/phone/tablet, OS category and
+browser category (when applicable). These diagnostic categories and suggestion
+text are public in the GitHub issue; no device IDs or raw browser strings are
+attached.
+
+**Cloudflare requirements:** Keep the existing Worker
+`wave-defence-leaderboard` and its KV binding `LEADERBOARD_KV`; the new
+endpoint does not require a second Worker or a second KV namespace. Its
+`GITHUB_TOKEN` secret must have **Issues: Read and write** as well as
+**Contents: Read and write**, with repository access to `Zephino/WaveDefence`.
+If the token already exists, edit its permissions and save them. No token is
+ever committed or sent to players. `GITHUB_BRANCH=data` is **only for
+leaderboard data**; Github Issues do not use that branch. Git-linked Cloudflare
+deployment should use `main` with root directory `leaderboard-api` and
+deploy command `npx wrangler deploy`. If the Worker isn't Git-linked, run
+`npm run deploy` from `leaderboard-api` with Cloudflare Wrangler credentials.
+
+**Verify after deploying:** Open
+`https://wave-defence-leaderboard.thebotcoder.workers.dev/suggestions`. The
+response should be `{"accepting":true}` when the KV binding and token are
+present. This only checks configuration, not token permissions. To verify
+end-to-end, send a sample in-game suggestion and check the newly created
+GitHub Issue.
+
+**Input safety:** The Worker validates categories, title/description sizes,
+the honeypot and daily rate limits. It normalizes player text and escapes
+HTML/Markdown before rendering in issues. It uses JSON, Workers KV, and the
+GitHub API—no SQL queries are performed. If a SQL database is added later,
+all user-provided values must use parameterized queries. The new route
+preserves the existing `/leaderboard` endpoint.
+
 ## Local test
 
 ```bash
