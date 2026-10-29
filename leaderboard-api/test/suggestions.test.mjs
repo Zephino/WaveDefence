@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { handleSuggestionPost, suggestionStatus, validateSuggestion } from "../src/suggestions.mjs";
 
 const payload = {
-  category: "god",
+  category: "tower",
   title: "Please add a new summon",
   description: "A lightning summon with a storm-themed area attack could be exciting.",
   website: "",
@@ -190,4 +190,26 @@ test("SQL-looking content stays inert text and Markdown/HTML are escaped in GitH
   assert.ok(!issue.body.includes("<script>"));
   assert.ok(!issue.body.includes("@everyone"));
   assert.equal(issue.body.includes("1.2.3.4"), false);
+});
+
+test("Worker routes in-game feedback without changing the leaderboard", async () => {
+  const { default: worker } = await import("../src/index.js");
+  const e = env();
+  const response = await worker.fetch(
+    new Request("https://example.workers.dev/suggestions"), e);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).accepting, true);
+
+  const noSecret = { ...e, GITHUB_TOKEN: undefined };
+  const missing = await worker.fetch(
+    new Request("https://example.workers.dev/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }), noSecret);
+  assert.equal(missing.status, 503);
+
+  const other = await worker.fetch(
+    new Request("https://example.workers.dev/not-found"), e);
+  assert.equal(other.status, 404);
 });
