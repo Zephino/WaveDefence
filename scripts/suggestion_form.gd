@@ -1,6 +1,6 @@
 class_name WaveSuggestionForm
 extends CanvasLayer
-## Anonymous player feedback, shown only from the main Hero selection screen.
+## Anonymous player feedback, shown only from the Wave Defence main menu.
 ## Sends to the Cloudflare Worker; no GitHub sign-in, email, or external tab.
 
 signal closed
