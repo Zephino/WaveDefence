@@ -92,8 +92,8 @@ func _build_ui() -> void:
 		pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pad.add_theme_constant_override("margin_left", 16)
 		pad.add_theme_constant_override("margin_right", 16)
-		pad.add_theme_constant_override("margin_top", 16)
-		pad.add_theme_constant_override("margin_bottom", 24)
+		pad.add_theme_constant_override("margin_top", 8)
+		pad.add_theme_constant_override("margin_bottom", 8)
 		scroll.add_child(pad)
 		host = pad
 	else:
@@ -106,13 +106,13 @@ func _build_ui() -> void:
 	_center = VBoxContainer.new()
 	_center.alignment = BoxContainer.ALIGNMENT_CENTER
 	_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_center.add_theme_constant_override("separation", 10 if _touch_layout else 12)
+	_center.add_theme_constant_override("separation", 6 if _touch_layout else 12)
 	host.add_child(_center)
 
 	_build_header(_center)
 	_build_choice_columns(_center)
 	call_deferred("_maybe_offer_tutorial")
-	_center.add_child(_spacer(8))
+	_center.add_child(_spacer(4.0 if _touch_layout else 8.0))
 	# Settings before Leaderboard so the primary gear action is higher on phones.
 	_center.add_child(_menu_button("Settings", _show_settings_popup))
 	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
@@ -120,7 +120,7 @@ func _build_ui() -> void:
 		_reopen_settings_after_rebuild = false
 		call_deferred("_show_settings_popup")
 
-	_center.add_child(_spacer(8))
+	_center.add_child(_spacer(4.0 if _touch_layout else 8.0))
 	var boards_label := Label.new()
 	boards_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	boards_label.modulate = Color(0.5, 0.58, 0.62)
@@ -130,8 +130,9 @@ func _build_ui() -> void:
 		func(_ok: bool) -> void:
 			boards_label.text = _boards_status_text()
 	)
-	# Keep Quit distinct from the other menu actions, including on phones.
-	_center.add_child(_spacer(28.0 if _touch_layout else 8.0))
+	# Keep Quit distinct from the other menu actions, but tight enough on phones
+	# that Quit and Suggest a Feature fit on screen without scrolling.
+	_center.add_child(_spacer(12.0 if _touch_layout else 8.0))
 	var quit_btn := _menu_button("Quit", _on_quit)
 	if _touch_layout:
 		quit_btn.modulate = Color(0.82, 0.62, 0.62)
