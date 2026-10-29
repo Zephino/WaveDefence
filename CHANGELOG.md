@@ -1,3 +1,23 @@
+## Version 00.03.02
+Date: 10/29/2026
+Time: 12:27 AM
+
+### Changes
+- Added `CLAUDE.md` with the Cursor rule parity ruleset (copied from Mythriven) so Claude Code reads and follows every rule in `.cursor/rules/` before each task
+
+### Reason
+Make Claude follow the same project rules as Cursor.
+
+## Version 00.03.01
+Date: 10/29/2026
+Time: 12:24 AM
+
+### Changes
+- Main menu (phone / large controls): tightened spacing so Quit and Suggest a Feature move up and the menu fits without a scroll bar
+
+### Reason
+Adding Suggest a Feature made the touch menu taller than the screen, which showed a scroll bar. (Entry backfilled; the original fix skipped the version and changelog rules.)
+
 ## Version 00.02.99
 Date: 10/25/2026
 Time: 1:07 AM
