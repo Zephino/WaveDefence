@@ -7,6 +7,8 @@
  * Vars: GITHUB_OWNER, GITHUB_REPO, GITHUB_PATH, GITHUB_BRANCH
  */
 
+import { handleSuggestionPost, suggestionStatus } from "./suggestions.mjs";
+
 const MAX_ENTRIES = 10;
 const MAX_NAME_LENGTH = 12;
 const MAX_WAVE = 100000;
@@ -301,7 +303,7 @@ export default {
       }
 
       const url = new URL(request.url);
-      if (url.pathname !== "/leaderboard" && url.pathname !== "/") {
+      if (url.pathname !== "/leaderboard" && url.pathname !== "/" && url.pathname !== "/suggestions") {
         return jsonResponse({ error: "not found" }, 404);
       }
 
@@ -312,6 +314,12 @@ export default {
         }
       } catch (err) {
         console.log("rateLimit failed:", String(err));
+      }
+
+      if (url.pathname === "/suggestions") {
+        if (request.method === "GET") return suggestionStatus(env);
+        if (request.method === "POST") return await handleSuggestionPost(request, env, ip);
+        return jsonResponse({ error: "method not allowed" }, 405);
       }
 
       if (request.method === "GET") {
