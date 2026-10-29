@@ -116,7 +116,6 @@ func _build_ui() -> void:
 	# Settings before Leaderboard so the primary gear action is higher on phones.
 	_center.add_child(_menu_button("Settings", _show_settings_popup))
 	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
-	_center.add_child(_menu_button("Suggest a Feature", _on_suggest_feature))
 	if _reopen_settings_after_rebuild:
 		_reopen_settings_after_rebuild = false
 		call_deferred("_show_settings_popup")
@@ -131,7 +130,7 @@ func _build_ui() -> void:
 		func(_ok: bool) -> void:
 			boards_label.text = _boards_status_text()
 	)
-	# Quit last + spaced on touch so a Settings tap is harder to miss.
+	# Keep Quit distinct from the other menu actions, including on phones.
 	_center.add_child(_spacer(28.0 if _touch_layout else 8.0))
 	var quit_btn := _menu_button("Quit", _on_quit)
 	if _touch_layout:
@@ -141,6 +140,7 @@ func _build_ui() -> void:
 			GameLayout.button_height(40.0)
 		)
 	_center.add_child(quit_btn)
+	_center.add_child(_menu_button("Suggest a Feature", _on_suggest_feature))
 
 
 func _build_header(parent: VBoxContainer) -> void:
