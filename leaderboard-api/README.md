@@ -5,6 +5,7 @@ Cloudflare Worker that:
 - Serves `GET /leaderboard` (mode×difficulty top 10s: `classic_medium`, `siege_hard`, `clash_easy`, …)
 - Accepts `POST /leaderboard` with `{ "name", "wave", "difficulty", "mode", "board", "seeds?", "board_png?" }`
 - Saves to Workers KV (fast) and commits `leaderboard.json` on the **`data`** branch of [Zephino/WaveDefence](https://github.com/Zephino/WaveDefence) (not `main`)
+- Runs **online Clash lobbies** at `GET /lobby` (WebSocket, 6-digit codes; see below)
 
 Apps never hold a GitHub token. Only this Worker does.
 
@@ -90,6 +91,29 @@ HTML/Markdown before rendering in issues. It uses JSON, Workers KV, and the
 GitHub API—no SQL queries are performed. If a SQL database is added later,
 all user-provided values must use parameterized queries. The new route
 preserves the existing `/leaderboard` endpoint.
+
+## Online Clash lobbies (6-digit codes)
+
+Same design as Mythriven co-op. `GET /lobby?host=1` (WebSocket) creates a
+match and replies with a random 6-digit code; `GET /lobby?code=123456` joins
+it. Each match is one **Durable Object** (`LobbyRoom` in `src/lobby.mjs`) that
+only **relays messages** between up to 4 players: the host's game simulates
+every lane, so the Worker never needs to understand the game. The host is
+player 1; nobody can join after the host starts; if the host leaves, everyone
+is disconnected. Each player may send 80 messages a second (more are dropped),
+up to 256 KB each. Nothing is stored after everyone leaves.
+
+**One-time deploy:** `wrangler.toml` binds `LOBBY` to the `LobbyRoom` class
+(SQLite-backed Durable Objects are on the free plan). From this folder:
+
+```bash
+npx wrangler login     # if not logged in already
+npm run deploy
+```
+
+Until this is deployed, **Invite Friends** shows "Couldn't start an online
+match". The game connects to `wss://<API_BASE_URL host>/lobby`
+(`OnlineConfig.lobby_url()` in `scripts/online_config.gd`).
 
 ## Local test
 

@@ -4,7 +4,12 @@ extends RefCounted
 ## One Clash lane participant (human or bot).
 
 var player_id: int = 0
+## The person playing on this device (their wallet is GameState).
 var is_human: bool = false
+## Online Clash: a person on another device (wallet here, like a bot's; no AI).
+var is_remote: bool = false
+## Finishing place once eliminated (1 = winner; 0 = still in).
+var place: int = 0
 var bot_difficulty: int = WaveScaler.Difficulty.MEDIUM
 var lane_index: int = 0
 var display_name: String = "Player"

@@ -22,6 +22,11 @@ var _clash_bots: Array = [] ## ClashBotAI
 var _clash_result_place: int = 0
 var _clash_human_won: bool = false
 var _clash_bot_send_cd: float = 0.0
+## Online Clash (6-digit code): one of these runs, depending on this device's role.
+var _net_host: ClashNetHost = null
+var _net_client: ClashNetClient = null
+## Shown in the match summary when an online match ends early (the host left).
+var _online_end_note: String = ""
 
 var enemies: Node2D
 var projectiles: Node2D
@@ -142,6 +147,9 @@ func _setup_systems() -> void:
 	wave_manager.map_rotate_requested.connect(_on_map_rotate_requested)
 	wave_manager.spawn_rotate_requested.connect(_on_spawn_rotate_requested)
 	wave_manager.tower_wrecked.connect(_on_clash_tower_wrecked)
+	if Net.is_client():
+		# The host's game spawns and moves enemies; this device only shows them.
+		wave_manager.process_mode = Node.PROCESS_MODE_DISABLED
 
 	_setup_clash_match()
 
@@ -162,22 +170,115 @@ func _setup_clash_match() -> void:
 	clash_match = ClashMatch.new()
 	clash_match.name = "ClashMatch"
 	add_child(clash_match)
-	clash_match.setup(game_state, Session.clash_player_count, Session.clash_bot_difficulties)
+	if _online():
+		clash_match.setup_online(game_state, Net.seats, Net.my_seat())
+		clash_match.player_eliminated.connect(_on_online_player_eliminated)
+	else:
+		clash_match.setup(game_state, Session.clash_player_count, Session.clash_bot_difficulties)
 	wave_manager.set_clash_match(clash_match)
-	build_system.set_clash_match(clash_match, 0)
+	build_system.set_clash_match(clash_match, clash_match.human_id)
 	clash_match.match_over.connect(_on_clash_match_over)
 	clash_match.players_changed.connect(_on_clash_players_changed)
 	for p in clash_match.players:
 		var cp := p as ClashPlayerState
-		if cp == null or cp.is_human:
+		if cp == null or cp.is_human or cp.is_remote or Net.is_client():
 			continue
-		var bot := ClashBotAI.new()
-		bot.setup(clash_match, grid, pathfinder, enemies, projectiles, traps, cp.player_id)
-		_clash_bots.append(bot)
+		_add_clash_bot(cp.player_id)
 	# GameState is the human wallet during play — seed it, then mirror into ClashPlayerState.
 	game_state.gold = WaveScaler.clash_starting_gold()
 	game_state.lives = WaveScaler.CLASH_STARTING_LIVES
 	clash_match.sync_human_gold_from_game_state()
+
+
+func _add_clash_bot(player_id: int) -> void:
+	var bot := ClashBotAI.new()
+	bot.setup(clash_match, grid, pathfinder, enemies, projectiles, traps, player_id)
+	_clash_bots.append(bot)
+
+
+## Online Clash match in progress on this device (host or joined player).
+func _online() -> bool:
+	return Net.in_match() and WaveScaler.is_clash_mode(Session.game_mode)
+
+
+func _setup_online() -> void:
+	if not _online() or clash_match == null:
+		return
+	Net.ended.connect(_on_online_session_ended)
+	if Net.is_host():
+		_net_host = ClashNetHost.new()
+		_net_host.name = "ClashNetHost"
+		add_child(_net_host)
+		_net_host.setup(self)
+		_net_host.bot_needed.connect(func(player_id: int) -> void:
+			_add_clash_bot(player_id)
+			_run_clash_bots()
+		)
+	else:
+		_net_client = ClashNetClient.new()
+		_net_client.name = "ClashNetClient"
+		add_child(_net_client)
+		_net_client.setup(self)
+		_net_client.match_finished.connect(_on_online_match_finished)
+	refresh_online_round_button()
+
+
+## Online Clash: the Start Round / Skip Timer button. Joined players press it to
+## say they're ready; the host can start once everyone is ready.
+func refresh_online_round_button() -> void:
+	if not _online() or wave_manager == null or game_state.is_game_over:
+		return
+	var between_waves := wave_manager.phase != WaveManager.Phase.WAVE
+	if Net.is_client():
+		if not between_waves:
+			hud.set_skip_button_state("Wave running", true, "The host starts each round")
+		elif Net.is_ready(Net.my_id):
+			hud.set_skip_button_state("Ready ✓", false, "Tap to cancel Ready")
+		else:
+			hud.set_skip_button_state("Ready", false, "Tell the host you're ready for the next round")
+		return
+	if not between_waves or Net.guest_ids().is_empty():
+		return
+	var guests := Net.guest_ids().size()
+	var ready := guests - Net.waiting_on_names().size()
+	if ready < guests:
+		var label := "Start Round" if wave_manager.phase == WaveManager.Phase.PREP else "Skip Timer"
+		hud.set_skip_button_state(
+			"%s (%d/%d ready)" % [label, ready, guests], false, "Waits for every player to press Ready"
+		)
+
+
+func _on_online_player_eliminated(player_id: int) -> void:
+	if clash_match == null or clash_match.finished or player_id != clash_match.human_id:
+		return
+	var me := clash_match.human()
+	hud.set_status(
+		"You're out (#%d). Watching until the match ends — leave anytime from the pause menu." % maxi(me.place, 2)
+	)
+
+
+## Joined player: the host says the match is over.
+func _on_online_match_finished(winner_id: int) -> void:
+	var me := clash_match.human()
+	var won := me != null and winner_id == me.player_id
+	clash_match.finished = true
+	_on_clash_match_over(winner_id, won, 1 if won else maxi(me.place if me else 0, 2))
+	if not game_state.is_game_over:
+		game_state.is_game_over = true
+		game_state.game_over.emit(game_state.highest_wave)
+
+
+## The connection ended mid-match (host left, internet dropped…).
+func _on_online_session_ended(reason: String) -> void:
+	if reason.is_empty() or game_state == null or game_state.is_game_over:
+		return
+	_online_end_note = reason
+	_clash_human_won = false
+	_clash_result_place = 0
+	game_state.is_game_over = true
+	wave_manager.clear_enemies()
+	hud.set_status(reason)
+	call_deferred("_boot_clash_summary", maxi(game_state.wave, game_state.highest_wave))
 
 
 func _setup_ui() -> void:
@@ -236,6 +337,7 @@ func _setup_ui() -> void:
 	if clash_match != null:
 		_run_clash_bots()
 		hud.refresh_clash_panel()
+	_setup_online()
 	SoundHub.unlock()
 	if WaveScaler.is_siege_mode(game_state.game_mode):
 		SoundHub.set_music_context(SoundHub.MUSIC_GAME_SIEGE)
@@ -247,7 +349,11 @@ func _setup_ui() -> void:
 
 
 func _set_start_status() -> void:
-	if WaveScaler.is_clash_mode(game_state.game_mode):
+	if _online() and Net.is_client():
+		hud.set_status("Online Clash — build your lane, buy sends, then press Ready. The host starts each round.")
+	elif _online():
+		hud.set_status("Online Clash — build your lane (leftmost). Start Round once everyone is Ready.")
+	elif WaveScaler.is_clash_mode(game_state.game_mode):
 		hud.set_status("Clash — build your lane (leftmost), buy sends for opponents, then Start Round.")
 	elif WaveScaler.is_random_mode(game_state.game_mode):
 		hud.set_status(
@@ -286,6 +392,9 @@ func _run_clash_bots() -> void:
 func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 	if clash_match == null or clash_match.finished:
 		return
+	if _net_client != null:
+		_net_client.send_action(["send", target_id, pack_id])
+		return
 	if clash_match.try_send_pack(clash_match.human_id, target_id, pack_id):
 		var pack := WaveScaler.clash_send_pack(pack_id)
 		var bump := WaveScaler.clash_send_income_bump(pack_id)
@@ -316,6 +425,9 @@ func _on_clash_send_requested(target_id: int, pack_id: String) -> void:
 
 func _on_clash_send_shop_upgrade_requested() -> void:
 	if clash_match == null or clash_match.finished:
+		return
+	if _net_client != null:
+		_net_client.send_action(["shop"])
 		return
 	var before := clash_match.send_shop_level
 	if clash_match.try_upgrade_send_shop(clash_match.human_id):
@@ -399,7 +511,7 @@ func _process(delta: float) -> void:
 		_panning = false
 		hud.hide_board_tower_tooltip()
 		return
-	if clash_match != null and not clash_match.finished:
+	if clash_match != null and not clash_match.finished and _net_client == null:
 		clash_match.tick_cheater_heals(delta)
 		if wave_manager != null and wave_manager.phase == WaveManager.Phase.WAVE:
 			_clash_bot_send_cd -= delta
@@ -486,6 +598,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_key(event: InputEventKey) -> void:
+	if _online() and event.keycode in [KEY_F1, KEY_QUOTELEFT, KEY_G, KEY_L, KEY_N, KEY_K, KEY_R]:
+		# Debug tools and restart would desync an online match.
+		return
 	match event.keycode:
 		KEY_F1, KEY_QUOTELEFT:
 			debug_panel.toggle()
@@ -841,7 +956,11 @@ func _focus_camera_on_human_lane() -> void:
 		_sync_world_positions()
 		_update_map_camera()
 		return
-	var lane := build_system.human_lane if build_system != null else 0
+	var lane := 0
+	if build_system != null:
+		lane = build_system.human_lane
+	elif _online():
+		lane = maxi(Net.my_seat(), 0)
 	var spawn := grid.get_lane_spawn(lane)
 	var focus := grid.cell_to_world_center(spawn)
 	# Bias a bit downward so more of the lane is visible under the top HUD.
@@ -908,7 +1027,23 @@ func _on_tower_type_selected(tower_id: String) -> void:
 	hud.set_status("Placing %s. Right-click or re-tap a selected tower to deselect." % name)
 
 
+## Joined player: anchor cells of the selected towers (the host acts on cells).
+func _selected_cells() -> Array:
+	var cells: Array = []
+	for t in build_system.selected_towers:
+		if is_instance_valid(t):
+			cells.append(t.get_meta("anchor_cell", grid.world_to_cell(t.position)))
+	return cells
+
+
 func _on_sell_selected() -> void:
+	if _net_client != null:
+		if build_system.selection_count() == 0:
+			hud.set_status("Nothing selected to sell.")
+			return
+		_net_client.send_action(["sell", _selected_cells()])
+		build_system.clear_selection()
+		return
 	var count := build_system.selection_count()
 	var refund := build_system.selection_sell_total()
 	if build_system.sell_selected():
@@ -1066,6 +1201,10 @@ func _resolve_command_aim(local_map: Vector2) -> void:
 		hud.set_status("Need %d gold for %s." % [cost, CommandAbilities.display_name(ability_id)])
 		return
 	var cell := grid.world_to_cell(local_map)
+	if _net_client != null:
+		_net_client.send_action(["cmd", tower.get_meta("anchor_cell", Vector2i.ZERO), ability_id, cell])
+		_clear_command_aim()
+		return
 	var result := CommandCaster.place(ability_id, cell, grid, pathfinder, enemies, traps)
 	if not bool(result.get("ok", false)):
 		hud.set_status(str(result.get("message", "Can't place there.")))
@@ -1100,6 +1239,9 @@ func _clear_command_aim() -> void:
 
 
 func _on_upgrade_selected() -> void:
+	if _net_client != null:
+		_net_client.send_action(["upgrade", _selected_cells()])
+		return
 	var result := build_system.upgrade_selected()
 	var upgraded: int = int(result.get("upgraded", 0))
 	var spent: int = int(result.get("spent", 0))
@@ -1117,6 +1259,9 @@ func _on_upgrade_selected() -> void:
 
 
 func _on_final_element_selected(element_id: String) -> void:
+	if _net_client != null:
+		_net_client.send_action(["final", _selected_cells(), element_id])
+		return
 	var result := build_system.apply_final_selected(element_id)
 	var applied: int = int(result.get("applied", 0))
 	var spent: int = int(result.get("spent", 0))
@@ -1137,6 +1282,7 @@ func _on_final_element_selected(element_id: String) -> void:
 
 func _on_timer_updated(seconds_left: float, can_skip: bool, mode: String) -> void:
 	hud.update_timer(seconds_left, can_skip, mode)
+	refresh_online_round_button()
 	_refresh_portal_slide_ui()
 
 
@@ -1183,6 +1329,9 @@ func _on_portal_slide_pressed(which: String, dx: int) -> void:
 	if not game_state.can_afford(WaveScaler.PORTAL_SLIDE_COST):
 		hud.set_status("Need %d gold to move a portal." % WaveScaler.PORTAL_SLIDE_COST)
 		return
+	if _net_client != null:
+		_net_client.send_action(["portal", which, dx])
+		return
 	var lane := _portal_slide_lane()
 	var pf: Pathfinder = build_system.pathfinder
 	if not grid.can_slide_portal(which, dx, pf, lane):
@@ -1211,6 +1360,17 @@ func _on_portal_slide_pressed(which: String, dx: int) -> void:
 
 
 func _on_skip_timer() -> void:
+	if _net_client != null:
+		if wave_manager.phase == WaveManager.Phase.WAVE or game_state.is_game_over:
+			return
+		var now_ready := not Net.is_ready(Net.my_id)
+		Net.set_ready(now_ready)
+		refresh_online_round_button()
+		hud.set_status("Ready — waiting for the host to start." if now_ready else "Not ready.")
+		return
+	if _online() and wave_manager.phase != WaveManager.Phase.WAVE and not Net.all_guests_ready():
+		hud.set_status("Waiting for %s to press Ready." % ", ".join(Net.waiting_on_names()))
+		return
 	if wave_manager.phase == WaveManager.Phase.PREP:
 		if wave_manager.start_round():
 			if game_state.tutorial_run and _tutorial_step == 2:
@@ -1277,6 +1437,7 @@ func _on_wave_started(wave: int, banner: String) -> void:
 	hud.set_status("Wave %d started." % wave)
 	if clash_match != null:
 		_clash_bot_send_cd = 0.6
+	refresh_online_round_button()
 
 
 func _on_wave_cleared(wave: int, kills: int, bonus_gold: int) -> void:
@@ -1473,6 +1634,11 @@ func _debug_god_mode(enabled: bool) -> void:
 func _on_end_run_confirmed() -> void:
 	if game_state == null or game_state.is_game_over:
 		return
+	if _online():
+		# Leaving: the host leaving ends the match for everyone; a joined player's lane goes to a bot.
+		Net.leave()
+		Session.go_menu()
+		return
 	var wave_reached := maxi(game_state.wave, game_state.highest_wave)
 	game_state.is_game_over = true
 	wave_manager.clear_enemies()
@@ -1532,7 +1698,13 @@ func _boot_clash_summary(wave_reached: int) -> void:
 	var summary: Control = _RunSummaryOverlay.new()
 	summary.show_summary(game_state, coaching)
 	hud.attach_run_summary(summary)
+	var online := _online() or not _online_end_note.is_empty()
 	summary.continued.connect(func() -> void:
+		if online:
+			# Online matches aren't leaderboard runs (the host's device played every lane).
+			Net.leave()
+			Session.go_menu()
+			return
 		Session.go_leaderboard(
 			wave_reached,
 			game_state.debug_used or game_state.tutorial_run,
@@ -1544,6 +1716,8 @@ func _boot_clash_summary(wave_reached: int) -> void:
 
 
 func _clash_summary_text(wave_reached: int) -> String:
+	if not _online_end_note.is_empty():
+		return "%s Match ended at wave %d." % [_online_end_note, wave_reached]
 	if _clash_human_won:
 		return "Clash victory! You were the last lane standing through wave %d." % wave_reached
 	var place := maxi(_clash_result_place, 2)
@@ -1609,8 +1783,10 @@ func _open_pause_menu() -> void:
 	if _pause_menu != null and is_instance_valid(_pause_menu):
 		return
 	_game_paused = true
-	wave_manager.game_paused = true
-	get_tree().paused = true
+	# Online matches keep running for everyone else; the menu just opens on top.
+	if not _online():
+		wave_manager.game_paused = true
+		get_tree().paused = true
 	SoundHub.set_paused_duck(true)
 	_pause_menu = _PauseMenuOverlay.new()
 	_pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -1637,6 +1813,8 @@ func _resume_from_pause() -> void:
 
 func _quit_to_menu_from_pause() -> void:
 	_resume_from_pause()
+	if _online():
+		Net.leave()
 	Session.tutorial_active = false
 	Session.go_menu()
 
@@ -1743,6 +1921,8 @@ func _clear_command_traps() -> void:
 
 
 func restart_run() -> void:
+	if _online():
+		return
 	for child in projectiles.get_children():
 		child.queue_free()
 	_clear_command_traps()

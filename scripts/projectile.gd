@@ -19,6 +19,8 @@ var tower_id: String = ""
 var _anim_time: float = 0.0
 var _flight_fx: String = ""
 var _impact_fx: String = ""
+## Online Clash (joining player): visual only; the host's game deals the damage.
+var cosmetic: bool = false
 
 
 func setup(
@@ -95,6 +97,9 @@ func _hits_clash_divider(from_global: Vector2, to_global: Vector2) -> bool:
 func _impact() -> void:
 	alive = false
 	_spawn_impact_fx()
+	if cosmetic:
+		queue_free()
+		return
 	if effect == "lightning":
 		_do_lightning(
 			int(effect_data.get("chain_count", 3)),

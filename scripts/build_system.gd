@@ -15,6 +15,12 @@ var enemy_container: Node
 var projectile_container: Node
 var clash_match: ClashMatch = null
 var human_lane: int = 0
+## Clash player this builder acts for (-1 = the local human). Online Clash: the
+## host keeps one BuildSystem per joined player, with that player's wallet.
+var owner_id: int = -1
+## Online Clash (joining player): send placements to the host instead of building.
+## Called with (cell: Vector2i, tower_id: String).
+var remote_place: Callable = Callable()
 
 var selected_tower_id: String = "gunner"
 var selected_towers: Array[Tower] = []
@@ -38,6 +44,26 @@ func _is_clash() -> bool:
 	return clash_match != null and grid != null and grid.is_clash_layout
 
 
+func _owner_id() -> int:
+	if owner_id >= 0:
+		return owner_id
+	return clash_match.human_id if clash_match != null else 0
+
+
+## Eliminated Clash players can't build (online matches keep running without them).
+func _owner_alive() -> bool:
+	if not _is_clash():
+		return true
+	var p := clash_match.get_player(_owner_id())
+	return p == null or p.alive
+
+
+## The local human's wallet is GameState; mirror it into ClashMatch after spending.
+func _sync_human_gold() -> void:
+	if clash_match != null and owner_id < 0:
+		clash_match.sync_human_gold_from_game_state()
+
+
 func _cell_in_human_lane(cell: Vector2i) -> bool:
 	if not _is_clash():
 		return true
@@ -50,7 +76,7 @@ func _tower_owned_by_human(tower: Tower) -> bool:
 	if not _is_clash():
 		return true
 	if tower.has_meta("clash_owner"):
-		return int(tower.get_meta("clash_owner")) == clash_match.human_id
+		return int(tower.get_meta("clash_owner")) == _owner_id()
 	# Untagged towers in human lane belong to human.
 	var cell := grid.world_to_cell(tower.position)
 	return _cell_in_human_lane(cell)
@@ -89,7 +115,7 @@ func update_hover(world_pos: Vector2) -> Tower:
 
 
 func can_place_at(cell: Vector2i) -> bool:
-	if game_state.is_game_over:
+	if game_state.is_game_over or not _owner_alive():
 		return false
 	if not grid.in_bounds(cell):
 		return false
@@ -205,12 +231,16 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 			_clear_placed_selection()
 		return false
 
+	if remote_place.is_valid():
+		remote_place.call(cell, selected_tower_id)
+		_clear_placed_selection()
+		return true
+
 	var cost: int = int(TowerData.get_def(selected_tower_id)["cost"])
 	if not game_state.spend_gold(cost):
 		return false
 	game_state.record_spend(cost)
-	if clash_match != null:
-		clash_match.sync_human_gold_from_game_state()
+	_sync_human_gold()
 
 	if existing and _can_replace_wall(existing):
 		_replace_wall_with_tower(cell, existing)
@@ -221,7 +251,7 @@ func try_place_at(world_pos: Vector2, additive_select: bool = false, paint_strok
 	var tower := Tower.new()
 	tower.setup(selected_tower_id, enemy_container, projectile_container)
 	if _is_clash() and clash_match != null:
-		tower.set_meta("clash_owner", clash_match.human_id)
+		tower.set_meta("clash_owner", _owner_id())
 	grid.place_tower(cell, tower)
 	if TowerData.is_wall(selected_tower_id):
 		game_state.record_wall_placed()
@@ -284,8 +314,7 @@ func sell_selected() -> bool:
 		tower.queue_free()
 	game_state.add_gold(refund_total)
 	game_state.record_sell_refund(refund_total)
-	if clash_match != null:
-		clash_match.sync_human_gold_from_game_state()
+	_sync_human_gold()
 	pathfinder.rebuild()
 	_refresh_path_preview()
 	SoundHub.play_sell()
@@ -312,8 +341,8 @@ func upgrade_selected() -> Dictionary:
 			spent += cost
 		else:
 			failed_afford += 1
-	if clash_match != null and spent > 0:
-		clash_match.sync_human_gold_from_game_state()
+	if spent > 0:
+		_sync_human_gold()
 	_emit_selection()
 	return {"upgraded": upgraded, "failed_afford": failed_afford, "spent": spent}
 
@@ -340,14 +369,26 @@ func apply_final_selected(element_id: String) -> Dictionary:
 			spent += cost
 		else:
 			failed_afford += 1
-	if clash_match != null and spent > 0:
-		clash_match.sync_human_gold_from_game_state()
+	if spent > 0:
+		_sync_human_gold()
 	_emit_selection()
 	return {"applied": applied, "failed_afford": failed_afford, "spent": spent}
 
 
 func clear_selection() -> void:
 	_clear_placed_selection()
+
+
+## Select exactly the towers this builder owns on these cells (online Clash actions).
+func select_cells(cells: Array) -> void:
+	_clear_placed_selection(false)
+	for c in cells:
+		if not (c is Vector2i):
+			continue
+		var t := grid.get_tower_at(c as Vector2i) as Tower
+		if t != null and _tower_owned_by_human(t) and not (t in selected_towers):
+			selected_towers.append(t)
+	_emit_selection()
 
 
 func selection_count() -> int:

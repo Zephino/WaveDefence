@@ -71,7 +71,7 @@ No addons or extra packages required.
 
 ## Main menu
 
-Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Monsters**, and **Difficulty** in three columns; then leaderboard, settings, and quit.
+Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Monsters**, and **Difficulty** in three columns; then settings, leaderboard + **Play Online**, quit, and Suggest a Feature.
 
 - **Map**
   - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
@@ -86,6 +86,12 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
 - **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot Easy/Medium/Hard/**Cheater**). Starting gold **350 / 200 / 100** (Clash starts at **320** so bots can lock in a full one-tile maze)
+- **Online Clash (6-digit code)** — play Clash with friends on other devices (PC, phone, or browser):
+  1. **Host:** pick **Clash**, a difficulty, set players and bots as usual, then press **Invite Friends**. Share the **6-digit code**.
+  2. **Friends:** press **Play Online** on the main menu and type the code. Each friend takes a new lane; when all **4** lanes are taken, a friend **replaces a bot**. The host can still add/remove bots and change their difficulty in the lobby.
+  3. Friends press **Ready**; the host presses **Start**. In the match, the **Start Round / Skip Timer** button is **Ready** for friends, and the host can start a round once everyone is ready (the intermission countdown still runs out on its own).
+  4. The host's game plays every lane; friends' builds, sells, upgrades, sends, Command abilities, and portal moves are checked by the host. If a friend leaves, a **Medium bot** takes over their lane. If the host leaves, the match ends for everyone. A knocked-out player (host included) can keep watching until one lane is left. Pause doesn't stop online matches. Online matches don't go on the leaderboard.
+  Needs the Worker's lobby (see `leaderboard-api/README.md`).
 - **Leaderboard** — top 10 boards for **every mode × difficulty** (Classic / Random / Siege / Clash × Easy / Medium / Hard). At game over the game **snaps your board**; if you qualify and submit a name, that snapshot is saved on the record so others can **View** how the maze looked. Clash scores also store **how many players** and **each bot’s difficulty** (e.g. `4p · Easy / Hard / Cheater`). Other modes show the **map seed** (or **Seeds ×N**). Online boards load from the **Cloudflare Worker** (then cache locally). Debug / tutorial runs cannot be submitted.
 - **Settings** — opens a popup:
   - **Large Controls**, **Effects**, **Performance mode**, **Show tower range**, **High contrast**, **Show enemy HP bars**, **Show grid coordinates**, **Screenshot watermark**
@@ -194,6 +200,14 @@ godot --headless --path . -s res://scripts/smoke_test.gd
 
 Expect `SMOKE_TEST_OK`.
 
+Online Clash (lobby seats, a friend's actions on the host, the friend's view of host snapshots; no internet needed):
+
+```text
+godot --headless --path . -s res://scripts/online_clash_test.gd
+```
+
+Expect `ONLINE_CLASH_TEST_OK`.
+
 ## Mobile / touch
 
 The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, keep the screen awake while the game is open (no idle timeout), and release orientation / wake lock when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
@@ -262,10 +276,11 @@ Optional custom domain (not free): point your domain at GitHub Pages so the link
 
 - `scenes/main.tscn` — entry scene
 - `scripts/` — game systems
+- `scripts/net/` — online Clash: lobby connection (`Net` autoload), host / joined-player sync
 - `data/` — tunable numbers
 - `docs/` — Web / GitHub Pages build
 - `data` branch / `leaderboard.json` — shared worldwide top-10 boards (Worker writes here)
-- `leaderboard-api/` — Cloudflare Worker (POST gateway → GitHub `data` branch)
+- `leaderboard-api/` — Cloudflare Worker (POST gateway → GitHub `data` branch; online Clash lobbies)
 - `leaderboard.json` on `main` — empty stub / local reference only
 - `pc/` — Windows play package
 - `phone/android/` — Android APK

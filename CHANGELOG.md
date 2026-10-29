@@ -1,3 +1,19 @@
+## Version 00.03.03
+Date: 10/29/2026
+Time: 6:18 PM
+
+### Changes
+- Online Clash with a 6-digit code (same design as Mythriven co-op): **Invite Friends** in Clash setup hosts a match; **Play Online** on the main menu joins one
+- Friends take a new lane, or replace a bot when all 4 lanes are taken; the host can still add/remove bots and set their difficulty in the lobby
+- Everyone presses **Ready**, then the host starts the match and each round (the Start Round / Skip Timer button is Ready for friends)
+- The host's game plays every lane and checks each friend's actions (build, sell, upgrade, final element, sends, send shop, Command abilities, portal moves) against that friend's own lane and gold; friends see the host's board about 10 times a second
+- A friend who leaves is replaced by a Medium bot; if the host leaves, the match ends for everyone; knocked-out players can keep watching until one lane is left
+- Cloudflare Worker: new `/lobby` route and `LobbyRoom` Durable Object that relays messages (needs one `npm run deploy` in `leaderboard-api`)
+- Tests: Worker lobby tests and a headless `scripts/online_clash_test.gd`
+
+### Reason
+Let people play Clash against each other online instead of only against bots, using the same 6-digit code system as Mythriven.
+
 ## Version 00.03.02
 Date: 10/29/2026
 Time: 12:27 AM

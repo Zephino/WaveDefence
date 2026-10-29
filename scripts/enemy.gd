@@ -66,6 +66,9 @@ var _sprite_anim_time: float = 0.0
 var _move_angle: float = 0.0
 ## Player clicked this mob to inspect (gold ring + pinned tooltip).
 var inspected: bool = false
+## Online Clash (joining player): the host moves this mob; glide to its last position.
+var net_remote: bool = false
+var net_target: Vector2 = Vector2.ZERO
 
 
 func display_name() -> String:
@@ -390,12 +393,26 @@ func resist_for(element_id: String) -> float:
 func _process(delta: float) -> void:
 	if not alive:
 		return
+	if net_remote:
+		_glide_to_net_target(delta)
+		return
 	_tick_statuses(delta)
 	if is_wrecker:
 		_wrecker_tick()
 	_move_along_path(delta)
 	if not sprite_species.is_empty():
 		_sprite_anim_time += delta * maxf(slow_factor, 0.35)
+	queue_redraw()
+
+
+func _glide_to_net_target(delta: float) -> void:
+	var step := net_target - position
+	if step.length_squared() > 0.25:
+		_move_angle = step.angle()
+	# Updates arrive ~10 times a second; close most of the gap each frame.
+	position = position.lerp(net_target, clampf(delta * 12.0, 0.0, 1.0))
+	if not sprite_species.is_empty():
+		_sprite_anim_time += delta
 	queue_redraw()
 
 

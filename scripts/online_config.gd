@@ -37,6 +37,14 @@ static func suggestion_url() -> String:
 	return base + "/suggestions"
 
 
+## Online Clash lobbies (leaderboard-api/src/lobby.mjs), as a WebSocket address.
+static func lobby_url() -> String:
+	var base: String = API_BASE_URL.strip_edges().trim_suffix("/")
+	if base.is_empty():
+		return ""
+	return base.replace("https://", "wss://").replace("http://", "ws://") + "/lobby"
+
+
 static func can_read() -> bool:
 	return not read_url().is_empty()
 

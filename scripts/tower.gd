@@ -29,6 +29,13 @@ var _anim_time: float = 0.0
 var _action_playing: bool = false
 ## Wall fortress autotile bitmask (N=1 E=2 S=4 W=8).
 var wall_mask: int = 0
+## Online Clash, joining player's device: the host's game does the fighting.
+## Towers only animate; shots arrive from the host (fire_cosmetic).
+static var net_view: bool = false
+## Online Clash, host's device: shots fired, as [cell x, cell y, enemy net id]…
+## (ClashNetHost sends and clears them).
+static var net_shot_log_on: bool = false
+static var net_shot_log: PackedInt32Array = PackedInt32Array()
 const SELECT_COLOR := Color(0.35, 0.95, 0.45)
 const SELECT_COLOR_SOFT := Color(0.35, 0.95, 0.45, 0.35)
 
@@ -139,6 +146,9 @@ func _process(delta: float) -> void:
 		return
 	if bool(def.get("is_command", false)):
 		_tick_ability_cooldowns(delta)
+		queue_redraw()
+		return
+	if net_view:
 		queue_redraw()
 		return
 	if bool(def.get("is_aura", false)) or str(def.get("effect", "")) == "orbit":
@@ -357,8 +367,19 @@ func _muzzle_global() -> Vector2:
 	return global_position + dir * 12.0
 
 
-func _fire_at(target: Enemy) -> void:
+## Online Clash (joining player): show a shot the host's tower fired. No damage.
+func fire_cosmetic(target: Enemy) -> void:
+	if target == null or not is_instance_valid(target) or projectile_container == null:
+		return
+	_fire_at(target, true)
+
+
+func _fire_at(target: Enemy, cosmetic: bool = false) -> void:
+	if not cosmetic and net_shot_log_on and target.has_meta("net_id"):
+		var cell: Vector2i = get_meta("anchor_cell", Vector2i.ZERO)
+		net_shot_log.append_array([cell.x, cell.y, int(target.get_meta("net_id"))])
 	var proj := Projectile.new()
+	proj.cosmetic = cosmetic
 	var effect: String = str(def.get("effect", "none"))
 	var to_pos := target.global_position
 	var aim := to_pos - global_position

@@ -9,6 +9,16 @@ compatibility_date = "2024-10-01"
 binding = "LEADERBOARD_KV"
 id = "e3ceadc6e9af4470ad15484805392533"
 
+# Durable Object (SQLite-backed, available on the free plan): one LobbyRoom
+# per online Clash match. Deploy once with `npx wrangler deploy`.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "LobbyRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LobbyRoom"]
+
 [vars]
 GITHUB_OWNER = "Zephino"
 GITHUB_REPO = "WaveDefence"

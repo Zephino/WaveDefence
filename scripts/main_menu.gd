@@ -51,6 +51,7 @@ var _seed_preview_path: Pathfinder
 var _seed_modal_panel: PanelContainer
 var _seed_modal_box: VBoxContainer
 var _seed_modal_max: Vector2 = Vector2.ZERO
+var _online_overlay: Control
 
 
 func _ready() -> void:
@@ -64,6 +65,7 @@ func _ready() -> void:
 	if not OS.has_feature("web"):
 		SoundHub.unlock()
 	SoundHub.set_music_context(SoundHub.MUSIC_MENU)
+	Net.match_starting.connect(_start_online_match)
 
 
 func _build_ui() -> void:
@@ -115,7 +117,13 @@ func _build_ui() -> void:
 	_center.add_child(_spacer(4.0 if _touch_layout else 8.0))
 	# Settings before Leaderboard so the primary gear action is higher on phones.
 	_center.add_child(_menu_button("Settings", _show_settings_popup))
-	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
+	# Side by side so the menu stays the same height on phones.
+	var board_row := HBoxContainer.new()
+	board_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	board_row.add_theme_constant_override("separation", 12)
+	board_row.add_child(_menu_button("Leaderboard", _on_leaderboard, true))
+	board_row.add_child(_menu_button("Play Online", func() -> void: _show_online_lobby(), true))
+	_center.add_child(board_row)
 	if _reopen_settings_after_rebuild:
 		_reopen_settings_after_rebuild = false
 		call_deferred("_show_settings_popup")
@@ -919,6 +927,9 @@ func _show_clash_setup(difficulty: int) -> void:
 	actions.add_theme_constant_override("separation", 12)
 	box.add_child(actions)
 	actions.add_child(_menu_button("Back", _hide_clash_setup, true))
+	var invite := _menu_button("Invite Friends", _on_invite_friends, true)
+	invite.tooltip_text = "Host an online match: friends join with a 6-digit code and take lanes (or replace bots)"
+	actions.add_child(invite)
 	actions.add_child(_menu_button("Start", _confirm_clash_setup, true))
 	call_deferred("_finalize_modal_size", modal["panel"], box, modal["max_size"])
 
@@ -1005,6 +1016,47 @@ func _confirm_clash_setup() -> void:
 		WaveScaler.MonsterMode.CLASSIC
 	)
 	_hide_clash_setup()
+
+
+## Clash setup → host an online match with these lanes and bots.
+func _on_invite_friends() -> void:
+	_ensure_clash_bot_diffs()
+	Session.set_clash_setup(_clash_player_count, _clash_bot_diffs)
+	_hide_clash_setup()
+	Net.host_match(_clash_player_count, _clash_bot_diffs)
+	_show_online_lobby()
+
+
+func _show_online_lobby(message: String = "") -> void:
+	_hide_online_lobby()
+	var modal := _make_modal_overlay(25)
+	_online_overlay = modal["overlay"]
+	var box: VBoxContainer = modal["box"]
+	var lobby := OnlineLobbyPanel.new()
+	box.add_child(lobby)
+	lobby.setup(_menu_button, message)
+	lobby.close_requested.connect(_hide_online_lobby)
+	call_deferred("_finalize_modal_size", modal["panel"], box, modal["max_size"])
+
+
+func _hide_online_lobby() -> void:
+	if _online_overlay != null and is_instance_valid(_online_overlay):
+		_online_overlay.queue_free()
+	_online_overlay = null
+
+
+## Everyone (host and joined players) loads the Clash board with the lobby's lanes.
+func _start_online_match() -> void:
+	Session.clash_player_count = Net.seats.size()
+	Session.map_layout_mode = WaveScaler.MapLayoutMode.STANDARD
+	Session.run_seed = -1
+	Session.current_map_seed = -1
+	Session.map_seed_text = ""
+	Session.go_game(
+		WaveScaler.Difficulty.MEDIUM,
+		WaveScaler.GameMode.CLASH,
+		WaveScaler.MonsterMode.CLASSIC
+	)
 
 
 func _show_map_setup(difficulty: int) -> void:

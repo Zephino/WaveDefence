@@ -1511,6 +1511,13 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 		_launcher_shell.reset_size()
 
 
+## Online Clash: the Start Round / Skip Timer button doubles as Ready.
+func set_skip_button_state(text: String, disabled: bool, tooltip: String) -> void:
+	skip_button.text = text
+	skip_button.disabled = disabled
+	skip_button.tooltip_text = tooltip
+
+
 func update_enemies_remaining(remaining: int, alive: int, queued: int) -> void:
 	if enemies_label == null:
 		return

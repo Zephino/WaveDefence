@@ -12,6 +12,9 @@ var players: Array = [] ## ClashPlayerState
 var human_id: int = 0
 var finished: bool = false
 var _place_counter: int = 0
+## Online Clash: people play other lanes, so the match runs until one lane is
+## left or no person is still in (the host can be out and keep watching).
+var online: bool = false
 ## Match-wide Clash send-shop unlock tier (1–4). One player's upgrade unlocks packs for everyone.
 var send_shop_level: int = 1
 
@@ -45,6 +48,44 @@ func setup(p_state: GameState, player_count: int, bot_difficulties: Array) -> vo
 	human_id = 0
 	sync_human_to_game_state()
 	players_changed.emit()
+
+
+## Online Clash: lanes from the lobby seats (NetSession.seats). `local_seat` is
+## this device's lane; other people's lanes are remote, bots are bots.
+func setup_online(p_state: GameState, seats: Array, local_seat: int) -> void:
+	game_state = p_state
+	players.clear()
+	finished = false
+	online = true
+	_place_counter = 0
+	send_shop_level = 1
+	for i in seats.size():
+		var seat := seats[i] as Dictionary
+		var p := ClashPlayerState.new()
+		p.player_id = i
+		p.lane_index = i
+		p.is_human = i == local_seat
+		var kind := str(seat.get("kind", NetSession.SEAT_BOT))
+		p.is_remote = not p.is_human and kind != NetSession.SEAT_BOT
+		p.bot_difficulty = int(seat.get("diff", WaveScaler.Difficulty.MEDIUM)) if kind == NetSession.SEAT_BOT else WaveScaler.Difficulty.MEDIUM
+		p.display_name = "You" if p.is_human else str(seat.get("name", "Player"))
+		p.reset_economy()
+		players.append(p)
+	human_id = local_seat
+	sync_human_to_game_state()
+	players_changed.emit()
+
+
+## A person left: their lane keeps playing as a bot.
+func convert_to_bot(player_id: int, difficulty: int = WaveScaler.Difficulty.MEDIUM) -> void:
+	var p := get_player(player_id)
+	if p == null or p.is_human:
+		return
+	p.is_remote = false
+	p.bot_difficulty = difficulty
+	p.display_name = "%s (bot)" % p.display_name
+	players_changed.emit()
+	_check_match_over()
 
 
 func player_count() -> int:
@@ -244,12 +285,16 @@ func sync_human_to_game_state() -> void:
 
 func _on_eliminated(p: ClashPlayerState) -> void:
 	_place_counter += 1
+	p.place = living_count() + 1
 	player_eliminated.emit(p.player_id)
 	_check_match_over()
 
 
 func _check_match_over() -> void:
 	if finished:
+		return
+	if online:
+		_check_online_match_over()
 		return
 	var living := living_players()
 	var h := human()
@@ -273,3 +318,30 @@ func _check_match_over() -> void:
 			game_state.is_game_over = true
 			game_state.game_over.emit(game_state.highest_wave)
 		match_over.emit(winner_id, human_won, 1 if human_won else 0)
+
+
+func _people_still_in() -> bool:
+	for p in living_players():
+		var cp := p as ClashPlayerState
+		if cp.is_human or cp.is_remote:
+			return true
+	return false
+
+
+func _check_online_match_over() -> void:
+	var living := living_players()
+	if living.size() > 1 and _people_still_in():
+		return
+	finished = true
+	var winner_id := -1
+	if living.size() == 1:
+		var w := living[0] as ClashPlayerState
+		winner_id = w.player_id
+		w.place = 1
+	var h := human()
+	var human_won := h != null and winner_id == h.player_id
+	var place := 1 if human_won else (h.place if h != null else 0)
+	if game_state != null and not game_state.is_game_over:
+		game_state.is_game_over = true
+		game_state.game_over.emit(game_state.highest_wave)
+	match_over.emit(winner_id, human_won, place)

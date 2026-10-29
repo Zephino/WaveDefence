@@ -1,13 +1,18 @@
 /**
  * Wave Defence shared leaderboard Worker.
  * GET/POST /leaderboard — stores in KV and commits leaderboard.json to GitHub.
+ * GET /lobby — online Clash lobbies with 6-digit codes, over WebSocket (see lobby.mjs)
  *
  * Secrets: GITHUB_TOKEN (contents:write on Zephino/WaveDefence)
- * Bindings: LEADERBOARD_KV
+ * Bindings: LEADERBOARD_KV, LOBBY (Durable Object LobbyRoom)
  * Vars: GITHUB_OWNER, GITHUB_REPO, GITHUB_PATH, GITHUB_BRANCH
  */
 
 import { handleSuggestionPost, suggestionStatus } from "./suggestions.mjs";
+import { handleLobby } from "./lobby.mjs";
+
+// Durable Object classes must be exported from the Worker's main module.
+export { LobbyRoom } from "./lobby.mjs";
 
 const MAX_ENTRIES = 10;
 const MAX_NAME_LENGTH = 12;
@@ -298,11 +303,13 @@ async function commitToGitHub(env, boards) {
 export default {
   async fetch(request, env) {
     try {
+      const url = new URL(request.url);
+      // Lobbies are WebSockets with their own per-player message limit (no KV use).
+      if (url.pathname === "/lobby") return await handleLobby(request, env);
       if (request.method === "OPTIONS") {
         return new Response(null, { status: 204, headers: corsHeaders() });
       }
 
-      const url = new URL(request.url);
       if (url.pathname !== "/leaderboard" && url.pathname !== "/" && url.pathname !== "/suggestions") {
         return jsonResponse({ error: "not found" }, 404);
       }
