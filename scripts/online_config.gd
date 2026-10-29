@@ -29,6 +29,14 @@ static func read_url() -> String:
 	return LEADERBOARD_READ_URL.strip_edges()
 
 
+## Anonymous player suggestions use the same Worker as the leaderboard.
+static func suggestion_url() -> String:
+	var base: String = API_BASE_URL.strip_edges().trim_suffix("/")
+	if base.is_empty():
+		return ""
+	return base + "/suggestions"
+
+
 static func can_read() -> bool:
 	return not read_url().is_empty()
 
