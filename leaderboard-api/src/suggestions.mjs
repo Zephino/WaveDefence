@@ -6,7 +6,7 @@
  * daily caps. Cloudflare KV limits are best-effort, not atomic bot protection.
  */
 export const SUGGESTION_CATEGORIES = Object.freeze([
-  "hero", "god", "weapon", "enemy", "region", "gameplay", "ui", "other",
+  "tower", "enemy", "map", "clash", "balance", "gameplay", "ui", "other",
 ]);
 
 const MAX_BODY_BYTES = 6000;
