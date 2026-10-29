@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: wave-defence-web-export
@@ -108,3 +109,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Failed to commit web export' }
           git push origin HEAD:main
           if ($LASTEXITCODE -ne 0) { throw 'Failed to publish web export to main/docs' }
+
+      # A GITHUB_TOKEN commit does NOT automatically trigger a branch-based Pages
+      # build. Explicitly request publication of the newly committed docs/.
+      - name: Request GitHub Pages to publish updated docs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/pages/builds"
+          $result = Invoke-WebRequest -Uri $url -Method Post -Headers $headers
+          if ($result.StatusCode -ne 201) {
+            throw "GitHub Pages build request failed with status $($result.StatusCode)"
+          }
+          Write-Host "Requested GitHub Pages to publish docs/ from main"
