@@ -116,6 +116,7 @@ func _build_ui() -> void:
 	# Settings before Leaderboard so the primary gear action is higher on phones.
 	_center.add_child(_menu_button("Settings", _show_settings_popup))
 	_center.add_child(_menu_button("Leaderboard", _on_leaderboard))
+	_center.add_child(_menu_button("Suggest a Feature", _on_suggest_feature))
 	if _reopen_settings_after_rebuild:
 		_reopen_settings_after_rebuild = false
 		call_deferred("_show_settings_popup")
@@ -1141,6 +1142,13 @@ func _confirm_map_setup() -> void:
 
 func _on_leaderboard() -> void:
 	Session.go_leaderboard(-1)
+
+
+func _on_suggest_feature() -> void:
+	# Only the main menu has this entry point. The popup is native to Godot.
+	var form := WaveSuggestionForm.new()
+	add_child(form)
+
 
 
 func _on_fullscreen() -> void:
