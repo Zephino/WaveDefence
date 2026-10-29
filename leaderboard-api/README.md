@@ -69,6 +69,14 @@ deployment should use `main` with root directory `leaderboard-api` and
 deploy command `npx wrangler deploy`. If the Worker isn't Git-linked, run
 `npm run deploy` from `leaderboard-api` with Cloudflare Wrangler credentials.
 
+**Cloudflare Git build connection:** The production build is linked to
+`Zephino/WaveDefence` on `main`. Leave the build command blank, set the root
+directory to `leaderboard-api` (not `/`), and deploy with
+`npx wrangler deploy`. Saving this connection alone does not publish code;
+the next commit to `main` triggers Cloudflare's first Worker build. Check its
+actual deployment result in Cloudflare. This does **not** rebuild the Godot
+web export in `docs/`; that requires a separate game export and commit.
+
 **Verify after deploying:** Open
 `https://wave-defence-leaderboard.thebotcoder.workers.dev/suggestions`. The
 response should be `{"accepting":true}` when the KV binding and token are
