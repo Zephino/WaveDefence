@@ -66,6 +66,7 @@ func _build_join() -> void:
 	_code_edit.custom_minimum_size = Vector2(200, GameLayout.button_height(40.0))
 	_code_edit.add_theme_font_size_override("font_size", 24)
 	_code_edit.text_submitted.connect(func(_t: String) -> void: _join())
+	WebTextInput.attach(_code_edit, "Type the 6-digit match code")
 	add_child(_code_edit)
 	_actions([make_button.call("Back", _close, true), make_button.call("Join", _join, true)])
 

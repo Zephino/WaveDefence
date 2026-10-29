@@ -1,3 +1,13 @@
+## Version 00.03.04
+Date: 10/29/2026
+Time: 7:00 PM
+
+### Changes
+- Online Clash join box: on phone/tablet browsers, tapping it now opens a small text pop-up with the phone keyboard, and the code goes into the box (same fix as Mythriven)
+
+### Reason
+Phone browsers can't show the keyboard for a game's own text box, so typed numbers never appeared.
+
 ## Version 00.03.03
 Date: 10/29/2026
 Time: 6:18 PM
