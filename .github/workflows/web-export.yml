@@ -52,7 +52,16 @@ jobs:
           $exe = Get-ChildItem $appFolder -Filter 'Godot_v*-stable_win64.exe' -Recurse |
             Select-Object -First 1
           if (-not $exe) { throw 'Godot executable not found in archive' }
-          Copy-Item $exe.FullName (Join-Path $bin 'godot.exe')
+          # On Windows, use Godot's console wrapper so CI receives real
+          # stdout/stderr and the correct exit status (not the GUI launcher).
+          $console = Get-ChildItem $appFolder -Filter 'Godot_v*-stable_win64_console.exe' -Recurse |
+            Select-Object -First 1
+          if (-not $console) { throw 'Godot console executable not found in archive' }
+          Copy-Item $exe.FullName (Join-Path $bin $exe.Name)
+          Copy-Item $console.FullName (Join-Path $bin $console.Name)
+          $shim = "@echo off" + [Environment]::NewLine +
+            '"%~dp0' + $console.Name + '" %*' + [Environment]::NewLine
+          Set-Content -Path (Join-Path $bin 'godot.cmd') -Value $shim -Encoding ascii
           Add-Content -Path $env:GITHUB_PATH -Value $bin
 
           $tpz = Join-Path $work 'templates.tpz'
@@ -76,8 +85,13 @@ jobs:
       - name: Import Godot project
         shell: pwsh
         run: |
-          & godot --headless --import --path .
-          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          & godot --headless --verbose --import --path . 2>&1 |
+            Tee-Object -FilePath 'godot-import.log'
+          $result = $LASTEXITCODE
+          if (Select-String -Path 'godot-import.log' -Pattern 'SCRIPT ERROR:|Failed to load script') {
+            throw 'Godot script parser errors found'
+          }
+          if ($result -ne 0) { throw "Godot import failed (exit $result); see log" }
 
       - name: Export web game including offline and mobile shell
         shell: powershell
