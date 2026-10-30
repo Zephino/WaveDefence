@@ -1,3 +1,13 @@
+## Version 00.03.05
+Date: 10/29/2026
+Time: 11:12 PM
+
+### Changes
+- `CLAUDE.md`: new owner rule — Claude pushes finished work to `main` (after the checks pass; merges in the web-build bot's commits first; never force-pushes)
+
+### Reason
+The game is published from `main`, so changes on other branches weren't reaching players.
+
 ## Version 00.03.04
 Date: 10/29/2026
 Time: 7:00 PM
