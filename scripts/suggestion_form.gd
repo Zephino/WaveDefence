@@ -105,6 +105,7 @@ func _build() -> void:
   _title_input.max_length = MAX_TITLE
   _title_input.custom_minimum_size.y = touch * 0.65
   column.add_child(_title_input)
+  WebTextInput.attach(_title_input, "Short title: what would you like added?")
 
   var details_label := Label.new()
   details_label.text = "Your idea"
@@ -115,6 +116,7 @@ func _build() -> void:
   _description.custom_minimum_size.y = touch * 1.6
   _description.size_flags_vertical = Control.SIZE_EXPAND_FILL
   column.add_child(_description)
+  WebTextInput.attach(_description, "Your idea: describe what you'd like and how it would work")
 
   var environment := Label.new()
   environment.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED

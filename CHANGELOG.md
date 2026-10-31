@@ -1,3 +1,14 @@
+## Version 00.03.06
+Date: 10/31/2026
+Time: 1:07 AM
+
+### Changes
+- Phone/tablet browsers: tapping any text box now opens a small pop-up with the phone keyboard, and what you type goes into the box — leaderboard name, both map seed boxes, and both Suggest a Feature boxes (the join-code box already had this)
+- Added the missing changelog entry for 00.03.00
+
+### Reason
+Phone browsers can't show the keyboard for the game's own text boxes, so nothing could be typed there; and 00.03.00 shipped without a changelog entry.
+
 ## Version 00.03.05
 Date: 10/29/2026
 Time: 11:12 PM
@@ -53,6 +64,18 @@ Time: 12:24 AM
 
 ### Reason
 Adding Suggest a Feature made the touch menu taller than the screen, which showed a scroll bar. (Entry backfilled; the original fix skipped the version and changelog rules.)
+
+## Version 00.03.00
+Date: 10/29/2026
+Time: 12:06 AM
+
+### Changes
+- Added **Suggest a Feature** to the main menu (below Quit): an anonymous in-game form that sends ideas through the existing Cloudflare Worker, which opens a GitHub issue with the game version and a coarse device/OS/browser category
+- The web version in `docs/` now rebuilds and publishes automatically (GitHub Actions) whenever game files change on `main`
+- Godot project version kept in step with `VERSION`
+
+### Reason
+Let players suggest features from inside the game, and make sure game changes reach the web version without a manual export. (Entry added later; this release shipped without one.)
 
 ## Version 00.02.99
 Date: 10/25/2026

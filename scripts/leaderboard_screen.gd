@@ -181,6 +181,7 @@ func _build_ui() -> void:
 	name_input.text_submitted.connect(func(_t: String) -> void: _on_submit())
 	name_row.add_child(name_input)
 	InputSanitize.bind_line_edit(name_input, "name")
+	WebTextInput.attach(name_input, "Your name for the leaderboard")
 
 	submit_button = Button.new()
 	submit_button.text = "Submit Score"
