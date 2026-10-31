@@ -1,5 +1,51 @@
 {
-	"easy": [],
-	"medium": [],
-	"hard": []
+	"classic_easy": [
+		{
+			"name": "Rds",
+			"wave": 91
+		},
+		{
+			"name": "DanK",
+			"wave": 84
+		},
+		{
+			"name": "rds",
+			"wave": 29
+		},
+		{
+			"name": "rds",
+			"wave": 27
+		},
+		{
+			"name": "rds",
+			"wave": 5
+		}
+	],
+	"classic_medium": [
+		{
+			"name": "Tiny",
+			"wave": 14
+		}
+	],
+	"classic_hard": [],
+	"random_easy": [],
+	"random_medium": [],
+	"random_hard": [],
+	"siege_easy": [],
+	"siege_medium": [],
+	"siege_hard": [],
+	"clash_easy": [],
+	"clash_medium": [
+		{
+			"name": "RDS",
+			"wave": 41,
+			"clash_players": 4,
+			"clash_bots": [
+				"cheater",
+				"cheater",
+				"cheater"
+			]
+		}
+	],
+	"clash_hard": []
 }
