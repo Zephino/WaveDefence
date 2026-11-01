@@ -37,6 +37,38 @@ static func starting_gold_for(difficulty: int) -> int:
 			return STARTING_GOLD_MEDIUM
 
 
+## Classic / Random / Siege difficulty: monster toughness, economy, lives, and how
+## early bosses / fliers arrive. Clash ignores this (it passes difficulty -1).
+## hp / speed / gold are multipliers; count = extra monsters per wave; earlier = waves sooner.
+const DIFFICULTY_TUNING := {
+	Difficulty.EASY: {"hp": 1.3, "speed": 1.05, "gold": 1.0, "lives": 20, "count": 1.0, "earlier": 0},
+	Difficulty.MEDIUM: {"hp": 1.6, "speed": 1.1, "gold": 0.9, "lives": 15, "count": 1.1, "earlier": 2},
+	Difficulty.HARD: {"hp": 2.0, "speed": 1.15, "gold": 0.8, "lives": 10, "count": 1.2, "earlier": 4},
+}
+const _NO_TUNING := {"hp": 1.0, "speed": 1.0, "gold": 1.0, "lives": STARTING_LIVES, "count": 1.0, "earlier": 0}
+
+
+## Tuning for a single-player difficulty; -1 (Clash) or unknown = neutral.
+static func tuning(difficulty: int) -> Dictionary:
+	return DIFFICULTY_TUNING.get(difficulty, _NO_TUNING)
+
+
+## The difficulty that shapes waves in this mode (-1 for Clash, which has its own rules).
+static func wave_difficulty(game_mode: int, difficulty: int) -> int:
+	return -1 if is_clash_mode(game_mode) else difficulty
+
+
+static func starting_lives_for(difficulty: int) -> int:
+	return int(tuning(difficulty)["lives"])
+
+
+## Kill / wave-clear / early-send gold after the difficulty's economy multiplier.
+static func scaled_gold(amount: int, difficulty: int) -> int:
+	if amount <= 0:
+		return amount
+	return maxi(int(round(float(amount) * float(tuning(difficulty)["gold"]))), 1)
+
+
 static func difficulty_label(difficulty: int) -> String:
 	match difficulty:
 		Difficulty.EASY:
@@ -171,18 +203,26 @@ static func is_speed_wave(wave: int) -> bool:
 	return wave >= SPEED_WAVE_FIRST and wave % SPEED_WAVE_INTERVAL == 0
 
 
-static func creep_count(wave: int) -> int:
+static func creep_count(wave: int, difficulty: int = -1) -> int:
 	var count := mini(8 + wave, 40)
 	# Speed waves pack a few extra runners.
 	if is_speed_wave(wave):
 		count = mini(count + 4, 44)
-	return count
+	return int(round(float(count) * float(tuning(difficulty)["count"])))
 
 
-static func flying_creep_count(wave: int) -> int:
+## Harder difficulties bring fliers and bosses a few waves sooner.
+static func _paced_wave(wave: int, difficulty: int) -> int:
+	if wave <= 0:
+		return wave
+	return wave + int(tuning(difficulty)["earlier"])
+
+
+static func flying_creep_count(wave: int, difficulty: int = -1) -> int:
 	if wave <= 0:
 		return 0
-	var total := creep_count(wave)
+	var total := creep_count(wave, difficulty)
+	wave = _paced_wave(wave, difficulty)
 	# Full mix: every wave after the threshold includes air creeps.
 	if wave > MIXED_AIR_AFTER_WAVE:
 		var ratio := clampf(
@@ -201,8 +241,8 @@ static func flying_creep_count(wave: int) -> int:
 	return 0
 
 
-static func ground_creep_count(wave: int) -> int:
-	return creep_count(wave) - flying_creep_count(wave)
+static func ground_creep_count(wave: int, difficulty: int = -1) -> int:
+	return creep_count(wave, difficulty) - flying_creep_count(wave, difficulty)
 
 
 static func creep_hp(wave: int) -> float:
@@ -226,9 +266,10 @@ static func creep_bounty(wave: int) -> int:
 	return bounty
 
 
-static func boss_count(wave: int) -> int:
+static func boss_count(wave: int, difficulty: int = -1) -> int:
 	if wave <= 0:
 		return 0
+	wave = _paced_wave(wave, difficulty)
 	if wave % 50 == 0:
 		return 2
 	if wave % 10 == 0:
@@ -267,7 +308,8 @@ static func flying_creep_bounty(wave: int) -> int:
 	return creep_bounty(wave) + 2
 
 
-static func flying_boss_count(wave: int) -> int:
+static func flying_boss_count(wave: int, difficulty: int = -1) -> int:
+	wave = _paced_wave(wave, difficulty)
 	if wave > 0 and wave % 15 == 0:
 		return 1
 	return 0
@@ -300,19 +342,19 @@ const SNAKE_HEAD_HP_MULT := 0.85
 const SNAKE_SPEED_MULT := 0.9
 
 
-static func is_boss_wave(wave: int) -> bool:
-	return boss_count(wave) > 0 or flying_boss_count(wave) > 0
+static func is_boss_wave(wave: int, difficulty: int = -1) -> bool:
+	return boss_count(wave, difficulty) > 0 or flying_boss_count(wave, difficulty) > 0
 
 
-static func roll_snake_boss(wave: int, rng: RandomNumberGenerator) -> bool:
-	if not is_boss_wave(wave) or rng == null:
+static func roll_snake_boss(wave: int, rng: RandomNumberGenerator, difficulty: int = -1) -> bool:
+	if not is_boss_wave(wave, difficulty) or rng == null:
 		return false
 	return rng.randf() < SNAKE_BOSS_CHANCE
 
 
 ## Every mob that would have been on the wave, as one ground chain.
-static func snake_segment_count(wave: int) -> int:
-	return creep_count(wave) + boss_count(wave) + flying_boss_count(wave)
+static func snake_segment_count(wave: int, difficulty: int = -1) -> int:
+	return creep_count(wave, difficulty) + boss_count(wave, difficulty) + flying_boss_count(wave, difficulty)
 
 
 static func snake_body_hp(wave: int) -> float:
@@ -347,23 +389,23 @@ static func spawn_interval(wave: int) -> float:
 	return interval
 
 
-static func boss_banner(wave: int, is_snake: bool = false) -> String:
+static func boss_banner(wave: int, is_snake: bool = false, difficulty: int = -1) -> String:
 	var parts: PackedStringArray = PackedStringArray()
 	if is_speed_wave(wave):
 		parts.append("SPEED WAVE")
 	if is_snake:
 		parts.append("SNAKE")
 		return " + ".join(parts)
-	var bosses := boss_count(wave)
+	var bosses := boss_count(wave, difficulty)
 	if bosses >= 2:
 		parts.append("DOUBLE BOSS")
 	elif bosses == 1:
 		parts.append("BOSS WAVE")
-	if flying_boss_count(wave) > 0:
+	if flying_boss_count(wave, difficulty) > 0:
 		parts.append("FLYING BOSS")
-	elif flying_creep_count(wave) > 0 and not is_speed_wave(wave):
+	elif flying_creep_count(wave, difficulty) > 0 and not is_speed_wave(wave):
 		parts.append("AIR MIX")
-	elif flying_creep_count(wave) > 0 and is_speed_wave(wave):
+	elif flying_creep_count(wave, difficulty) > 0 and is_speed_wave(wave):
 		parts.append("AIR")
 	return " + ".join(parts)
 

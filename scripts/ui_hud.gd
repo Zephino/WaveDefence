@@ -1478,7 +1478,7 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 			# Skip button already says Start Round — no redundant status line.
 			timer_label.text = ""
 			if game_state:
-				set_next_wave_brief(_WavePreview.summary_line(1, game_state.game_mode, game_state.monster_mode))
+				set_next_wave_brief(_WavePreview.summary_line(1, game_state.game_mode, game_state.monster_mode, _wave_difficulty()))
 			skip_button.text = "Start Round"
 			skip_button.disabled = false
 			skip_button.tooltip_text = "Start the build timer, then waves begin"
@@ -1486,7 +1486,7 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 			timer_label.text = "Next wave: %.1fs" % seconds_left
 			if game_state:
 				var nw := game_state.wave + 1
-				set_next_wave_brief(_WavePreview.summary_line(nw, game_state.game_mode, game_state.monster_mode))
+				set_next_wave_brief(_WavePreview.summary_line(nw, game_state.game_mode, game_state.monster_mode, _wave_difficulty()))
 			skip_button.text = "Skip Timer"
 			skip_button.disabled = not can_skip
 			if can_skip:
@@ -1509,6 +1509,10 @@ func update_timer(seconds_left: float, can_skip: bool, mode: String) -> void:
 	if _launcher_collapsed and _launcher_shell != null:
 		_launcher_shell.size = Vector2.ZERO
 		_launcher_shell.reset_size()
+
+
+func _wave_difficulty() -> int:
+	return WaveScaler.wave_difficulty(game_state.game_mode, game_state.difficulty) if game_state else -1
 
 
 ## Online Clash: the Start Round / Skip Timer button doubles as Ready.

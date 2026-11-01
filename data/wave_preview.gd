@@ -2,22 +2,23 @@ class_name WavePreview
 extends RefCounted
 
 ## Icons + text for upcoming waves (pause timeline, intermission briefing).
+## `difficulty` is WaveScaler.wave_difficulty (harder = bosses / air sooner; -1 = Clash).
 
 
-static func label_for_wave(wave: int, game_mode: int, rng_seed: int = 0) -> String:
+static func label_for_wave(wave: int, game_mode: int, rng_seed: int = 0, difficulty: int = -1) -> String:
 	if wave <= 0:
 		return "normal"
-	if WaveScaler.is_boss_wave(wave):
-		if wave % 50 == 0:
+	if WaveScaler.is_boss_wave(wave, difficulty):
+		if WaveScaler.boss_count(wave, difficulty) >= 2:
 			return "double boss"
-		if wave % 15 == 0:
+		if WaveScaler.flying_boss_count(wave, difficulty) > 0:
 			return "flying boss"
-		if WaveScaler.roll_snake_boss(wave, _rng(rng_seed, wave)):
+		if WaveScaler.roll_snake_boss(wave, _rng(rng_seed, wave), difficulty):
 			return "snake boss"
 		return "boss"
 	if WaveScaler.is_speed_wave(wave):
 		return "faster enemies"
-	if WaveScaler.flying_creep_count(wave) > 0:
+	if WaveScaler.flying_creep_count(wave, difficulty) > 0:
 		return "air enemies"
 	if WaveScaler.should_rotate_spawn_after_wave(game_mode, wave):
 		return "spawn moves after"
@@ -35,23 +36,25 @@ static func _rng(seed_val: int, wave: int) -> RandomNumberGenerator:
 	return r
 
 
-static func summary_line(wave: int, game_mode: int, monster_mode: int) -> String:
+static func summary_line(wave: int, game_mode: int, monster_mode: int, difficulty: int = -1) -> String:
 	if wave <= 0:
 		return "Build your maze, then Start Round."
 	var parts: Array[String] = ["Wave %d" % wave]
-	var banner := WaveScaler.boss_banner(wave, WaveScaler.roll_snake_boss(wave, _rng(0, wave)))
+	var banner := WaveScaler.boss_banner(
+		wave, WaveScaler.roll_snake_boss(wave, _rng(0, wave), difficulty), difficulty
+	)
 	if banner.strip_edges() != "":
 		parts.append(banner)
 	if WaveScaler.is_speed_wave(wave):
 		parts.append("faster enemies")
-	if WaveScaler.flying_creep_count(wave) > 0:
+	if WaveScaler.flying_creep_count(wave, difficulty) > 0:
 		parts.append("air enemies")
 	if WaveScaler.is_randomize_monsters(monster_mode):
 		parts.append("Elemental resists scale with wave")
 	return " — ".join(parts)
 
 
-static func timeline_text(from_wave: int, count: int, game_mode: int) -> String:
+static func timeline_text(from_wave: int, count: int, game_mode: int, difficulty: int = -1) -> String:
 	var parts: PackedStringArray = []
 	var normal_start := -1
 	var normal_end := -1
@@ -59,7 +62,7 @@ static func timeline_text(from_wave: int, count: int, game_mode: int) -> String:
 		var w := from_wave + i
 		if w <= 0:
 			continue
-		var label := label_for_wave(w, game_mode, 12345)
+		var label := label_for_wave(w, game_mode, 12345, difficulty)
 		if label == "normal":
 			if normal_start < 0:
 				normal_start = w

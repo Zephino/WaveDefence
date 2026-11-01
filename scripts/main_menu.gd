@@ -224,22 +224,40 @@ func _build_choice_columns(parent: VBoxContainer) -> void:
 		func() -> void: _start_difficulty(WaveScaler.Difficulty.EASY),
 		true
 	)
-	easy.tooltip_text = "Starting gold: %d" % WaveScaler.STARTING_GOLD_EASY
+	easy.tooltip_text = _difficulty_tooltip(WaveScaler.Difficulty.EASY)
 	diff_col.add_child(easy)
 	var med := _menu_button(
 		"Medium  (%d gold)" % WaveScaler.STARTING_GOLD_MEDIUM,
 		func() -> void: _start_difficulty(WaveScaler.Difficulty.MEDIUM),
 		true
 	)
-	med.tooltip_text = "Starting gold: %d" % WaveScaler.STARTING_GOLD_MEDIUM
+	med.tooltip_text = _difficulty_tooltip(WaveScaler.Difficulty.MEDIUM)
 	diff_col.add_child(med)
 	var hard := _menu_button(
 		"Hard  (%d gold)" % WaveScaler.STARTING_GOLD_HARD,
 		func() -> void: _start_difficulty(WaveScaler.Difficulty.HARD),
 		true
 	)
-	hard.tooltip_text = "Starting gold: %d" % WaveScaler.STARTING_GOLD_HARD
+	hard.tooltip_text = _difficulty_tooltip(WaveScaler.Difficulty.HARD)
 	diff_col.add_child(hard)
+
+
+## Classic / Random / Siege: what each difficulty changes (Clash has its own setup).
+func _difficulty_tooltip(diff: int) -> String:
+	var t := WaveScaler.tuning(diff)
+	var lines := PackedStringArray([
+		"Starting gold: %d · Lives: %d" % [WaveScaler.starting_gold_for(diff), int(t["lives"])],
+		"Monsters: +%d%% health, +%d%% speed, +%d%% per wave" % [
+			roundi((float(t["hp"]) - 1.0) * 100.0),
+			roundi((float(t["speed"]) - 1.0) * 100.0),
+			roundi((float(t["count"]) - 1.0) * 100.0),
+		],
+	])
+	if float(t["gold"]) < 1.0:
+		lines.append("Kill gold: %d%%" % roundi(float(t["gold"]) * 100.0))
+	if int(t["earlier"]) > 0:
+		lines.append("Bosses and fliers arrive %d waves sooner" % int(t["earlier"]))
+	return "\n".join(lines)
 
 
 func _choice_column(title_text: String) -> VBoxContainer:

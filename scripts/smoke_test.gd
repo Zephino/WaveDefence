@@ -1001,20 +1001,41 @@ func _run() -> void:
 		errors.append("flying creeps should be glassier than ~75% ground HP")
 	if WaveScaler.flying_boss_hp(15) >= WaveScaler.creep_hp(15) * 9.0:
 		errors.append("flying bosses should be under 9x creep HP")
-	# Confirm wave-15 spawn queue actually contains a flyer.
+	# Difficulty (Classic / Random / Siege): harder = tougher, faster, more, sooner, poorer, fewer lives.
+	var easy_t := WaveScaler.tuning(WaveScaler.Difficulty.EASY)
+	var hard_t := WaveScaler.tuning(WaveScaler.Difficulty.HARD)
+	if float(hard_t["hp"]) <= float(easy_t["hp"]) or float(easy_t["hp"]) <= 1.0:
+		errors.append("harder difficulties should have tougher monsters (and Easy tougher than before)")
+	if WaveScaler.creep_count(20, WaveScaler.Difficulty.HARD) <= WaveScaler.creep_count(20, WaveScaler.Difficulty.EASY):
+		errors.append("Hard should have more monsters per wave than Easy")
+	if WaveScaler.starting_lives_for(WaveScaler.Difficulty.HARD) >= WaveScaler.starting_lives_for(WaveScaler.Difficulty.EASY):
+		errors.append("Hard should start with fewer lives than Easy")
+	if WaveScaler.scaled_gold(100, WaveScaler.Difficulty.HARD) >= 100:
+		errors.append("Hard should pay less kill gold")
+	if WaveScaler.boss_count(6, WaveScaler.Difficulty.HARD) != 1 or WaveScaler.boss_count(6, WaveScaler.Difficulty.EASY) != 0:
+		errors.append("Hard's first boss should come sooner (wave 6) than Easy's (wave 10)")
+	if WaveScaler.wave_difficulty(WaveScaler.GameMode.CLASH, WaveScaler.Difficulty.HARD) != -1:
+		errors.append("Clash should ignore single-player difficulty")
+
+	# Confirm the flying-boss wave's spawn queue actually contains a flyer.
+	var run_diff := WaveScaler.wave_difficulty(state.game_mode, state.difficulty)
+	var fly_wave := 15 - int(WaveScaler.tuning(run_diff)["earlier"])
 	waves._wave_is_snake = false
-	waves._build_spawn_queue(15)
+	waves._build_spawn_queue(fly_wave)
 	var flying_in_15 := 0
 	for spec in waves.spawn_queue:
 		if bool(spec.get("flying", false)):
 			flying_in_15 += 1
 	if flying_in_15 <= 0:
-		errors.append("wave 15 spawn queue should include flying enemies")
+		errors.append("flying-boss wave spawn queue should include flying enemies")
+	if not waves.spawn_queue.is_empty() and not bool(waves.spawn_queue[0].get("flying", false)):
+		if float(waves.spawn_queue[0]["hp"]) < WaveScaler.creep_hp(fly_wave) * float(WaveScaler.tuning(run_diff)["hp"]) - 0.01:
+			errors.append("spawned monsters should get the difficulty's health boost")
 
 	# Snake boss queue: all ground segments, head first, tougher body HP.
 	waves._wave_is_snake = true
 	waves._build_spawn_queue(10)
-	if waves.spawn_queue.size() != WaveScaler.snake_segment_count(10):
+	if waves.spawn_queue.size() != WaveScaler.snake_segment_count(10, run_diff):
 		errors.append("snake queue length should match segment count")
 	elif waves.spawn_queue.is_empty():
 		errors.append("snake queue should not be empty")

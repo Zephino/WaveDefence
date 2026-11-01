@@ -67,7 +67,7 @@ func reset_run(p_difficulty: int = -1, p_mode: int = -1, p_monster_mode: int = -
 		lives = WaveScaler.CLASH_STARTING_LIVES
 	else:
 		gold = WaveScaler.starting_gold_for(difficulty)
-		lives = WaveScaler.STARTING_LIVES
+		lives = WaveScaler.starting_lives_for(difficulty)
 	wave = 0
 	highest_wave = 0
 	total_kills = 0
@@ -134,7 +134,7 @@ func register_kill() -> void:
 func begin_next_map_sector(carry_gold: int) -> void:
 	map_sector += 1
 	kills_this_map = 0
-	lives = WaveScaler.STARTING_LIVES
+	lives = WaveScaler.starting_lives_for(difficulty)
 	gold = maxi(carry_gold, 0)
 	gold_changed.emit(gold)
 	lives_changed.emit(lives)

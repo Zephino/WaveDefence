@@ -129,6 +129,9 @@ static func build_coaching_text(state: GameState) -> String:
 		lines.append("Sold %d times (~%d gold refunded)" % [state.sell_count, state.sell_refund_total])
 	if not lines.is_empty():
 		var worst: Dictionary = top[0]
-		var tip := _WavePreview.summary_line(int(worst["w"]), state.game_mode, state.monster_mode)
+		var tip := _WavePreview.summary_line(
+			int(worst["w"]), state.game_mode, state.monster_mode,
+			WaveScaler.wave_difficulty(state.game_mode, state.difficulty)
+		)
 		lines.append("Most leaks: wave %d (%s)" % [int(worst["w"]), tip])
 	return "\n".join(lines)

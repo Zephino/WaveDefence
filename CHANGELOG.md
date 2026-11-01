@@ -1,3 +1,20 @@
+## Version 00.03.07
+Date: 10/31/2026
+Time: 11:15 PM
+
+### Changes
+- Classic, Random and Siege difficulties now change the monsters, not just starting gold:
+  - Monster health: Easy +30%, Medium +60%, Hard +100%; speed +5% / +10% / +15%
+  - Monsters per wave: +0% / +10% / +20%
+  - Kill, wave-clear and early-send gold: 100% / 90% / 80%
+  - Lives: 20 / 15 / 10
+  - Bosses and fliers arrive 2 waves sooner on Medium and 4 sooner on Hard (e.g. first boss at wave 10 / 8 / 6)
+- Wave preview, pause timeline and difficulty button tooltips show the new rules; Clash is unchanged
+- Smoke test checks the new difficulty rules
+
+### Reason
+Easy, Medium and Hard only differed in starting gold, so every difficulty got the same monsters and felt too easy.
+
 ## Version 00.03.06
 Date: 10/31/2026
 Time: 1:07 AM

@@ -79,6 +79,13 @@ func _is_clash() -> bool:
 	return clash_match != null and game_state != null and WaveScaler.is_clash_mode(game_state.game_mode)
 
 
+## Difficulty that shapes waves (WaveScaler.DIFFICULTY_TUNING); -1 in Clash.
+func _difficulty() -> int:
+	if game_state == null:
+		return -1
+	return WaveScaler.wave_difficulty(game_state.game_mode, game_state.difficulty)
+
+
 func begin_run() -> void:
 	clear_enemies()
 	phase = Phase.PREP
@@ -353,7 +360,7 @@ func try_skip_timer() -> bool:
 			clear_path_blockers()
 		if not can_send_wave():
 			return false
-	last_early_send_bonus = WaveScaler.early_send_bonus_from_timer(intermission_left)
+	last_early_send_bonus = WaveScaler.scaled_gold(WaveScaler.early_send_bonus_from_timer(intermission_left), _difficulty())
 	if last_early_send_bonus > 0:
 		game_state.add_gold(last_early_send_bonus)
 	return send_next_wave()
@@ -371,8 +378,8 @@ func send_next_wave() -> bool:
 	_spawn_rng.randomize()
 	_snake_tail = null
 	_snake_tails_by_lane.clear()
-	_wave_is_snake = false if _is_clash() else WaveScaler.roll_snake_boss(wave, _spawn_rng)
-	var banner := WaveScaler.boss_banner(wave, _wave_is_snake)
+	_wave_is_snake = false if _is_clash() else WaveScaler.roll_snake_boss(wave, _spawn_rng, _difficulty())
+	var banner := WaveScaler.boss_banner(wave, _wave_is_snake, _difficulty())
 	if _is_clash():
 		_build_clash_spawn_queue(wave)
 	else:
@@ -387,8 +394,8 @@ func send_next_wave() -> bool:
 	_flying_boss_wave_active = wave > 0 and wave % 15 == 0
 	skip_unlocked = false
 	intermission_left = 0.0
-	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave))
-	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave))
+	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave, _difficulty()))
+	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave, _difficulty()))
 	wave_started.emit(wave, banner)
 	_emit_timer()
 	_emit_enemies_remaining()
@@ -407,8 +414,10 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	if award_bonuses and phase == Phase.WAVE and game_state.wave > 0:
 		var finished_wave := game_state.wave
 		var kills := kills_this_wave
-		var clear_bonus := WaveScaler.wave_clear_bonus(kills, finished_wave)
-		var early_bonus := WaveScaler.early_send_bonus_from_alive(finished_wave, enemies_alive)
+		var clear_bonus := WaveScaler.scaled_gold(WaveScaler.wave_clear_bonus(kills, finished_wave), _difficulty())
+		var early_bonus := WaveScaler.scaled_gold(
+			WaveScaler.early_send_bonus_from_alive(finished_wave, enemies_alive), _difficulty()
+		)
 		last_early_send_bonus = early_bonus
 		if clear_bonus > 0:
 			game_state.add_gold(clear_bonus)
@@ -429,8 +438,8 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	var wave := game_state.advance_wave()
 	_spawn_rng.randomize()
 	_snake_tail = null
-	_wave_is_snake = WaveScaler.roll_snake_boss(wave, _spawn_rng)
-	var banner := WaveScaler.boss_banner(wave, _wave_is_snake)
+	_wave_is_snake = WaveScaler.roll_snake_boss(wave, _spawn_rng, _difficulty())
+	var banner := WaveScaler.boss_banner(wave, _wave_is_snake, _difficulty())
 	_build_spawn_queue(wave)
 	enemies_this_wave_total = spawn_queue.size()
 
@@ -443,8 +452,8 @@ func _begin_overlapping_next_wave(award_bonuses: bool) -> bool:
 	_flying_boss_wave_active = wave > 0 and wave % 15 == 0
 	skip_unlocked = false
 	intermission_left = 0.0
-	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave))
-	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave))
+	SoundHub.play_wave_start(WaveScaler.is_boss_wave(wave, _difficulty()))
+	SoundHub.set_gameplay_music_source(enemy_container as Node2D, wave, WaveScaler.is_boss_wave(wave, _difficulty()))
 	wave_started.emit(wave, banner)
 	_emit_timer()
 	_emit_enemies_remaining()
@@ -477,8 +486,8 @@ func _build_spawn_queue(wave: int) -> void:
 	if _wave_is_snake:
 		_build_snake_spawn_queue(wave)
 		return
-	var ground_left := WaveScaler.ground_creep_count(wave)
-	var air_left := WaveScaler.flying_creep_count(wave)
+	var ground_left := WaveScaler.ground_creep_count(wave, _difficulty())
+	var air_left := WaveScaler.flying_creep_count(wave, _difficulty())
 	# Interleave ground and air creeps so late waves feel mixed, not batched.
 	while ground_left > 0 or air_left > 0:
 		if ground_left > 0:
@@ -501,7 +510,7 @@ func _build_spawn_queue(wave: int) -> void:
 				true
 			))
 			air_left -= 1
-	var bosses := WaveScaler.boss_count(wave)
+	var bosses := WaveScaler.boss_count(wave, _difficulty())
 	for i in bosses:
 		spawn_queue.append(_make_spawn_spec(
 			wave,
@@ -511,7 +520,7 @@ func _build_spawn_queue(wave: int) -> void:
 			true,
 			false
 		))
-	var flyers := WaveScaler.flying_boss_count(wave)
+	var flyers := WaveScaler.flying_boss_count(wave, _difficulty())
 	for i in flyers:
 		spawn_queue.append(_make_spawn_spec(
 			wave,
@@ -645,7 +654,7 @@ func _interleave_clash_queue() -> void:
 
 
 func _build_snake_spawn_queue(wave: int) -> void:
-	var count := WaveScaler.snake_segment_count(wave)
+	var count := WaveScaler.snake_segment_count(wave, _difficulty())
 	for i in count:
 		var is_head := i == 0
 		var spec := _make_spawn_spec(
@@ -669,6 +678,11 @@ func _make_spawn_spec(
 	boss: bool,
 	flying: bool
 ) -> Dictionary:
+	# Classic / Random / Siege difficulty: tougher, faster monsters and less kill gold.
+	var tune := WaveScaler.tuning(_difficulty())
+	hp *= float(tune["hp"])
+	speed *= float(tune["speed"])
+	bounty = WaveScaler.scaled_gold(bounty, _difficulty())
 	var spec := {
 		"hp": hp,
 		"speed": speed,
@@ -916,7 +930,7 @@ func _check_wave_clear() -> void:
 		var kills := kills_this_wave
 		var bonus := 0
 		if not _is_clash():
-			bonus = WaveScaler.wave_clear_bonus(kills, wave)
+			bonus = WaveScaler.scaled_gold(WaveScaler.wave_clear_bonus(kills, wave), _difficulty())
 			if bonus > 0:
 				game_state.add_gold(bonus)
 		_record_wave_milestones(wave)

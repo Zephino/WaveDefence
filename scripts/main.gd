@@ -1792,7 +1792,9 @@ func _open_pause_menu() -> void:
 	_pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
 	var next_w := game_state.wave + 1 if wave_manager.phase != WaveManager.Phase.WAVE else game_state.wave
 	_pause_menu.setup(
-		_WavePreview.timeline_text(next_w, 8, game_state.game_mode),
+		_WavePreview.timeline_text(
+			next_w, 8, game_state.game_mode, WaveScaler.wave_difficulty(game_state.game_mode, game_state.difficulty)
+		),
 		_RunSummaryOverlay.seed_clipboard_text(game_state)
 	)
 	hud.attach_pause_menu(_pause_menu)

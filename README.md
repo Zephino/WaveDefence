@@ -85,7 +85,7 @@ Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Mo
 
   - **Classic** — standard ground/air/boss mix (no elemental resists)
   - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
-- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot Easy/Medium/Hard/**Cheater**). Starting gold **350 / 200 / 100** (Clash starts at **320** so bots can lock in a full one-tile maze)
+- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot Easy/Medium/Hard/**Cheater**). Starting gold **350 / 200 / 100** (Clash starts at **320** so bots can lock in a full one-tile maze). In Classic / Random / Siege, difficulty also changes the monsters — see **Difficulty** below
 - **Online Clash (6-digit code)** — play Clash with friends on other devices (PC, phone, or browser):
   1. **Host:** pick **Clash**, a difficulty, set players and bots as usual, then press **Invite Friends**. Share the **6-digit code**.
   2. **Friends:** press **Play Online** on the main menu and type the code (on a phone browser, tapping the box opens a small pop-up with the keyboard). Each friend takes a new lane; when all **4** lanes are taken, a friend **replaces a bot**. The host can still add/remove bots and change their difficulty in the lobby.
@@ -170,6 +170,17 @@ When a run ends, a **Run summary** (stats + coaching) appears before the **leade
 Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns/trap modes are in `data/command_abilities.gd`.
 
 Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**. Clash: **320** for every lane.
+
+**Difficulty** (Classic / Random / Siege; `DIFFICULTY_TUNING` in `data/wave_scaler.gd`; Clash is unaffected):
+
+| | Easy | Medium | Hard |
+|---|---|---|---|
+| Monster health | +30% | +60% | +100% |
+| Monster speed | +5% | +10% | +15% |
+| Monsters per wave | +0% | +10% | +20% |
+| Kill / wave-clear / early-send gold | 100% | 90% | 80% |
+| Lives | 20 | 15 | 10 |
+| Bosses and fliers arrive | on time (boss wave 10, air wave 8) | 2 waves sooner | 4 waves sooner |
 
 ## Debug / playtest
 
