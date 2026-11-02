@@ -1,3 +1,14 @@
+## Version 00.03.08
+Date: 11/01/2026
+Time: 11:10 PM
+
+### Changes
+- `README.md` rewritten as a player's guide: getting the game, first game, menu, modes, difficulty, rounds, building, towers, waves, Clash, online Clash, controls (computer and phone), leaderboard, settings, tips
+- Technical material (running from source, exports, tests, debug keys, balance files, art/audio, leaderboard/online setup, project layout) moved to a new `DEVELOPMENT.md`
+
+### Reason
+Make the README instructions on how to play the game, without losing the developer notes.
+
 ## Version 00.03.07
 Date: 10/31/2026
 Time: 11:15 PM

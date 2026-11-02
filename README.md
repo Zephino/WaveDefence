@@ -1,306 +1,349 @@
 # Wave Defence
 
-Endless maze-builder tower defence (Godot 4). Place towers to shape the enemy path, keep at least one route open, and send waves until you run out of lives.
+An endless maze-building tower defence game. Monsters walk from the start to the
+exit; you build walls and towers to make their path as long as possible and shoot
+them down on the way. Every monster that gets through costs a life. How many
+waves can you survive?
 
-**Version:** see root [`VERSION`](VERSION) (also shown in-game).
+**Play now in your browser:** **https://zephino.github.io/WaveDefence/**
+(works on computers, phones and tablets — no download needed).
 
-**License:** proprietary — [All Rights Reserved](LICENSE). Play the official builds; contact via the [Zephino/WaveDefence](https://github.com/Zephino/WaveDefence) GitHub profile for commercial licensing. Do not copy or sell this project without permission.
+**Version:** shown on the main menu (also in [`VERSION`](VERSION)).
+**License:** proprietary — [All Rights Reserved](LICENSE). Contact via the
+[Zephino/WaveDefence](https://github.com/Zephino/WaveDefence) GitHub profile.
 
-## Play in a browser (share with friends)
+---
 
-After GitHub Pages is enabled on this repo (`Settings → Pages → Deploy from branch → main /docs`):
+## Contents
 
-**https://zephino.github.io/WaveDefence/**
+- [Getting the game](#getting-the-game)
+- [Your first game](#your-first-game)
+- [The main menu](#the-main-menu)
+- [Game modes](#game-modes)
+- [Difficulty](#difficulty)
+- [How a round works](#how-a-round-works)
+- [Building your maze](#building-your-maze)
+- [Towers](#towers)
+- [Monsters and waves](#monsters-and-waves)
+- [Clash mode](#clash-mode)
+- [Online Clash with friends](#online-clash-with-friends)
+- [Controls](#controls)
+- [Leaderboard](#leaderboard)
+- [Settings](#settings)
+- [Tips](#tips)
 
-Works on desktop and phone browsers (including iPhone Safari — no Mac/IPA required for web play). Click the game once if controls seem stuck.
+---
 
-On **phones**, the web build can **CSS-rotate** the game 90° when upright. Tap **Fullscreen** in Settings — a real on-page tap target appears (browsers block fullscreen from the game canvas alone). Use the floating **Fullscreen** control if the screen timed out. On web only, Settings also has **Install app** (Chrome install prompt, or Safari Share → Add to Home Screen).
+## Getting the game
 
-**Offline on phone:** open the site (or installed app) **once while online** so the game pack + music finish downloading. After that you can **start and play with no internet** (airplane mode). Leaderboard scores save on the device offline and **upload automatically when you’re back online**. Use **Update app** when you have a connection to pull a newer build.
+- **Browser (easiest):** open **https://zephino.github.io/WaveDefence/**. Click or
+  tap the game once if the controls seem stuck.
+- **Windows:** play `pc/WaveDefence.exe`.
+- **Android:** install `phone/android/WaveDefence.apk`.
+- **iPhone / iPad:** use the browser link (Safari works fine).
 
-The main menu includes **Suggest a Feature**, directly beneath **Quit**,
-which opens an anonymous in-game suggestion form. The website is generated from
-the files in `docs/`, not directly from the Godot source files. A GitHub Actions
-workflow now exports the web game after source changes and commits the refreshed
-`docs/` files back to `main`. GitHub Pages then publishes that export.
+**On a phone:** the game plays sideways (landscape). In **Settings** you can go
+**Fullscreen**, or use **Install app** (Chrome) / **Share → Add to Home Screen**
+(Safari) to get an app icon.
 
-To rebuild the web files locally instead:
+**Playing offline:** open the game (or the installed app) **once while online**
+so everything downloads. After that you can play with no internet, even in
+airplane mode. Leaderboard scores wait on your device and upload when you're back
+online. Use **Settings → Update app** while online to get the newest version.
 
-```powershell
-.\export_builds.ps1 -WebOnly
-```
+**Typing on a phone browser:** tapping a text box (join code, leaderboard name,
+map seed, Suggest a Feature) opens a small pop-up with your keyboard. What you
+type goes into the box.
 
-## Quick start (recommended)
+---
 
-Double-click **`play.bat`** (or run the scripts below). This will:
+## Your first game
 
-1. Install **Godot 4** with winget if it is missing
-2. Launch the game
+The first time you open the game, it offers a short **tutorial** (an easy practice
+game that isn't scored). You can replay it anytime from **Settings → Replay
+Tutorial**. The basics:
 
-If launch fails, the window stays open and writes `godot_launch.log` in this folder.
+1. Pick **Classic** (Map), **Classic** (Monsters), and a difficulty (start with **Easy**).
+2. Choose **Standard** map, then start.
+3. Open **Towers** and place a few **Walls** to bend the path, then put real
+   towers (like **Gunner**) on or beside the walls.
+4. Press **Start Round**. You get a short build countdown, then waves start coming
+   on their own.
+5. Kill monsters for gold, spend it on more towers and upgrades, and don't let
+   your lives hit zero.
 
-```bat
-play.bat
-```
+---
 
-PowerShell:
+## The main menu
 
-```powershell
-.\play.ps1
-```
+From top to bottom:
 
-Open the Godot editor instead of playing:
+- **Map**, **Monsters**, and **Difficulty** columns — pick a map and monster type,
+  then press a difficulty to start. On a computer, hover any button for a short
+  description.
+- **Settings**
+- **Leaderboard** and **Play Online** (join a friend's Clash match with a code)
+- **Quit** (on phones and the web it asks first)
+- **Suggest a Feature** — send an idea to the developer, anonymously, from inside
+  the game.
 
-```powershell
-.\play.ps1 -Editor
-```
+The bottom of the menu may show your best Medium wave on this device.
 
-Git Bash:
+---
 
-```bash
-./play.sh
-```
+## Game modes
 
-## Setup (manual)
+### Map
 
-1. Install [Godot 4](https://godotengine.org/) (standard build, 4.3+ recommended).
-2. In Godot: **Import** → open this folder → select `project.godot`.
-3. Press **F5** (or Play) to run.
+| Map | What it is |
+|-----|-----------|
+| **Classic** | One board for the whole game. After picking a difficulty, choose **Standard** (fixed left-to-right corridor) or **Custom layout** (a random board made from a **seed** number — type one in, or leave blank for a random one). |
+| **Random** | A new board every **25 waves**. You can type a starting seed. The screen shows each board's seed so you can replay it later in Classic → Custom. |
+| **Siege** | A bigger board with the **exit in the middle** and monsters coming in from the edge. The entrance moves every **5 waves** (your towers stay). Scroll to zoom; move the view with **Actions → Pan**, by holding **Space**, or with the right/middle mouse button. |
+| **Clash** | 2–4 players side by side, each defending their own lane, sending monsters at each other. See [Clash mode](#clash-mode). |
 
-No addons or extra packages required.
+### Monsters
 
-## Main menu
+| Monsters | What it is |
+|----------|-----------|
+| **Classic** | The normal mix of ground monsters, fliers and bosses. |
+| **Randomize** | Monsters come in elemental types (Ember, Frost, Venom, Spark, Brute) that resist some damage (Fire, Ice, Poison, Lightning). Resistances grow as waves go on; by wave 50 they can have all four. Mix your tower types! |
 
-Layout: title **WAVE DEFENCE** with **ver: XX.XX.XX** on one line; **Map**, **Monsters**, and **Difficulty** in three columns; then settings, leaderboard + **Play Online**, quit, and Suggest a Feature.
+Clash always uses Classic monsters.
 
-- **Map**
-  - **Classic** — after difficulty, **Map setup**: **Standard** (fixed left→right corridor) or **Custom layout** (seeded random map, fixed for the whole run)
-  - **Random** — after difficulty, optional **starting seed**; maps shift every **25** waves; HUD shows each map’s **Seed** so you can replay it in Classic → Custom
-  - **Siege** — larger board, **exit in the center**, spawn on the outer rim; spawn relocates every **5** waves (towers stay). Starts centered on the map. **Scroll wheel** zooms. Move the view with **Actions → Pan** (drag without placing), hold **Space**, right/middle mouse, or drag from rocks/spawn/exit
-  - **Clash** — **2–4** side-by-side lanes (you + AI bots). Mobs spawn at the **top** of each lane and walk to the **bottom**. Each lane starts empty (no rock handicaps; **7×15** one-tile maze space matching the reference sheets). Build only in your lane. Towers only attack mobs in **their own lane**. Brown lane dividers **neutralize any shot** that crosses them (so fire doesn't chase leaks into the next column). After the first **Start Round**, later rounds use the intermission countdown. **Send shop** (left launcher **Send** popup, or Pin to keep it open where it is): start at **Lv1** with Scout/Pack/Brute; upgrade for **1500 / 5000 / 15000** gold to unlock stronger packs for **everyone** in the match (bosses, fliers, **Wrecker** that hunts and destroys defender towers/walls, then exits). Every pack permanently raises income — newer tiers pay **clearly more** (+2…+35/rnd). Each wave clear pays your **+X/rnd** income into spendable gold. Leaks overflow to the next living lane. **Last standing** wins. Each bot picks a **match-long plan** (full maze, DPS-first, or hybrid) and a maze style, then sticks to that plan every prep — DPS bots skip wall spam and buy damage; maze bots lock corridors then overbuild. If a **Wrecker** smashes their lane mid-round, they **repair immediately** (walls first, then a few combat towers). They may buy any combat tower they can afford (no unlock-wave gates), including **Command** (they cast Air Strike / Supply / Barricade / Flare). **Melee** towers stay path-adjacent; bots also finish the **final elemental** upgrade after three stats. Bot difficulty includes **Cheater** (+500 gold, +100 lives, slowly heals back toward 50 after dropping to 10) for long endless fights. No leaderboard for Clash yet.
-- **Monsters** — independent of map (Clash always uses Classic monsters for v1). Ground / flier / boss sheets come from the **mobs_all** pack under `assets/sprites/` (base + `_plus` variants; late waves prefer plus). Wreckers use armadillo / armadillo_plus; snakes use crawler / crawler_plus. Older ground art is kept in `archive/mobs_ground_legacy/`; pre-update sheets from this import sit under `archive/mobs_all_pre_*`. Regenerate with `tools/monster_art/`.
+---
 
-- **Towers** — animated sheets under `assets/sprites/towers/` (data-driven via `TowerSprites` + `*_frames.json`). Walls use a **16-tile fortress autotile**; Vortex uses a **120×120** sheet. Replace PNGs with the same names/layout without changing code — see [`docs/TOWER_SPRITES.md`](docs/TOWER_SPRITES.md).
-- **Attack effects** — projectile / muzzle / impact sheets under `assets/sprites/effects/` (`EffectSprites` + `effects_manifest.json`). See [`docs/EFFECT_SPRITES.md`](docs/EFFECT_SPRITES.md).
+## Difficulty
 
-  - **Classic** — standard ground/air/boss mix (no elemental resists)
-  - **Randomize** — Ember / Frost / Venom / Spark / Brute types with slight Fire / Ice / Poison / Lightning resists; resist count grows with waves and reaches all **4** by wave **50** (`data/monster_types.gd`)
-- **Easy / Medium / Hard** — for Classic/Random opens **Map setup** (seed optional); Siege starts immediately; Clash opens **Clash setup** (player count + bot Easy/Medium/Hard/**Cheater**). Starting gold **350 / 200 / 100** (Clash starts at **320** so bots can lock in a full one-tile maze). In Classic / Random / Siege, difficulty also changes the monsters — see **Difficulty** below
-- **Online Clash (6-digit code)** — play Clash with friends on other devices (PC, phone, or browser):
-  1. **Host:** pick **Clash**, a difficulty, set players and bots as usual, then press **Invite Friends**. Share the **6-digit code**.
-  2. **Friends:** press **Play Online** on the main menu and type the code (on a phone browser, tapping the box opens a small pop-up with the keyboard). Each friend takes a new lane; when all **4** lanes are taken, a friend **replaces a bot**. The host can still add/remove bots and change their difficulty in the lobby.
-  3. Friends press **Ready**; the host presses **Start**. In the match, the **Start Round / Skip Timer** button is **Ready** for friends, and the host can start a round once everyone is ready (the intermission countdown still runs out on its own).
-  4. The host's game plays every lane; friends' builds, sells, upgrades, sends, Command abilities, and portal moves are checked by the host. If a friend leaves, a **Medium bot** takes over their lane. If the host leaves, the match ends for everyone. A knocked-out player (host included) can keep watching until one lane is left. Pause doesn't stop online matches. Online matches don't go on the leaderboard.
-  Needs the Worker's lobby (see `leaderboard-api/README.md`).
-- **Leaderboard** — top 10 boards for **every mode × difficulty** (Classic / Random / Siege / Clash × Easy / Medium / Hard). At game over the game **snaps your board**; if you qualify and submit a name, that snapshot is saved on the record so others can **View** how the maze looked. Clash scores also store **how many players** and **each bot’s difficulty** (e.g. `4p · Easy / Hard / Cheater`). Other modes show the **map seed** (or **Seeds ×N**). Online boards load from the **Cloudflare Worker** (then cache locally). Debug / tutorial runs cannot be submitted.
-- **Settings** — opens a popup:
-  - **Large Controls**, **Effects**, **Performance mode**, **Show tower range**, **High contrast**, **Show enemy HP bars**, **Show grid coordinates**, **Screenshot watermark**
-  - **Master / Music / SFX** volume sliders (persist in `user://settings.cfg`)
-  - **Build speed** slider **1.0×–2.5×** for prep and intermission timers only (not combat)
-  - **View Seeds** — compact preview of **Classic / Random / Siege** layouts
-  - **Achievements** — hard goals saved on this device (`user://achievements.cfg`)
-  - **Replay Tutorial** — guided Easy Classic practice run (not scored)
-  - **Fullscreen** / **Install app** (web only)
-- Hover Map / Monsters / Difficulty buttons for short tooltips.
-- First launch offers **Start Tutorial** or **Skip** (saved in settings).
-- Footer may show your best **Medium** wave on this device.
-- **Quit** — close the game (on phone/web, asks to confirm first). On **web**, also exits fullscreen / CSS rotate and tries to go back to the previous page.
-- **Update app** (web / installed home-screen app) — in Settings: checks GitHub Pages for a newer build, then clears the service-worker cache and reloads so the home-screen icon picks up the update without uninstalling. After updating (online), the pack is cached again for offline play.
-
-### Audio
-
-Music is original retro console-style loops in `audio/music/` (32 bars, seamless WAV; `MIX_CONSOLES` blends NES, Game Boy, GBA, SNES, Master System, Game Gear, and Genesis timbres) and starts on the main menu. Desktop uses full stereo beds; the web build uses lighter mono `web_loop_*.wav` copies played through the browser Web Audio API. Menu, Standard, and Siege each have a bed; the intense layer is the same tempo with a busier mix so it blends when enemies near the exit. Regenerate with `python audio/music/generate_loops.py`. Older beds are kept in `audio/music/old_audio/`. **Master**, **Music**, and **SFX** each set that bus; Music and SFX then pass through Master. **Mute music** / **Mute sounds** silence those buses without wiping the slider levels. Button clicks stay short synthesized SFX. The exit-leak cue is unchanged. On web, music starts on your first click/tap (browsers block sound before any gesture). If an old home-screen icon stays silent, close it fully and reopen (or clear site data) so it can fetch the new build.
-
-When a run ends, a **Run summary** (stats + coaching) appears before the **leaderboard** (Clash included). If your wave score ranks in the top 10 for that **mode + difficulty** board, you can enter a name (letters, numbers, spaces, `_`/`-`; max 12) and your board snapshot is attached. Older difficulty-only saves migrate into **Classic**. Text boxes are **allowlist-sanitized**; there is **no SQL database** (local JSON + Cloudflare KV).
-
-**Shared scores:** live boards live on the **`data`** branch as [`leaderboard.json`](https://github.com/Zephino/WaveDefence/blob/data/leaderboard.json) (kept off `main` so score updates don’t clutter game history). Clients **read** that file; **submitting** uses a small Cloudflare Worker ([`leaderboard-api/`](leaderboard-api/)) that writes the same path on `data` (apps never hold a GitHub token). Set `API_BASE_URL` in [`scripts/online_config.gd`](scripts/online_config.gd) after deploying the Worker. Until that URL is set, scores **save on this device only** (fetch merges remote into local so empties do not wipe your runs). With upload configured, a qualifying score is pushed on submit and again when you leave the leaderboard if still pending.
-
-## How to play
-
-- **Pause** — **Esc** or the **Pause** button: resume, plain-English upcoming waves (e.g. normal / faster enemies / air / boss), **Settings** (Master / Music / SFX volume + Mute music / Mute sounds; swipe to scroll without changing controls), save maze image, quit to menu (no mid-run save).
-- **Copy seed** — on the pause menu (Esc) and the run summary after game over (Classic / Random layouts with seeds).
-- Under gold/lives, open **Towers**, **Send** (Clash only), or **Actions** from the **Controls** launcher. Drag its title bar to move it anywhere; **Hide** shrinks it to a compact chip (timer + Start Round stay). Esc/X closes popups. Empty space on **Controls** lets taps through to the board. Floating **Towers** can be dragged freely; picking a type closes it so you can tap the board to place.
-- Select a tower from **Towers**, then **left-click** / tap the grid to place it.
-- Hover a shop tower or a placed tower for a description (stats, effects, air/ground multipliers).
-- **Click or hover a living mob** to inspect it (name, HP left/max, gold bounty) on the same board tooltip as towers. Clears on death, empty click, Esc/deselect, or selecting a tower. Clicks that hit a mob inspect it instead of placing.
-- **Hold left-click and drag** to paint-place many walls/towers in a row.
-- Place cheap **Walls** to shape the maze. With a combat tower armed, **tap or drag** over a wall to build on top of it. **Deselect** (right-click / Esc) first, then tap a wall to **select** it for **Sell**.
-- You **cannot** build a wall or tower on top of an existing tower — **sell it first**.
-- Towers **block the path**. Placement still refuses a seal, but if the path is already blocked when you press **Start Round** (or when the intermission timer tries to start a wave), blocking towers/walls are removed, sell value is refunded, and the round continues.
-- Click a placed tower to select it; **Ctrl+click** or **Shift+click** to select multiple.
-- **Deselect** (Actions), **Esc**, or **right-click** the board clears the selection.
-- Select towers and open **Actions** → **Upgrade** (or **U**): each tower can take **3** stat upgrades (damage/range/rate). Yellow pips show progress.
-- After +3, choose a **final** elemental buff: **Fire / Ice / Poison / Lightning** (Actions). One per tower — keeps the tower’s type and adds a light extra effect (e.g. Burn + Ice still burns, with a mild slow).
-- **Sell Selected** (Actions) sells every selected tower/wall (~50% refund of base + upgrade gold).
-- After the main menu, build freely with **no timer**. Press **Start Round** when ready. In **Clash**, later rounds use the intermission countdown automatically (you only press Start Round once at the beginning).
-
-- From **wave 10** onward (prep / intermission only), a cyan **Move start / end** bar appears on the **top-left of the map**. Pay **200 gold** per click to slide start or end one cell left/right on the same row. Cannot leave the map or seal the path. Clash: your lane only.
-- That starts a **build countdown**, then waves auto-run with intermissions between them.
-- After **Start Round**, the build countdown is always skippable (small gold bonus for time left).
-- After a wave ends, the break timer is always skippable (small gold bonus for time left).
-- Kill **25%** of a wave to unlock **Send Next Wave**: next-wave enemies start spawning immediately while enemies already on the map stay; unspawned leftovers from the current wave are dropped. Plus a slight early-send gold bonus. Early-send is blocked if the board is already very crowded.
-- Boss every **10** waves; **two bosses** every **50** waves.
-- Boss waves can randomly become a **SNAKE**: every mob in the wave forms a tougher ground chain (head + body segments). Banner shows **SNAKE**.
-- **Flying boss** every **15** waves — flies an **S-curve** over walls/towers (air creeps use the same style).
-- Light flying **scouts** start around **wave 8**; after **wave 20** every wave mixes air with ground (banner **AIR MIX**). Air creeps are glassier (~70% ground HP) and only slightly faster than ground.
-- Every **7** waves (**7, 14, 21…**) is a **SPEED WAVE** — much faster, glassier creeps and denser spawns.
-- Top bar **Left** shows enemies remaining until the board clears (on map + still spawning).
-- Kill enemies for gold. Leaks cost lives. Game over at 0 lives → leaderboard.
-- After each wave is cleared, earn a **clear bonus**: gold based on kills that round (`WAVE_CLEAR_BONUS_PER_KILL` in `data/wave_scaler.gd`).
-- In-game **End Run** asks for confirmation, then sends your wave score to the leaderboard (same as dying).
-
-### Towers (costs are tunable in `data/towers.gd`)
-
-| Tower | Cost | Role |
-|--------|------|------|
-| Wall | 5 | Path-blocking only (no attack). Build any real tower on top of a wall to replace it. |
-| Gunner | 40 | Basic single-target; slight air bonus (`air_damage_mult` 1.25) |
-| Rapid | 55 | Fast / low damage; strong vs air (1.6×) |
-| Cannon | 75 | Boss hunter (2.4× bosses, prioritizes them); splash; weak vs air |
-| Burn | 50 | Ignite DoT; weak vs air (0.7×). Homing flame shot from tower → enemy when Effects is on |
-| Freeze | 60 | Slow; good vs air (1.4×). Homing ice shard from tower → enemy when Effects is on |
-| Poison | 70 | Poison DoT + light splash; slight air penalty (0.85×). Homing poison blob from tower → enemy when Effects is on |
-| Lightning | 80 | Chain damage; strong vs air (2.0×). Bolt flashes when Effects is on |
-| Spike | 45 | Melee ground-only; high damage, very short range |
-| Anti-Air | 65 | Air-only missiles; long range |
-| Vortex | 90 | No damage (unlocks wave **12**); 1-cell tower that **locks a 3×3** build zone (not in corners); only pulls enemies on the **8 ring tiles**, spins them one lap, then releases |
-| Gatling | 25000 | Late-game special (unlocks wave **30**); extreme fire rate; place other towers around it |
-| Command | 100 | Does not shoot. Select it, then place **pay-on-place** abilities. Combat ones (Air Strike / Barricade Spike / Recon Flare) arm as **path traps** and only spend gold when placed — they wait for enemies instead of missing. Supply Drop buffs nearby towers on place (no spend if none in range). Hover ability buttons for tower-style tooltips. |
-
-Air/ground multipliers, `target_filter` (`any` / `ground` / `air`), and `unlock_wave` are tunable in `data/towers.gd`. Command ability costs/cooldowns/trap modes are in `data/command_abilities.gd`.
-
-Starting gold by difficulty (`data/wave_scaler.gd`): **Easy 350**, **Medium 200**, **Hard 100**. Clash: **320** for every lane.
-
-**Difficulty** (Classic / Random / Siege; `DIFFICULTY_TUNING` in `data/wave_scaler.gd`; Clash is unaffected):
+Applies to Classic, Random and Siege. Clash has its own setup.
 
 | | Easy | Medium | Hard |
 |---|---|---|---|
+| Starting gold | 350 | 200 | 100 |
+| Lives | 20 | 15 | 10 |
 | Monster health | +30% | +60% | +100% |
 | Monster speed | +5% | +10% | +15% |
-| Monsters per wave | +0% | +10% | +20% |
-| Kill / wave-clear / early-send gold | 100% | 90% | 80% |
-| Lives | 20 | 15 | 10 |
-| Bosses and fliers arrive | on time (boss wave 10, air wave 8) | 2 waves sooner | 4 waves sooner |
+| Monsters per wave | normal | +10% | +20% |
+| Gold from kills and bonuses | 100% | 90% | 80% |
+| First boss | wave 10 | wave 8 | wave 6 |
+| First fliers | wave 8 | wave 6 | wave 4 |
 
-## Debug / playtest
+---
 
-Toggle panel with **F1** or **~**. Opening the debug menu or using debug hotkeys makes that run **ineligible** for the leaderboard.
+## How a round works
 
-| Hotkey | Action |
-|--------|--------|
-| G | +1000 gold |
-| L | +5 lives |
-| N | Force next wave (ignores timer / skip unlock; keeps enemies on the map) |
-| U | Upgrade selected towers |
-| K | Clear enemies |
-| R | Restart run |
+1. **Build time.** At the start there's **no timer** — build as long as you like.
+2. Press **Start Round**. A short **build countdown** runs, then the first wave comes.
+3. After each wave there's a short **break**, then the next wave starts by itself.
+4. **Skip the timer** anytime during a countdown or break for a little bonus gold
+   (more gold for more time left).
+5. **Send Next Wave early:** once you've killed **25%** of a wave, you can call the
+   next wave right away for bonus gold. Monsters already on the board stay.
+6. Clearing a wave pays a **clear bonus** based on how many monsters you killed.
+7. The game ends when your lives reach **0** (or you press **End Run** and confirm).
+   You'll see a **run summary** with tips, then the leaderboard.
 
-Panel also: **Force Next Wave**, **Spawn 5 / Flyer / Boss on Self** (your path or Clash human lane), jump to wave 10/15/50, god mode, restart.
+The top of the screen shows your gold, lives, the wave, the timer, and **Left**
+(monsters still to come or on the board). The **next wave** line warns you what's
+coming (boss, fliers, speed wave…).
 
-Tune balance in:
+---
 
-- `data/towers.gd` — costs and combat stats
-- `data/monster_types.gd` — Randomize monster roster and resist growth
-- `data/wave_scaler.gd` — wave scaling, lives, starting gold
+## Building your maze
 
-## Headless smoke test
+- Monsters always take the **shortest open path** from start to exit. Your job is
+  to make that path long, and line it with towers.
+- **Walls** are cheap (5 gold) and only block. Use them to shape the maze.
+- **Build a tower on a wall** to replace it: pick a combat tower and tap the wall.
+- You **can't** block the path completely — the game won't let you place a piece
+  that seals it. (If the path somehow ends up blocked when a wave starts, the
+  blocking pieces are removed and refunded.)
+- You can't build on top of a tower — **sell it first**.
+- **Upgrade:** select towers and press **Upgrade** (or **U**). Each tower takes
+  **3** upgrades (yellow pips show how many).
+- **Final element:** after 3 upgrades, choose **Fire, Ice, Poison or Lightning**
+  for an extra effect (for example, burn plus a slight slow). One per tower.
+- **Sell:** select towers or walls and press **Sell** for about half of what you
+  spent.
+- **Move the start or end (wave 10+):** between waves, a cyan bar on the top-left
+  of the map lets you slide the start or exit one square left or right for
+  **200 gold** per move (it can't seal the path).
 
-```text
-godot --headless --path . -s res://scripts/smoke_test.gd
-```
+---
 
-Expect `SMOKE_TEST_OK`.
+## Towers
 
-Online Clash (lobby seats, a friend's actions on the host, the friend's view of host snapshots; no internet needed):
+| Tower | Cost | What it does |
+|-------|------|--------------|
+| Wall | 5 | Blocks the path only. Build a real tower on it to replace it. |
+| Gunner | 40 | Basic single-target shooter. Slightly better vs fliers. |
+| Rapid | 55 | Fast, low damage. Strong vs fliers. |
+| Cannon | 75 | Boss hunter (much more damage to bosses), splash damage. Weak vs fliers. |
+| Burn | 50 | Sets monsters on fire (damage over time). Weak vs fliers. |
+| Freeze | 60 | Slows monsters. Good vs fliers. |
+| Poison | 70 | Poison over time plus a little splash. |
+| Lightning | 80 | Chains between monsters. Very strong vs fliers. |
+| Spike | 45 | Melee, ground only. Huge damage at very short range — put it right next to the path. |
+| Anti-Air | 65 | Fliers only. Long-range missiles. |
+| Vortex | 90 | Unlocks at wave **12**. No damage; takes a 3×3 area and spins monsters on its ring around once, buying time. |
+| Gatling | 25,000 | Unlocks at wave **30**. Late-game monster with an extreme fire rate. |
+| Command | 100 | Doesn't shoot. Select it to use paid abilities: **Air Strike**, **Barricade Spike** and **Recon Flare** are traps you place on the path (gold is only spent when placed, and they wait for monsters); **Supply Drop** boosts nearby towers' fire rate. |
 
-```text
-godot --headless --path . -s res://scripts/online_clash_test.gd
-```
+Hover a tower (or tap it on a phone) to see its full stats.
 
-Expect `ONLINE_CLASH_TEST_OK`.
+---
 
-## Mobile / touch
+## Monsters and waves
 
-**Typing in a phone/tablet browser:** tapping a text box (join code, leaderboard name, map seed, Suggest a Feature) opens a small pop-up with the phone keyboard; what you type goes into the box. PC, desktop browsers, and the apps type as usual.
+- Waves get bigger and tougher forever.
+- **Bosses** come every **10 waves**, and **two bosses** every **50**. Some boss
+  waves turn into a **SNAKE**: the whole wave becomes one long, tough chain.
+- **Flying bosses** come every **15 waves**. Fliers ignore your maze and weave
+  over it in an S-shape, so you need towers that hit air.
+- **Fliers** start showing up around **wave 8**, and after **wave 20** every wave
+  mixes fliers in.
+- Every **7th wave** (7, 14, 21…) is a **SPEED WAVE**: much faster but weaker
+  monsters, packed close together.
+- On Medium and Hard, bosses and fliers arrive sooner (see [Difficulty](#difficulty)).
+- **Tap or click a monster** to see its name, health and kill gold.
 
-The game supports phones and tablets (native Android/iOS and mobile web). Mobile devices use landscape (either direction), force fullscreen while playing, keep the screen awake while the game is open (no idle timeout), and release orientation / wake lock when the app is closed or backgrounded. Desktop PCs are not forced into fullscreen.
+---
 
-**HUD (PC and mobile):** **Controls** launcher under gold/lives opens **Towers**, Clash **Send**, and **Actions** as floating popups (Esc/X closes). Drag the Controls title to move it anywhere on screen; **Hide** collapses shop buttons. Start Round / Skip and the timer stay. Controls chrome is click-through so it does not block placing. Drag popup title bars to move them; **Pin** keeps Towers / Send open at their current spot (still draggable). Unpinned **Towers** closes after you pick a type so mobile taps reach the board.
+## Clash mode
 
-Mobile extras:
+You against 1–3 opponents (bots, or friends online), each with your own lane.
+Monsters enter at the **top** of each lane and walk to the **bottom**.
 
-- **Drag** on the board to paint-place
-- **Tap** a tower to select + show its info card
-- **Long-press** a tower to multi-select (or Actions → **Multi: On**)
-- **Deselect** (Actions), or tap empty/unplaceable cells / outside the board
-- Larger touch buttons
+- **Your lane is the leftmost.** You can only build there, and towers only hit
+  monsters in their own lane (shots stop at the brown lane dividers).
+- **Send monsters:** open **Send** and buy packs to send at an opponent. Every pack
+  **raises your income** for the rest of the match. Income is paid each time a wave
+  is cleared.
+- **Send shop levels:** start at Lv1 (Scout, Pack, Brute). Upgrade for **1,500 /
+  5,000 / 15,000** gold to unlock stronger packs for **everyone** — bosses, fliers,
+  and the **Wrecker**, which smashes towers and walls in its lane.
+- **Leaks spill over:** a monster that gets past you moves on to the next lane.
+- **Last lane standing wins.** Everyone starts with **320 gold** and 20 lives.
+- After the first **Start Round**, later rounds start on the timer.
+- **Bots:** choose 2–4 players and each bot's difficulty: **Easy, Medium, Hard**,
+  or **Cheater** (+500 gold, +100 lives, and slowly heals back up after dropping to
+  10 lives — great for long endless fights). Each bot picks a plan for the match
+  (big maze, lots of damage, or a mix) and repairs its lane right away if a
+  Wrecker smashes it.
 
-**Debug (F1 / ~):** opens a floating panel over the board (does not cover the sidebars). Using debug makes the run ineligible for the leaderboard.
+---
 
-### Send / play packages
+## Online Clash with friends
 
-There is **one** game codebase. Playable builds live in:
+Play Clash with friends on other devices — computer, phone, or browser — using a
+**6-digit code**.
 
-| Folder | File | Use |
-|--------|------|-----|
-| `docs/` | `index.html` (+ wasm/pck) | Web — GitHub Pages |
-| `pc/` | `WaveDefence.exe` | Windows — double-click to play |
-| `phone/android/` | `WaveDefence.apk` | Android — install on the phone |
-| `phone/ios/` | `WaveDefence.ipa` | iPhone/iPad — export on a Mac with Xcode |
+**To host:**
+1. Pick **Clash** and any difficulty. Set the players and bots as usual.
+2. Press **Invite Friends** and share the **6-digit code**.
+3. Friends join; you can still add, remove or change bots in the lobby.
+4. When everyone has pressed **Ready**, press **Start**.
 
-After you change game code, rebuild from the project root:
+**To join:** press **Play Online** on the main menu, type the code, then press
+**Ready**.
 
-```powershell
-.\export_builds.ps1
-```
+**How it works:**
+- Each friend takes a new lane. When all **4** lanes are full, a joining friend
+  **replaces a bot**.
+- Each round, friends press **Ready** (it's on the Start Round button), and the
+  host can start once everyone is ready. The break timer still runs out on its own,
+  so nobody can hold up the game.
+- If a friend leaves, a **bot takes over** their lane. If the host leaves, the match
+  ends for everyone.
+- If you're knocked out, you can keep watching until the match ends.
+- Pausing doesn't stop an online match for the others. Online matches don't go on
+  the leaderboard. Everyone needs the same game version.
 
-Options: `-PcOnly`, `-PhoneOnly`, `-AndroidOnly`, `-IosOnly`, `-WebOnly`.
+---
 
-### Export (Android) → `phone/android/`
+## Controls
 
-1. Install Godot **Android** export templates and configure the Android SDK + Java 17 (Editor → Editor Settings → Export → Android).
-2. Project → Export → **Android**, or run `.\export_builds.ps1 -AndroidOnly`.
-3. Package id: `com.wavedefence.game`.
-4. Send `phone/android/WaveDefence.apk`.
+### Computer
 
-### Export (iOS) → `phone/ios/`
+| Action | How |
+|--------|-----|
+| Place a tower | Pick it in **Towers**, then click the board |
+| Place many | Hold the left button and drag |
+| Select a tower | Click it (**Ctrl/Shift+click** to select several) |
+| Deselect | **Right-click**, **Esc**, or **Actions → Deselect** |
+| Upgrade selected | **Actions → Upgrade** or **U** |
+| Inspect a monster | Click it, or hover |
+| Zoom (big maps) | Mouse wheel |
+| Move the view (big maps) | Hold **Space** and drag, middle/right mouse, or **Actions → Pan** |
+| Pause | **Esc** or the **Pause** button |
 
-1. Requires **macOS + Xcode** (cannot finish an IPA on Windows).
-2. Install Godot **iOS** export templates and set Apple team / signing (Editor Settings → Export → iOS).
-3. Project → Export → **iOS** (preset writes `phone/ios/WaveDefence.ipa`), or run `.\export_builds.ps1 -IosOnly` on a Mac.
-4. Bundle id: `com.wavedefence.game`. Install via Xcode / TestFlight / your usual signing flow.
+### Phone / tablet
 
-## Export (Windows) → `pc/`
+| Action | How |
+|--------|-----|
+| Place a tower | Pick it in **Towers**, then tap the board |
+| Place many | Drag your finger |
+| Select a tower | Tap it (shows its info card) |
+| Select several | **Long-press** towers, or **Actions → Multi: On** |
+| Deselect | Tap an empty spot or outside the board, or **Actions → Deselect** |
+| Move the view (big maps) | **Actions → Pan**, then drag |
 
-1. Install Godot export templates (Editor → Manage Export Templates).
-2. Project → Export → **Windows Desktop**, or run `.\export_builds.ps1`.
-3. Send `pc/WaveDefence.exe` (or the whole `pc/` folder).
+### The on-screen panels
 
-### Export (Web) → `docs/`
+Under your gold and lives is the **Controls** launcher. It opens **Towers**,
+**Send** (Clash only) and **Actions** as small floating windows. Drag a window's
+title bar to move it; **Pin** keeps it open; **Hide** shrinks the launcher (the
+timer and Start Round stay visible).
 
-1. Install Godot **Web** export templates.
-2. Project → Export → **Web**, or `.\export_builds.ps1 -WebOnly`.
-3. Enable GitHub Pages: branch `main`, folder `/docs`.
-4. Share `https://zephino.github.io/WaveDefence/`.
+**Pause menu:** resume, see the upcoming waves in plain words, change volume,
+**copy the map seed**, save a picture of your maze, or quit to the menu (there's no
+mid-game save).
 
-Optional custom domain (not free): point your domain at GitHub Pages so the link does not show `github.io`.
+---
 
-## Project layout
+## Leaderboard
 
-- `scenes/main.tscn` — entry scene
-- `scripts/` — game systems
-- `scripts/net/` — online Clash: lobby connection (`Net` autoload), host / joined-player sync
-- `data/` — tunable numbers
-- `docs/` — Web / GitHub Pages build
-- `data` branch / `leaderboard.json` — shared worldwide top-10 boards (Worker writes here)
-- `leaderboard-api/` — Cloudflare Worker (POST gateway → GitHub `data` branch; online Clash lobbies)
-- `leaderboard.json` on `main` — empty stub / local reference only
-- `pc/` — Windows play package
-- `phone/android/` — Android APK
-- `phone/ios/` — iOS IPA (exported on Mac)
-- `export_builds.ps1` — rebuild packages from this source
-- `LICENSE` — All Rights Reserved
-- `CHANGELOG.md` — version history
-- `docs/TOWER_SPRITES.md` — how to replace tower artwork (no code changes)
-- `docs/EFFECT_SPRITES.md` — how to replace attack effect sheets
-- `docs/archive/` — original tower/effect ZIP backups
+- There's a top-10 board for **every map and difficulty** (Classic / Random /
+  Siege / Clash × Easy / Medium / Hard), shared worldwide.
+- When your game ends, if your wave makes the top 10, type a name (letters,
+  numbers, spaces, `_` and `-`, up to 12 characters) to save it.
+- A **picture of your board** is saved with your score so others can **View** how
+  your maze looked. Classic / Random / Siege scores show the map seed; Clash scores
+  show how many players and each bot's difficulty.
+- Runs where you used the debug tools, tutorial runs, and online Clash matches
+  can't be submitted.
+
+---
+
+## Settings
+
+- **Large Controls**, **Effects**, **Performance mode**, **Show tower range**,
+  **High contrast**, **Show enemy HP bars**, **Show grid coordinates**,
+  **Screenshot watermark**
+- **Master / Music / SFX** volume, plus **Mute music** / **Mute sounds**
+- **Build speed** (1.0×–2.5×) — speeds up only the build and break timers, not the
+  fighting
+- **View Seeds** — preview Classic, Random and Siege boards from a seed
+- **Achievements** — tough goals, saved on this device
+- **Replay Tutorial**
+- **Fullscreen**, **Install app** and **Update app** (web version)
+
+Music starts on your first click or tap (browsers block sound before that).
+
+---
+
+## Tips
+
+- A long, winding maze beats lots of towers on a short path. Walls are cheap!
+- Put towers where the path passes by them **more than once**.
+- Plan for **fliers** before wave 8 (sooner on Medium/Hard): Rapid, Lightning,
+  Freeze and Anti-Air are your friends.
+- **Cannons** shred bosses; **Spikes** hit hard but must touch the path.
+- **Freeze** or **Vortex** in front of your damage towers buys them more time.
+- In Randomize, mix elements so resistant monsters can't walk through.
+- In Clash, sending packs early grows your income — but don't starve your own lane.
+
+---
+
+*Developing or building the game? See [`DEVELOPMENT.md`](DEVELOPMENT.md).
+Version history is in [`CHANGELOG.md`](CHANGELOG.md).*
